@@ -4,6 +4,8 @@ from modelgenerator.backbones import (
     aido_protein_debug,
     dna_onehot,
     protein_onehot,
+    enformer,
+    borzoi,
 )
 from modelgenerator.data import *
 from modelgenerator.tasks import *
@@ -22,6 +24,10 @@ class TestDatasets(unittest.TestCase):
     def _test(self, task, data):
         trainer = Trainer(fast_dev_run=True)
         trainer.fit(task, data)
+        trainer.test(task, data)
+
+    def _test_inference(self, task, data):
+        trainer = Trainer(fast_dev_run=True)
         trainer.test(task, data)
 
     def test_NTClassification(self):
@@ -335,7 +341,6 @@ class TestDatasets(unittest.TestCase):
             num_outputs=30
         )
         self._test(unimodal_task, unimodal_data)
-        
         multimodal_data = IsoformExpression(train_split_files = ["train_1.tsv"], normalize=False)
         bimodal_task = MMSequenceRegression(
             backbone=dna_onehot,
@@ -352,6 +357,73 @@ class TestDatasets(unittest.TestCase):
             num_outputs=30
         )
         self._test(trimodal_task, multimodal_data)
+
+    def test_clinvar(self):
+        data = ClinvarRetrieve(
+            test_split_files = ["ClinVar_demo.tsv"],
+            batch_size = 2,
+        )
+        task = ZeroshotPredictionDistance(
+            backbone=aido_dna_debug,
+        )
+        self._test_inference(task, data)
+
+    def test_clinvar_diff(self):
+        data = ClinvarRetrieve(
+            test_split_files = ["ClinVar_demo.tsv"],
+            batch_size = 2,
+            method='Diff',
+        )
+        task = ZeroshotPredictionDiff(
+            backbone=aido_dna_debug,
+        )
+        self._test_inference(task, data)
+
+    def test_clinvar_enformer(self):
+        data = ClinvarRetrieve(
+            test_split_files = ["ClinVar_demo.tsv"],
+            window=96000,
+            batch_size = 2,
+        )
+        task = ZeroshotPredictionDistance(
+            backbone=enformer,
+        )
+        self._test_inference(task, data)
+
+    def test_enformer_embed(self):
+        data = ClinvarRetrieve(
+            test_split_files = ["ClinVar_demo.tsv"],
+            window=96000,
+            batch_size = 2,
+            method='Diff',
+        )
+        task = Embed(
+            backbone=enformer,
+        )
+        self.trainer.predict(task, data)
+
+    def test_clinvar_borzoi(self):
+        data = ClinvarRetrieve(
+            test_split_files = ["ClinVar_demo.tsv"],
+            window=262144,
+            batch_size = 2,
+        )
+        task = ZeroshotPredictionDistance(
+            backbone=borzoi,
+        )
+        self._test_inference(task, data)
+
+    def test_borzoi_embed(self):
+        data = ClinvarRetrieve(
+            test_split_files = ["ClinVar_demo.tsv"],
+            window=262144,
+            batch_size = 2,
+            method='Diff',
+        )
+        task = Embed(
+            backbone=borzoi,
+        )
+        self.trainer.predict(task, data)
 
 if __name__ == "__main__":
     unittest.main()

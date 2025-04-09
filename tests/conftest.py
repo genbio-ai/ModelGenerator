@@ -1,14 +1,29 @@
 import pytest
 import torch
 import torch.nn as nn
+import warnings
 from unittest.mock import MagicMock, patch
 from modelgenerator.backbones.backbones import (
     GenBioBERT,
     GenBioFM,
     GenBioCellFoundation,
+    GenBioCellSpatialFoundation,
     Enformer,
+    Borzoi,
     ESM,
 )
+
+
+@pytest.fixture()
+def flash_attn_available():
+    """
+    Check if flash attention is available.
+    """
+    try:
+        import flash_attn  # noqa: F401
+        return torch.cuda.is_available()
+    except ImportError:
+        return False
 
 
 @pytest.fixture
@@ -59,7 +74,7 @@ def genbiofm(genbiofm_cls):
 
 
 @pytest.fixture
-def genbiocellfoundation():
+def genbiocellfoundation(flash_attn_available):
     class TinyModel(GenBioCellFoundation):
         def __init__(self, *args, **kwargs):
             config_overwrites = {
@@ -69,18 +84,52 @@ def genbiocellfoundation():
                 "intermediate_size": 16,
                 "max_position_embeddings": 128,
                 "_use_flash_attention_2": True,
+                "bf16": True,
             }
             super().__init__(
                 *args, from_scratch=True, config_overwrites=config_overwrites, **kwargs
             )
-
     tiny_model = TinyModel(None, None)
-    tiny_model.encoder = MagicMock(spec=nn.Module)
-    tiny_model.encoder.return_value = MagicMock(
-        last_hidden_state=torch.randn(4, 10, 16),
-        hidden_states=[torch.randn(4, 10, 16) for _ in range(2)],
-    )
-    tiny_model.encoder.config = MagicMock(**tiny_model.config_overwrites)
+    if not flash_attn_available:
+        warnings.warn(
+            "Flash attention is not available. Using a mocked encoder for CellFoundation."
+        )
+        tiny_model.encoder = MagicMock(spec=nn.Module)
+        tiny_model.encoder.return_value = MagicMock(
+            last_hidden_state=torch.randn(4, 10, 16),
+            hidden_states=[torch.randn(4, 10, 16) for _ in range(2)],
+        )
+        tiny_model.encoder.config = MagicMock(**tiny_model.config_overwrites)
+    return tiny_model
+
+
+@pytest.fixture
+def genbiocellspatialfoundation(flash_attn_available):
+    class TinyModel(GenBioCellSpatialFoundation):
+        def __init__(self, *args, **kwargs):
+            config_overwrites = {
+                "hidden_size": 16,
+                "num_hidden_layers": 2,
+                "num_attention_heads": 1,
+                "intermediate_size": 16,
+                "max_position_embeddings": 128,
+                "_use_flash_attention_2": True,
+                'bf16': True,
+            }
+            super().__init__(
+                *args, from_scratch=True, config_overwrites=config_overwrites, **kwargs
+            )
+    tiny_model = TinyModel(None, None)
+    if not flash_attn_available:
+        warnings.warn(
+            "Flash attention is not available. Using a mocked encoder for CellSpatialFoundation."
+        )
+        tiny_model.encoder = MagicMock(spec=nn.Module)
+        tiny_model.encoder.return_value = MagicMock(
+            last_hidden_state=torch.randn(4, 130, 16),
+            hidden_states=[torch.randn(4, 130, 16) for _ in range(2)],
+        )
+        tiny_model.encoder.config = MagicMock(**tiny_model.config_overwrites)
     return tiny_model
 
 
@@ -111,6 +160,32 @@ def enformer_cls():
 def enformer(enformer_cls):
     return enformer_cls(None, None)
 
+
+@pytest.fixture
+def borzoi_cls():
+    class TinyModel(Borzoi):
+        def __init__(self, *args, **kwargs):
+            config_overwrites = {
+                "dim": 12,
+                "depth": 2,
+                "heads": 1,
+                "bins_to_return": 2,
+                "dim_divisible_by": 2,
+                "num_downsamples": 4,
+            }
+            super().__init__(
+                *args,
+                from_scratch=True,
+                config_overwrites=config_overwrites,
+                max_length=128,
+                **kwargs,
+            )
+
+    return TinyModel
+
+@pytest.fixture
+def borzoi(borzoi_cls):
+    return borzoi_cls(None, None)
 
 @pytest.fixture
 def esm():

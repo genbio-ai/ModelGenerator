@@ -219,11 +219,8 @@ class LinearMaxPoolAdapter(nn.Module, SequenceAdapter):
             torch.Tensor: predictions (n, out_features)
         """
         if attention_mask is not None:
-            input_mask_expanded = (
-                attention_mask.unsqueeze(-1).expand(hidden_states.size()).float()
-            )
-            input_mask_expanded[input_mask_expanded == 0] = -torch.inf
-            hidden_states_final = hidden_states * input_mask_expanded
+            attention_mask = attention_mask.unsqueeze(-1)
+            hidden_states_final = hidden_states.masked_fill(attention_mask == 0, -torch.inf)
         else:
             hidden_states_final = hidden_states
         embeddings = hidden_states_final.max(1)[0]

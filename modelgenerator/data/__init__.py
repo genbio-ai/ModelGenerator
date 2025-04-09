@@ -1,3 +1,7 @@
+import os
+import subprocess
+import warnings
+from typing import Union, List
 from modelgenerator.data.base import *
 from modelgenerator.data.data import *
 from typing import Union
@@ -177,13 +181,27 @@ class TemperatureStability(SequenceClassificationDataModule):
 class ClinvarRetrieve(ZeroshotClassificationRetrieveDataModule):
     def __init__(
         self,
-        path: str,
+        path: str = None,
         test_split_files: List[str] = ["ClinVar_Processed.tsv"],
         reference_file: str = "hg38.ml.fa",
         method: str = "Distance",
         window: int = 512,
         **kwargs,
     ):
+        # Check and initialize GENBIO_DATA_DIR
+        if "GENBIO_DATA_DIR" not in os.environ:
+            default_dir = os.path.abspath("./genbio_data")
+            warnings.warn(f"'GENBIO_DATA_DIR' not found in environment. Using default: {default_dir}")
+            os.environ["GENBIO_DATA_DIR"] = default_dir
+
+        # Default path if not explicitly passed
+        if path is None:
+            path = os.path.join(os.environ["GENBIO_DATA_DIR"], 'genbio_finetune', 'dna_datasets')
+
+        # Check and download the files if they don't exist
+        self.download_files(path)
+
+        # Initialize the parent class
         super().__init__(
             path=path,
             test_split_files=test_split_files,
@@ -193,6 +211,21 @@ class ClinvarRetrieve(ZeroshotClassificationRetrieveDataModule):
             y_col="effect",
             **kwargs,
         )
+
+    def download_files(self, save_dir):
+        files_to_download = ["ClinVar_Processed.tsv", "ClinVar_demo.tsv", "hg38.ml.fa"]
+
+        # Ensure the save directory exists
+        os.makedirs(save_dir, exist_ok=True)
+        for file in files_to_download:
+            file_path = os.path.join(save_dir, file)
+            if not os.path.exists(file_path):
+                subprocess.run(
+                    ["wget", "-O", file_path, os.path.join("https://huggingface.co/datasets/genbio-ai/Clinvar/resolve/main", file)]
+                )
+                print(f"Downloaded {file} to {file_path}")
+            else:
+                print(f"{file} already exists, skipping download.")
 
 
 class TranslationEfficiency(SequenceRegressionDataModule):

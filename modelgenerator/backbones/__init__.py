@@ -231,10 +231,42 @@ enformer = type(
     },
 )
 
+borzoi = type(
+    "borzoi",
+    (Borzoi,),
+    {
+        "model_path": "johahi/borzoi-replicate-0",
+    },
+)
+
+flashzoi = type(
+    "flashzoi",
+    (Borzoi,),
+    {
+        "model_path": "johahi/flashzoi-replicate-0",
+    }
+)
+
 scfoundation = type(
     "scfoundation",
     (SCFoundation,),
     {
         "model_path": "genbio-ai/AIDO.scFoundation",
+    },
+)
+
+aido_tissue_3m = type(
+    "aido_tissue_3m",
+    (GenBioCellSpatialFoundation,),
+    {
+        "model_path": "genbio-ai/AIDO.Tissue-3M",
+    },
+)
+
+aido_tissue_60m = type(
+    "aido_tissue_60m",
+    (GenBioCellSpatialFoundation,),
+    {
+        "model_path": "genbio-ai/AIDO.Tissue-60M",
     },
 )

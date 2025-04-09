@@ -13,6 +13,9 @@ from torch.utils.data import Dataset, DataLoader
 from lightning.pytorch.utilities import rank_zero_info, rank_zero_warn
 from modelgenerator.data.base import *
 
+from scipy.spatial import cKDTree
+import math
+
 string_complement_map = {
     "A": "T",
     "C": "G",
@@ -1238,7 +1241,7 @@ class ClockDataModule(DataInterface):
 
     Args:
         split_column (str): The column of <obs> that defines the split assignments.
-        gene_set_file (str): Path to a csv file containing gene symbols in the order expected by the model being used. 
+        gene_set_file (str): Path to a csv file containing gene symbols in the order expected by the model being used.
         filter_columns (Optional[list[str]], optional): The columns of <obs> we want to use. Defaults to None, in which case all columns are used.
         rename_columns (Optional[list[str]], optional): New name of columns. Defaults to None, in which case columns are not renamed. Does nothing if filter_colums is None.
         # TODO: Add option to return a subset of genes by filtering on <var>.
@@ -1301,7 +1304,6 @@ class ClockDataModule(DataInterface):
             adata_test.obs['numeric_age'] = (adata_test.obs['numeric_age'] - mu) / sigma
         else:
             raise NotImplementedError(f'label_scaling {self.label_scaling} not recognized.')
-        
         # only retain useful data for regression
         if self.filter_columns is not None:
             adata_train.obs = adata_train.obs[self.filter_columns]
@@ -1313,7 +1315,6 @@ class ClockDataModule(DataInterface):
                 adata_train.obs.columns = self.rename_columns
                 adata_val.obs.columns = self.rename_columns
                 adata_test.obs.columns = self.rename_columns
-        
         D_train = {key: torch.from_numpy(adata_train.obs[key].values)[:, None] for key in adata_train.obs.columns}
         D_train["sequences"] = adata_train.X.toarray()
         D_val = {key: torch.from_numpy(adata_val.obs[key].values)[:, None] for key in adata_val.obs.columns}
@@ -1324,3 +1325,197 @@ class ClockDataModule(DataInterface):
         self.train_dataset = AnyDataset(**D_train)
         self.val_dataset = AnyDataset(**D_val)
         self.test_dataset = AnyDataset(**D_test)
+
+
+class SpatialDataGenerator(Dataset):
+    """Memory-efficient map-style dataset with precomputed neighbors"""
+
+    def __init__(
+        self,
+        file_path,
+        neighbor_num,
+        filter_cols,
+        rename_cols,
+        use_random=False,
+        copy_center=False,
+    ):
+        self.file_path = file_path
+        self.neighbor_num = neighbor_num
+        self.filter_cols = filter_cols
+        self.rename_cols = rename_cols
+        self.use_random = use_random
+        self.copy_center = copy_center
+
+        # Load metadata in backed mode
+        self.adata = ad.read_h5ad(self.file_path, backed="r")
+        self._process_metadata()
+        self.neighbor_indices = self._precompute_neighbors()
+        self.length = len(self.adata.obs)
+
+    def _process_metadata(self):
+        """Handle column filtering/renaming without loading full data"""
+        if self.filter_cols:
+            self.obs = self.adata.obs[self.filter_cols]
+            if self.rename_cols:
+                self.obs.columns = self.rename_cols
+        else:
+            self.obs = self.adata.obs
+
+    def _precompute_neighbors(self):
+        """Calculate once during initialization"""
+        spatial_data = np.stack([self.adata.obs.x, self.adata.obs.y], axis=1)
+        tree = cKDTree(spatial_data)
+        _, indices = tree.query(spatial_data, k=1 + self.neighbor_num)
+        return indices
+
+    def __len__(self):
+        return self.length
+
+    def __getitem__(self, idx):
+        """Generate samples on-demand"""
+        # Load center cell data
+        center_x = self.adata.X[idx].toarray().flatten()
+
+        # Get neighbor indices
+        if self.use_random:
+            neighbors = np.random.choice(len(self), self.neighbor_num, replace=False)
+        else:
+            neighbors = self.neighbor_indices[idx][1:]  # Skip self
+
+        # Process neighbors
+        if self.copy_center:
+            noise_factor = 0.2
+            neighbor_x = [self._add_noise(center_x, noise_factor) for _ in neighbors]
+        else:
+            neighbor_x = [self.adata.X[i].toarray().flatten() for i in neighbors]
+
+        # Combine features
+        features = np.concatenate([center_x] + neighbor_x)
+
+        # Get label
+        label = self.obs.iloc[idx].values[
+            0
+        ]  # Assuming single label column, assumes first column is label
+        if type(label) is np.float64:
+            label = np.array([label]).astype(np.float64)
+        else:
+            # print(type(label), label)
+            if "," in label:
+                label = np.array(list(map(float, label.split(",")))).astype(np.float64)
+
+        return {"sequences": features.astype(np.float32), "labels": label}
+
+    def _add_noise(self, matrix, noise_factor=0.2):
+        """In-place noise addition"""
+        lambda_matrix = noise_factor * np.abs(matrix)
+        lambda_matrix[lambda_matrix == 0] = noise_factor
+        noise = np.random.poisson(lam=lambda_matrix)
+        return matrix + noise
+
+
+class CellWithNeighborDataModule(DataInterface):
+    """Lightning-compatible DataModule with memory optimization"""
+
+    def __init__(
+        self,
+        *args,
+        filter_columns=None,
+        rename_columns=None,
+        use_random_neighbor=False,
+        copy_center_as_neighbor=False,
+        neighbor_num=10,
+        **kwargs,
+    ):
+        super().__init__(*args, **kwargs)
+        if len(self.train_split_files) != 1:
+            raise NotImplementedError("Multiple files not yet supported.")
+        if len(self.valid_split_files) != 1:
+            raise NotImplementedError("Multiple files not yet supported.")
+        if len(self.test_split_files) != 1:
+            raise NotImplementedError("Multiple files not yet supported.")
+        self.trainfile = self.train_split_files[0]
+        self.valfile = self.valid_split_files[0]
+        self.testfile = self.test_split_files[0]
+        self.rename_columns = rename_columns
+        self.filter_columns = filter_columns
+        self.use_random_neighbor = use_random_neighbor
+        self.copy_center_as_neighbor = copy_center_as_neighbor
+        self.neighbor_num = neighbor_num
+        self.setup_complete = False
+
+    def setup(self, stage=None):
+        """Initialize datasets with lazy loading"""
+        if not self.setup_complete:
+            self.train_gen = self._create_generator(self.trainfile)
+            self.val_gen = self._create_generator(self.valfile)
+            self.test_gen = self._create_generator(self.testfile)
+            self.train_dataset = AnyDataset(
+                sequences=_KeyDataset(self.train_gen, "sequences"),
+                labels=_KeyDataset(self.train_gen, "labels"),
+                ids=np.arange(len(self.train_gen)),
+            )
+            self.val_dataset = AnyDataset(
+                sequences=_KeyDataset(self.val_gen, "sequences"),
+                labels=_KeyDataset(self.val_gen, "labels"),
+                ids=np.arange(len(self.val_gen)),
+            )
+            self.test_dataset = AnyDataset(
+                sequences=_KeyDataset(self.test_gen, "sequences"),
+                labels=_KeyDataset(self.test_gen, "labels"),
+                ids=np.arange(len(self.test_gen)),
+            )
+            self.setup_complete = True
+
+    def _create_generator(self, filename):
+        return SpatialDataGenerator(
+            os.path.join(self.path, filename),
+            neighbor_num=self.neighbor_num,
+            filter_cols=self.filter_columns,
+            rename_cols=self.rename_columns,
+            use_random=self.use_random_neighbor,
+            copy_center=self.copy_center_as_neighbor,
+        )
+
+
+class _KeyDataset(Dataset):
+    """Helper to extract specific keys from generator"""
+
+    def __init__(self, source, key):
+        self.source = source
+        self.key = key
+
+    def __len__(self):
+        return len(self.source)
+
+    def __getitem__(self, idx):
+        return self.source[idx][self.key]
+
+
+def next_16x(x):
+    return int(math.ceil(x / 16) * 16)
+
+
+def gather_data(data, labels, pad_token_id):
+    value_nums = labels.sum(1)
+    max_num = next_16x(max(value_nums))
+
+    fake_data = torch.full((data.shape[0], max_num), pad_token_id, device=data.device)
+    data = torch.hstack([data, fake_data])
+
+    fake_label = torch.full((labels.shape[0], max_num), 1, device=labels.device)
+    none_labels = ~labels
+    labels = labels.float()
+    labels[none_labels] = torch.tensor(-float("Inf"), device=labels.device)
+
+    tmp_data = torch.tensor(
+        [(i + 1) * 20000 for i in range(labels.shape[1], 0, -1)], device=labels.device
+    )
+    labels += tmp_data
+
+    labels = torch.hstack([labels, fake_label])
+    fake_label_gene_value, fake_label_gene_idx = labels.topk(max_num)
+
+    new_data = torch.gather(data, 1, fake_label_gene_idx)
+    padding_labels = fake_label_gene_value == 1
+
+    return new_data, padding_labels

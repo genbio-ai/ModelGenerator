@@ -1,7 +1,13 @@
 import pandas as pd
+import sys
+import os
 
-# Define the path to your BED file
-bed_file_path = 'clinvarMain.bed'
+bed_file_path = sys.argv[1]
+
+# Check if the file exists
+if not os.path.isfile(bed_file_path):
+    print(f"Error: The file {bed_file_path} does not exist.")
+    sys.exit(1)
 
 # https://genome.ucsc.edu/cgi-bin/hgTables?db=hg38&hgta_group=phenDis&hgta_track=clinvar&hgta_table=clinvarMain&hgta_doSchema=describe+table+schema
 names = ['chrom', 'start', 'end', 'name', 'score', 'strand',
@@ -10,12 +16,12 @@ names = ['chrom', 'start', 'end', 'name', 'score', 'strand',
                 'geneID', 'molConseq', 'snpID', 'nsvID', 'rcvAcc', 'testedInGtr',
                 'phenotypeList', 'phenotype', 'origin', 'assembly', 'cytogenetic',
                 '_jsonHgvsTable', '_hgvsProt', 'numSubmit', 'lastEval', 'guidelines',
-                'otherIds', '_mouseOver', '_clinSignCode', '_originCode', '_allTypeCode',
-                '_varLen', '_starCount', '_variantId', '_dbVarSsvId']
+                'otherIds', '_mouseOver', 'vcfDesc','somImpactDesc','oncogenDesc','_clinSignCode', '_originCode', '_allTypeCode',
+                '_varLen', '_starCount', '_variantId', '_dbVarSsvId', 'vcvId']
 
 # Load the BED file
 # BED files are typically tab-delimited; the first three columns are mandatory
-bed_df = pd.read_csv(bed_file_path, sep='\t', header=None, names = names)
+bed_df = pd.read_csv(bed_file_path, sep='\t', header=None, names = names, engine="python")
 
 ## We only want SNPs, and BN and PG
 snp_df = bed_df[bed_df["type"] == "single nucleotide variant"]
@@ -41,4 +47,6 @@ chroms = ['chr1', 'chr10', 'chr11', 'chr12', 'chr13', 'chr14', 'chr15',
 
 df_cleaned = df_cleaned[df_cleaned["chrom"].isin(chroms)]
 
-df_cleaned.to_csv("ClinVar_Processed.bed", sep='\t', index=False)
+savepath = os.path.join(os.path.dirname(bed_file_path), "ClinVar_Processed.tsv")
+df_cleaned.to_csv(savepath, sep='\t', index=False)
+print(f'save processed file to {savepath}')

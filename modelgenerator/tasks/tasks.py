@@ -1823,17 +1823,21 @@ class ZeroshotPredictionDiff(TaskInterface):
 
 
 class ZeroshotPredictionDistance(TaskInterface):
-    """Task for zero-shot prediction on masked languange model. This task is used to evaluate the embeddings of pretrained model
-       The evaluation metric is L1, L2 distance between reference and alt sequence embeddings extracted from every layer
+    """Task for zero-shot prediction on an embedding model.
+    Calculates the L1 and L2 distance between a reference and alt embeddings.
+    Then evaluates the AUROC and AUPRC of this distance statistic against a given label.
+
     Args:
         backbone (BackboneCallable): The callable that returns a backbone.
-        use_legacy_adapter (bool): Whether we use adapter in huggingface model
+        use_legacy_adapter (bool, optional): Whether we use the legacy adapter from the pretrained model. Defaults to True.
+        all_hidden_states (bool, optional): Whether to run the test on all available hidden layers. Defaults to False, only using the last layer.
     """
 
     def __init__(
         self,
         backbone: BackboneCallable,
         use_legacy_adapter: bool = True,
+        all_hidden_states: bool = False,
         **kwargs,
     ):
         if self.__class__ is ZeroshotPredictionDistance:
@@ -1842,13 +1846,15 @@ class ZeroshotPredictionDistance(TaskInterface):
         self.backbone = None
         self.adapter = None
         self.backbone_fn = backbone
+        self.ref_hidden_mean = None
+        self.all_hidden_states = all_hidden_states
 
     def configure_model(self) -> None:
         if self.backbone is not None:
             return
         self.backbone = self.backbone_fn(LegacyAdapterType.MASKED_LM, None)
         self.adapter = self.backbone.get_decoder()
-        self.n_layers = self.backbone.get_num_layer()
+        self.n_layers = self.backbone.get_num_layer() if self.all_hidden_states else 1
         metrics_dict = {}
         for i in range(self.n_layers):
             metrics_dict.update(
@@ -1896,7 +1902,8 @@ class ZeroshotPredictionDistance(TaskInterface):
                         self.device
                     )
                 processed_batch[key.replace("sequences", "input_ids")] = input_ids
-                processed_batch["special_tokens_mask"] = special_tokens_mask
+                processed_batch[key.replace("sequences", "attention_mask")] = attention_mask
+                processed_batch[key.replace("sequences", "special_tokens_mask")] = special_tokens_mask
             else:
                 processed_batch[key] = batch[key]
         return processed_batch
@@ -1910,33 +1917,48 @@ class ZeroshotPredictionDistance(TaskInterface):
         Returns:
             Tensor: The decoder logits
         """
-        ref_encoder_hidden = torch.stack(
-            self.backbone(
+        output = self.backbone(
+            collated_batch["mutation_input_ids"],
+            attention_mask=None,
+            all_hidden_states=self.all_hidden_states,
+        )
+
+        if not self.all_hidden_states:
+            mutation_encoder_hidden = output.unsqueeze(0)
+        else:
+            mutation_encoder_hidden = torch.stack(output)
+        n, b, s, d = mutation_encoder_hidden.shape
+        if self.ref_hidden_mean is None:
+            ref_output = self.backbone(
                 collated_batch["ref_input_ids"],
                 attention_mask=None,
-                all_hidden_states=True,
-            )[1:]
-        )
-        mutation_encoder_hidden = torch.stack(
-            self.backbone(
-                collated_batch["mutation_input_ids"],
-                attention_mask=None,
-                all_hidden_states=True,
-            )[1:]
-        )
-        # remove special token before computing zeroshot score
-        n, b, s, d = ref_encoder_hidden.shape
-        if collated_batch.get("special_tokens_mask") is not None:
-            special_tokens_mask = torch.tensor(collated_batch["special_tokens_mask"])
-            ref_encoder_hidden = ref_encoder_hidden[
-                :, torch.logical_not(special_tokens_mask)
-            ].view(n, b, -1, d)
-            mutation_encoder_hidden = mutation_encoder_hidden[
-                :, torch.logical_not(special_tokens_mask)
-            ].view(n, b, -1, d)
+                all_hidden_states=self.all_hidden_states
+            )
+            if not self.all_hidden_states:
+                ref_encoder_hidden = ref_output.unsqueeze(0)
+            else:
+                ref_encoder_hidden = torch.stack(ref_output)
+
+            if collated_batch.get('special_tokens_mask') is not None:
+                ref_encoder_hidden = ref_encoder_hidden[
+                    :, torch.logical_not(collated_batch["special_tokens_mask"])
+                ].view(n, b, -1, d).mean(dim=-2)
+            else:
+                ref_encoder_hidden = ref_encoder_hidden.mean(dim=-2)
+            self.ref_hidden_mean = ref_encoder_hidden[:,0,:]
         else:
-            ref_encoder_hidden = ref_encoder_hidden.view(n, b, -1, d)
-            mutation_encoder_hidden = mutation_encoder_hidden.view(n, b, -1, d)
+            ref_encoder_hidden = self.ref_hidden_mean.unsqueeze(1).repeat(b)
+
+        # remove special token before computing zeroshot score
+        if collated_batch.get('special_tokens_mask') is not None:
+            masked_hidden_list = []
+            for i in range(b):
+                mask = torch.logical_not(collated_batch["special_tokens_mask"][i])
+                masked_hidden = mutation_encoder_hidden[:,i,mask,:].mean(dim=1)
+                masked_hidden_list.append(masked_hidden)
+            mutation_encoder_hidden = torch.stack(masked_hidden_list, dim=1)
+        else:
+            mutation_encoder_hidden = mutation_encoder_hidden.mean(dim=-2)
         return torch.stack([ref_encoder_hidden, mutation_encoder_hidden])
 
     def evaluate(
@@ -1958,7 +1980,7 @@ class ZeroshotPredictionDistance(TaskInterface):
         ref_hidden_states = logits[0]
         mutation_hidden_states = logits[1]
         prediction_dict = {
-            key: [] for key in collated_batch.keys() if "sequences" not in key
+            key: [] for key in collated_batch.keys() if ("mask" not in key) and ('input_id' not in key)
         }
         # add score related keys
         prediction_dict["norm_type"] = []
@@ -1977,8 +1999,8 @@ class ZeroshotPredictionDistance(TaskInterface):
                 stage, metrics[key], score, collated_batch["labels"]
             )
         # prepare prediction score to be saved to a tsv file
-        for i in range(self.n_layers):
-            for norm_type in ["L1", "L2"]:
+        for index in range(ref_hidden_states.shape[0]):
+            for norm_type in ["L1", "L2", "cosine"]:
                 score = self._compute_norm_score(
                     norm_type, ref_hidden_states[index], mutation_hidden_states[index]
                 )
@@ -1986,7 +2008,7 @@ class ZeroshotPredictionDistance(TaskInterface):
                 prediction_dict["norm_type"].extend([norm_type] * batch_size)
                 prediction_dict["num_layer"].extend([index] * batch_size)
                 for key in collated_batch.keys():
-                    if "sequences" not in key:
+                    if ("mask" not in key) and ('input_id' not in key):
                         try:
                             prediction_dict[key].extend(
                                 collated_batch[key].cpu().tolist()
@@ -2009,15 +2031,11 @@ class ZeroshotPredictionDistance(TaskInterface):
 
         """
         if norm_type == "L1":
-            score = torch.abs(
-                ref_hidden_state.mean(dim=-2) - mutation_hidden_state.mean(dim=-2)
-            ).sum(dim=1)
+            score = torch.abs(ref_hidden_state- mutation_hidden_state).sum(dim=1)
+        elif norm_type == 'L2':
+            score = torch.norm(ref_hidden_state - mutation_hidden_state, p=2, dim=1)
         else:
-            score = torch.norm(
-                ref_hidden_state.mean(dim=-2) - mutation_hidden_state.mean(dim=-2),
-                p=2,
-                dim=1,
-            )
+            score = 1 - F.cosine_similarity(ref_hidden_state,mutation_hidden_state,dim=1)
         return score
 
 

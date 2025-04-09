@@ -188,26 +188,27 @@ class PredictionWriter(Callback):
                             merged_data[col].extend(val)
                 for col, is_tensor in tensor_cols.items():
                     if is_tensor:
-                        max_length_col = max([val.shape[1] for val in merged_data[col]])
-                        merge_tuples = []
-                        for k, val in enumerate(merged_data[col]):
-                            # defining tuple for padding with nans using F.pad
-                            target_shape = [0] * (2 * len(val.shape))
-                            # we want to pad to the right on the 2nd dimension
-                            target_shape[2] = max_length_col - val.shape[1]
-                            # F.pad takes padding values in reverse w/last dimension first
-                            merge_tuple = tuple(reversed(target_shape))
-                            merge_tuples.append(merge_tuple)
+                        if merged_data[col][0].dim() > 1:
+                            max_length_col = max([val.shape[1] for val in merged_data[col]])
+                            merge_tuples = []
+                            for k, val in enumerate(merged_data[col]):
+                                # defining tuple for padding with nans using F.pad
+                                target_shape = [0] * (2 * len(val.shape))
+                                # we want to pad to the right on the 2nd dimension
+                                target_shape[2] = max_length_col - val.shape[1]
+                                # F.pad takes padding values in reverse w/last dimension first
+                                merge_tuple = tuple(reversed(target_shape))
+                                merge_tuples.append(merge_tuple)
 
-                        merged_data[col] = [
-                            F.pad(
-                                val.float(),
-                                merge_tuples[k],
-                                mode="constant",
-                                value=float("nan"),
-                            )
-                            for k, val in enumerate(merged_data[col])
-                        ]
+                            merged_data[col] = [
+                                F.pad(
+                                    val.float(),
+                                    merge_tuples[k],
+                                    mode="constant",
+                                    value=float("nan"),
+                                )
+                                for k, val in enumerate(merged_data[col])
+                            ]
 
                         merged_data[col] = torch.cat(merged_data[col], dim=0)
 

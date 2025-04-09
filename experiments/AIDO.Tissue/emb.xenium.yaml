@@ -1,0 +1,51 @@
+seed_everything: 42
+data:
+  class_path: modelgenerator.data.CellWithNeighborDataModule
+  init_args:
+    path: '/home/jing_gong_genbio_ai/bio-engine/data/ST_downstream/scGPT-spatial'
+    batch_size: 1
+    train_split_files:
+      - 'processed_fetal_lung_visium_xenium.xenium.convert.h5ad'
+    valid_split_files:
+      - 'processed_fetal_lung_visium_xenium.xenium.convert.h5ad'
+    test_split_files:
+      - 'processed_fetal_lung_visium_xenium.xenium.convert.h5ad'
+    filter_columns:
+      - 'cell_type'
+      - 'x'
+      - 'y'
+    rename_columns:
+      - 'labels'
+      - 'x'
+      - 'y'
+    neighbor_num: 10
+    num_workers: 4
+    persistent_workers: True
+model:
+  class_path: modelgenerator.tasks.Embed
+  init_args:
+    backbone:
+      class_path: modelgenerator.backbones.aido_tissue_3m
+      init_args:
+        from_scratch: False
+trainer:
+  log_every_n_steps: 10
+  precision: bf16
+  devices: auto
+  max_epochs: 10
+  gradient_clip_val: 0
+  profiler: null
+  devices: 1
+  default_root_dir: './logs/emb.xenium'
+  strategy:
+    class_path: lightning.pytorch.strategies.DDPStrategy
+  callbacks:
+    class_path: modelgenerator.callbacks.PredictionWriter
+    init_args:
+      output_dir: './logs/emb.xenium/lightning_logs/pred_output'
+      filetype: 'pt'
+      write_cols:
+        - 'predictions'
+        - 'ids'
+return_predictions: True
+# TODO: Clean up parameter dependencies.

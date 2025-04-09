@@ -197,7 +197,7 @@ class TaskInterface(pl.LightningModule):
         preds = self.forward(collated_batch)
         outputs = self.evaluate(preds, collated_batch, "val", loss_only=False)
         self.log_loss_and_metrics(outputs["loss"], "val")
-        return outputs
+        return {"predictions": preds, **batch, **collated_batch, **outputs}
 
     def test_step(
         self, batch: dict[str, Union[list, Tensor]], batch_idx: Optional[int] = None
@@ -215,7 +215,7 @@ class TaskInterface(pl.LightningModule):
         preds = self.forward(collated_batch)
         outputs = self.evaluate(preds, collated_batch, "test", loss_only=False)
         self.log_loss_and_metrics(outputs["loss"], "test")
-        return {"predictions": preds, **collated_batch}
+        return {"predictions": preds, **batch, **collated_batch, **outputs}
 
     def predict_step(
         self, batch: dict[str, Union[list, Tensor]], batch_idx: Optional[int] = None
@@ -231,7 +231,7 @@ class TaskInterface(pl.LightningModule):
         """
         collated_batch = self.transform(batch, batch_idx)
         preds = self.forward(collated_batch)
-        return {"predictions": preds, **collated_batch}
+        return {"predictions": preds, **batch, **collated_batch}
 
     def get_metrics_by_stage(
         self, stage: Literal["train", "val", "test"]
