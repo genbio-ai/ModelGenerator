@@ -327,6 +327,31 @@ class TestDatasets(unittest.TestCase):
         )
         self._test(task, data)
 
+    def test_IsoformExpression(self):
+        unimodal_data = IsoformExpression(train_split_files = ["train_1.tsv"], x_col = "dna_seq", normalize=False)
+        unimodal_task = SequenceRegression(
+            backbone=dna_onehot,
+            adapter=self.sequence_adapter_partial,
+            num_outputs=30
+        )
+        self._test(unimodal_task, unimodal_data)
+        
+        multimodal_data = IsoformExpression(train_split_files = ["train_1.tsv"], normalize=False)
+        bimodal_task = MMSequenceRegression(
+            backbone=dna_onehot,
+            backbone1=dna_onehot,
+            num_outputs=30
+        )
+        self._test(bimodal_task, multimodal_data)
+
+        trimodal_task = MMSequenceRegression(
+            backbone=dna_onehot,
+            backbone1=dna_onehot,
+            backbone2=protein_onehot,
+            backbone_order=["dna_seq", "rna_seq", "protein_seq"],
+            num_outputs=30
+        )
+        self._test(trimodal_task, multimodal_data)
 
 if __name__ == "__main__":
     unittest.main()

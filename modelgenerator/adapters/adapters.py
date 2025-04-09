@@ -45,6 +45,18 @@ class MLPAdapter(nn.Sequential, TokenAdapter):
 
         super().__init__(*layers)
 
+    def forward(self, hidden_states: Tensor, attention_mask: Tensor = None) -> Tensor:
+        """Forward pass
+
+        Args:
+            hidden_states (torch.Tensor): of shape (n, seq_len, in_features)
+
+        Returns:
+            torch.Tensor: predictions (n, seq_len, out_features)
+        """
+        output = super().forward(hidden_states)
+        return output
+
 
 class MLPPoolAdapter(nn.Module, SequenceAdapter):
     """MLP adapter for a 2D embedding with pooling for the sequence length dimension
@@ -94,12 +106,15 @@ class MLPPoolAdapter(nn.Module, SequenceAdapter):
             torch.Tensor: predictions (n, out_features)
         """
         if self.pooling == "mean_pooling":
-            input_mask_expanded = (
-                attention_mask.unsqueeze(-1).expand(hidden_states.size()).float()
-            )
-            embeddings = torch.sum(
-                hidden_states * input_mask_expanded, 1
-            ) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
+            if attention_mask is not None:
+                input_mask_expanded = (
+                    attention_mask.unsqueeze(-1).expand(hidden_states.size()).float()
+                )
+                embeddings = torch.sum(
+                    hidden_states * input_mask_expanded, 1
+                ) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
+            else:
+                embeddings = hidden_states.mean(1)
         elif self.pooling == "cls_pooling":
             embeddings = hidden_states[:, 0]
         else:
@@ -168,12 +183,15 @@ class LinearMeanPoolAdapter(nn.Module, SequenceAdapter):
         Returns:
             torch.Tensor: predictions (n, out_features)
         """
-        input_mask_expanded = (
-            attention_mask.unsqueeze(-1).expand(hidden_states.size()).float()
-        )
-        embeddings = torch.sum(hidden_states * input_mask_expanded, 1) / torch.clamp(
-            input_mask_expanded.sum(1), min=1e-9
-        )
+        if attention_mask is not None:
+            input_mask_expanded = (
+                attention_mask.unsqueeze(-1).expand(hidden_states.size()).float()
+            )
+            embeddings = torch.sum(hidden_states * input_mask_expanded, 1) / torch.clamp(
+                input_mask_expanded.sum(1), min=1e-9
+            )
+        else:
+            embeddings = torch.mean(hidden_states, dim=1)
         output = self.linear(embeddings)
         return output
 
@@ -339,7 +357,7 @@ class ResNet2DAdapter(nn.Module, SequenceAdapter):
         upper_triangular = torch.triu(matrix, diagonal=1)
         return upper_triangular + upper_triangular.transpose(-1, -2)
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor, attention_mask: Tensor = None) -> Tensor:
         """Forward pass
 
         Args:

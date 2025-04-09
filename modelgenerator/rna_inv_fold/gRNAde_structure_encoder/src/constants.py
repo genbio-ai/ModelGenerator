@@ -8,7 +8,9 @@ DATA_PATH = os.path.join(
     os.environ.get("MGEN_DATA_DIR"), "modelgenerator/datasets/rna_inv_fold/"
 )
 if DATA_PATH is None:
-    raise Exception("DATA_PATH not set properly. Did you set the environment variable 'MGEN_DATA_DIR'?")
+    raise Exception(
+        "DATA_PATH not set properly. Did you set the environment variable 'MGEN_DATA_DIR'?"
+    )
 
 raw_data_dir = os.path.join(DATA_PATH, "raw_data")
 if not os.path.exists(raw_data_dir):

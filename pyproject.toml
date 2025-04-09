@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "modelgenerator"
-version = "0.1.1-5"
+version = "0.1.1-4"
 description = "AIDO.ModelGenerator is a software stack powering the development of an AI-driven Digital Organism by enabling researchers to adapt pretrained models and generate finetuned models for downstream tasks."
 readme = "README.md"
 authors = [
@@ -24,10 +24,9 @@ keywords = [
 ]
 dependencies = [
     "torch",
-    "torchvision",
-    "torchaudio",
     "transformers==4.38.0",
     "datasets",
+    "numpy<2",
     "packaging",
     "bitsandbytes",
     "scipy",
@@ -38,9 +37,7 @@ dependencies = [
     "peft<=0.13.2",  # Dec 6 2024 release breaks EncoderDecoderCache from transformers
     "torchmetrics>=1.5.0",
     "lightning>=2.4.0",
-    "black",
-    "jsonargparse[signatures]>=4.26.1",
-    "awscli",
+    "jsonargparse[signatures]>=4.37.0",
     "openfold @ git+https://github.com/genbio-ai/openfold.git@c4aa2fd0d920c06d3fd80b177284a22573528442",
     "dllogger @ git+https://github.com/NVIDIA/dllogger.git@0540a43971f4a8a16693a9de9de73c1072020769",
     "biotite>=1.0.1",
@@ -50,8 +47,18 @@ dependencies = [
     "biopython>=1.84",
     "omegaconf>=2.3.0",
     "anndata",
+    "enformer-pytorch",
+    "local_attention",
 ]
 requires-python = ">=3.10,<3.11"
+
+[project.optional-dependencies]
+dev = [
+    "black",
+    "awscli",
+    "pytest",
+    "pytest-cov",
+]
 
 [project.scripts]
 mgen = "modelgenerator.main:cli_main"

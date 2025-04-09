@@ -1,10 +1,8 @@
 from typing import Callable, Literal, Optional, Set, Union
-import numpy as np
 
 import torch
 from torch import Tensor
 import torch.nn as nn
-import torch.nn.functional as F
 
 import lightning.pytorch as pl
 from lightning.pytorch.cli import OptimizerCallable, LRSchedulerCallable
@@ -16,10 +14,8 @@ from jsonargparse import ArgumentParser
 from modelgenerator.lr_schedulers import LazyLRScheduler
 from modelgenerator.backbones import (
     HFSequenceBackbone,
-    HFSequenceBackbone,
     DefaultConfig,
     LegacyAdapterType,
-    aido_dna_dummy,
 )
 
 BackboneCallable = Callable[

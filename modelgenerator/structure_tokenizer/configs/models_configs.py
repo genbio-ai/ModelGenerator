@@ -92,7 +92,7 @@ class FoldingTrunkConfig:
     layer_drop: float = 0
     cpu_grad_checkpoint: bool = False
 
-    max_recycles: int = 4
+    max_recycles: int = 1
     chunk_size: int | None = None
 
     structure_module: StructureModuleConfig = StructureModuleConfig()

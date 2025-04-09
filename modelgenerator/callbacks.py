@@ -1,6 +1,7 @@
 import os
 import torch
 from torch.optim.optimizer import Optimizer
+import torch.nn.functional as F
 from lightning import LightningModule
 import lightning.pytorch as pl
 from lightning.pytorch.utilities import rank_zero_info, rank_zero_warn
@@ -174,18 +175,42 @@ class PredictionWriter(Callback):
                     data = torch.load(file)
                     if i == 0:
                         for col, val in data.items():
+                            if val is None:
+                                continue
                             tensor_cols[col] = type(val) is torch.Tensor
                             merged_data[col] = []
                     for col, val in data.items():
+                        if col not in merged_data:
+                            continue
                         if tensor_cols[col]:
-                            merged_data[col].append(val)
+                            merged_data[col].append(val.cpu())
                         else:
                             merged_data[col].extend(val)
                 for col, is_tensor in tensor_cols.items():
                     if is_tensor:
-                        # Todo: remove, broken for different length tokenizations
-                        # NOTE: remove_special_tokens doesn't support pt filetype is because of this line
+                        max_length_col = max([val.shape[1] for val in merged_data[col]])
+                        merge_tuples = []
+                        for k, val in enumerate(merged_data[col]):
+                            # defining tuple for padding with nans using F.pad
+                            target_shape = [0] * (2 * len(val.shape))
+                            # we want to pad to the right on the 2nd dimension
+                            target_shape[2] = max_length_col - val.shape[1]
+                            # F.pad takes padding values in reverse w/last dimension first
+                            merge_tuple = tuple(reversed(target_shape))
+                            merge_tuples.append(merge_tuple)
+
+                        merged_data[col] = [
+                            F.pad(
+                                val.float(),
+                                merge_tuples[k],
+                                mode="constant",
+                                value=float("nan"),
+                            )
+                            for k, val in enumerate(merged_data[col])
+                        ]
+
                         merged_data[col] = torch.cat(merged_data[col], dim=0)
+
                 torch.save(
                     merged_data,
                     os.path.join(self.output_dir, f"{stage}_predictions.pt"),
@@ -197,9 +222,6 @@ class PredictionWriter(Callback):
         self, trainer, pl_module, predictions, batch, batch_idx, dataloader_idx=0
     ):
         self._save_batch(trainer, predictions, batch_idx, stage="test")
-
-    def on_test_epoch_end(self, trainer, pl_module):
-        self._save_epoch(trainer, stage="test")
 
     def on_predict_batch_end(
         self, trainer, pl_module, predictions, batch, batch_idx, dataloader_idx=0

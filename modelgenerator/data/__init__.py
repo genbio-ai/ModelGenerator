@@ -1,5 +1,6 @@
 from modelgenerator.data.base import *
 from modelgenerator.data.data import *
+from typing import Union
 
 
 class NTClassification(SequenceClassificationDataModule):
@@ -592,5 +593,37 @@ class DMSFitnessPrediction(SequenceRegressionDataModule):
             valid_split_size=valid_split_size,
             test_split_name=test_split_name,
             test_split_size=test_split_size,
+            **kwargs,
+        )
+
+
+class IsoformExpression(SequenceRegressionDataModule):
+    """
+    Data class for single/multimodal isoform expression prediction tasks
+    """
+
+    def __init__(
+        self,
+        path: str = "genbio-ai/transcript_isoform_expression_prediction",
+        config_name: str = None,
+        x_col: Union[str, list] = ["dna_seq", "rna_seq", "protein_seq"],
+        valid_split_name="valid",
+        train_split_files: Optional[Union[str, list[str]]] = "train_*.tsv",
+        test_split_files: Optional[Union[str, list[str]]] = "test.tsv",
+        valid_split_files: Optional[Union[str, list[str]]] = "validation.tsv",
+        normalize: bool = True,
+        **kwargs,
+    ):
+        super().__init__(
+            path=path,
+            config_name=config_name,
+            x_col=x_col,
+            y_col=[f"labels_{i}" for i in range(30)],
+            valid_split_name=valid_split_name,
+            train_split_files=train_split_files,
+            test_split_files=test_split_files,
+            valid_split_files=valid_split_files,
+            normalize=normalize,
+            extra_reader_kwargs={"keep_default_na": False},
             **kwargs,
         )

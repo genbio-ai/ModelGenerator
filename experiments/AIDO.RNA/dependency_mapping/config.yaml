@@ -1,0 +1,19 @@
+# Caleb Ellington
+model:
+  class_path: Inference
+  init_args: 
+    backbone: aido_rna_1b600m
+data:
+  class_path: DependencyMappingDataModule
+  init_args:
+    path: experiments/AIDO.RNA/dependency_mapping/
+    test_split_files: 
+      - depmap.csv
+    vocab_file: experiments/AIDO.RNA/dependency_mapping/DNA.txt
+    batch_size: 32
+trainer:
+  callbacks:
+  - class_path: modelgenerator.callbacks.PredictionWriter
+    dict_kwargs:
+      output_dir: depmap_predictions
+      filetype: pt

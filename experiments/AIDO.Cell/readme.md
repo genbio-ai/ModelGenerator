@@ -33,10 +33,10 @@ huggingface-cli login
 cd /path/to/ModelGenerator
 docker run --rm --runtime=nvidia \
 -v /home/user/ModelGenerator/configs:/workspace/configs \
--v /home/user/mgen_data:/workspace/mgen_data \
 -v /home/user/ModelGenerator/modelgenerator:/workspace/modelgenerator \
 -v /home/user/ModelGenerator/experiments:/workspace/experiments \
 -v /home/user/.cache/huggingface:/root/.cache/huggingface \
+-v "/home/user/ModelGenerator/logs:/workspace/logs" \
 finetune bash -c "mgen fit --config experiments/AIDO.Cell/cell_type_classification.yaml"
 ```
 
@@ -46,9 +46,16 @@ finetune bash -c "mgen fit --config experiments/AIDO.Cell/cell_type_classificati
 cd /path/to/ModelGenerator
 docker run --rm --runtime=nvidia \
 -v /home/user/ModelGenerator/configs:/workspace/configs \
--v /home/user/mgen_data:/workspace/mgen_data \
 -v /home/user/ModelGenerator/modelgenerator:/workspace/modelgenerator \
 -v /home/user/ModelGenerator/experiments:/workspace/experiments \
 -v /home/user/.cache/huggingface:/root/.cache/huggingface \
+-v "/home/user/ModelGenerator/logs:/workspace/logs" \
 finetune bash -c "mgen test --config experiments/AIDO.Cell/cell_type_classification.yaml --ckpt_path /workspace/lightning_logs/version_X/checkpoints/my.ckpt"
 ```
+
+# Other usage examples
+
+The example above fine-tunes and evaluates a model for cell type classification. Other usage examples are described below. 
+
+## Transcriptomic Clock Task
+Simply replace the `config` argument of `mgen fit` with  `experiments/AIDO.Cell/transcriptomic_clock.yaml`.

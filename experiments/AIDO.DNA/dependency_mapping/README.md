@@ -12,8 +12,8 @@ mgen predict --config experiments/AIDO.DNA/dependency_mapping/config.yaml
 
 # Plotting
 python experiments/AIDO.DNA/dependency_mapping/plot_dependency_maps.py \
-    -i predictions \
-    -o plots \
+    -i depmap_predictions \
+    -o depmap_plots \
     -v experiments/AIDO.DNA/dependency_mapping/DNA.txt \
     -t modelgenerator/huggingface_models/rnabert/vocab.txt 
 ```

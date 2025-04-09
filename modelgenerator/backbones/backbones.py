@@ -1,5 +1,5 @@
 import os
-from typing import Union, Optional, List, Callable, Tuple
+from typing import Union, Optional, List
 from pathlib import Path
 
 import torch
@@ -9,6 +9,8 @@ from torch import Tensor
 from lightning.pytorch.utilities.rank_zero import rank_zero_only, rank_zero_info
 
 from peft import LoraConfig, TaskType, get_peft_model, get_peft_model_state_dict
+
+from transformers.utils import cached_file
 
 from modelgenerator.backbones.base import *
 
@@ -21,7 +23,7 @@ class GenBioBERT(HFSequenceBackbone):
         `aido_rna_1b600m`, `aido_rna_1b600m_cds`, `aido_rna_1m_mars`, `aido_rna_25m_mars`, `aido_rna_300m_mars`,
         `aido_rna_650m`, `aido_rna_650m_cds`.
 
-        FSDP auto_wrap_policy is `[transformers.models.rnabert.modeling_rnabert.RNABertLayer]`
+        FSDP auto_wrap_policy is `modelgenerator.distributed.fsdp.wrap.AutoWrapPolicy`
 
     Args:
         config_overwrites (dict, optional): Optional model arguments for PretrainedConfig. Defaults to None.
@@ -36,6 +38,10 @@ class GenBioBERT(HFSequenceBackbone):
         lora_dropout (float, optional): LoRA dropout. Defaults to 0.1.
         lora_target_modules (Optional[List[str]], optional): LoRA target modules. Defaults to ["query", "value"].
     """
+
+    fsdp_wrap_modules = [
+        "modelgenerator.huggingface_models.rnabert.modeling_rnabert.RNABertLayer"
+    ]
 
     def __init__(
         self,
@@ -192,9 +198,7 @@ class GenBioBERT(HFSequenceBackbone):
         )
         input_ids = seq_tokenized["input_ids"]
         attention_mask = seq_tokenized["attention_mask"]
-        special_mask = torch.tensor(
-            seq_tokenized["special_tokens_mask"], dtype=torch.bool
-        )
+        special_mask = seq_tokenized["special_tokens_mask"]
         return input_ids, attention_mask, special_mask
 
     def decode_tokens(self, tokenized_sequences: Tensor) -> list[str]:
@@ -243,7 +247,7 @@ class GenBioBERT(HFSequenceBackbone):
         """
         return self.encoder.config.vocab_size
 
-    def on_save_checkpoint(self, checkpoint: dict):
+    def on_save_checkpoint(self, checkpoint: dict, prefix: str = "backbone"):
         if (not self.use_peft and not self.frozen) or not self.save_peft_only:
             return
         adapter_name = "default"
@@ -251,9 +255,9 @@ class GenBioBERT(HFSequenceBackbone):
             peft_dict = get_peft_model_state_dict(
                 self.encoder, adapter_name=adapter_name
             )
-            prefixed_dict = {f"backbone.encoder.{k}": v for k, v in peft_dict.items()}
+            prefixed_dict = {f"{prefix}.encoder.{k}": v for k, v in peft_dict.items()}
         for k in list(checkpoint["state_dict"].keys()):
-            if not k.startswith("backbone.encoder."):
+            if not k.startswith(f"{prefix}.encoder."):
                 # keep all decoder weights
                 continue
             if self.frozen or (
@@ -279,7 +283,7 @@ class GenBioFM(HFSequenceBackbone):
     Note:
         Models using this interface include `aido_protein_16b`, `aido_protein_16b_v1`, `aido_protein2structoken_16b`, `aido_protein_debug`.
 
-        FSDP auto_wrap_policy is `[modelgenerator.huggingface_models.fm4bio.modeling_fm4bio.FM4BioLayer]`
+        FSDP auto_wrap_policy is `modelgenerator.distributed.fsdp.wrap.AutoWrapPolicy`
 
     Args:
         config_overwrites (dict, optional): Optional model arguments for PretrainedConfig. Defaults to None.
@@ -296,6 +300,12 @@ class GenBioFM(HFSequenceBackbone):
         lora_modules_to_save (Optional[List[str]], optional): LoRA modules to save. Defaults to None.
         lora_use_rslora (bool, optional): Whether to use RSLora. Defaults to False.
     """
+
+    fsdp_wrap_modules = [
+        "modelgenerator.huggingface_models.fm4bio.modeling_fm4bio.FM4BioLayer",
+        "modelgenerator.huggingface_models.fm4bio.modeling_fm4bio.FM4BioMLP",
+        "modelgenerator.huggingface_models.fm4bio.modeling_fm4bio.FM4BioEmbeddings",
+    ]
 
     def __init__(
         self,
@@ -457,9 +467,7 @@ class GenBioFM(HFSequenceBackbone):
         )
         input_ids = seq_tokenized["input_ids"]
         attention_mask = seq_tokenized["attention_mask"]
-        special_mask = torch.tensor(
-            seq_tokenized["special_tokens_mask"], dtype=torch.bool
-        )
+        special_mask = seq_tokenized["special_tokens_mask"]
         return input_ids, attention_mask, special_mask
 
     def decode_tokens(self, tokenized_sequences: Tensor) -> list[str]:
@@ -508,7 +516,7 @@ class GenBioFM(HFSequenceBackbone):
         """
         return self.encoder.config.vocab_size
 
-    def on_save_checkpoint(self, checkpoint: dict):
+    def on_save_checkpoint(self, checkpoint: dict, prefix: str = "backbone"):
         if (not self.use_peft and not self.frozen) or not self.save_peft_only:
             return
         adapter_name = "default"
@@ -516,9 +524,9 @@ class GenBioFM(HFSequenceBackbone):
             peft_dict = get_peft_model_state_dict(
                 self.encoder, adapter_name=adapter_name
             )
-            prefixed_dict = {f"backbone.encoder.{k}": v for k, v in peft_dict.items()}
+            prefixed_dict = {f"{prefix}.encoder.{k}": v for k, v in peft_dict.items()}
         for k in list(checkpoint["state_dict"].keys()):
-            if not k.startswith("backbone.encoder."):
+            if not k.startswith(f"{prefix}.encoder."):
                 # keep all decoder weights
                 continue
             if self.frozen or (
@@ -544,7 +552,7 @@ class GenBioCellFoundation(HFSequenceBackbone):
     Note:
         Models using this interface include `aido_cell_100m`, `aido_cell_10m`, and `aido_cell_3m`.
 
-        FSDP auto_wrap_policy is `[modelgenerator.huggingface_models.cellfoundation.modeling_cellfoundation.CellFoundationLayer]`
+        FSDP auto_wrap_policy is `modelgenerator.distributed.fsdp.wrap.AutoWrapPolicy`
 
     Args:
         config_overwrites (dict, optional): Optional model arguments for PretrainedConfig. Defaults to None.
@@ -561,6 +569,10 @@ class GenBioCellFoundation(HFSequenceBackbone):
         lora_modules_to_save (Optional[List[str]], optional): LoRA modules to save. Defaults to None.
         lora_use_rslora (bool, optional): Whether to use RSLora. Defaults to False.
     """
+
+    fsdp_wrap_modules = [
+        "modelgenerator.huggingface_models.cellfoundation.modeling_cellfoundation.CellFoundationLayer"
+    ]
 
     def __init__(
         self,
@@ -594,9 +606,10 @@ class GenBioCellFoundation(HFSequenceBackbone):
         self.max_length = max_length
         # Note: Legacy adapters are for older sequence models.
         if legacy_adapter_type is not None:
-            raise NotImplementedError(
-                "Legacy adapters are not implemented for CellFoundation."
-            )
+            # raise NotImplementedError(
+            #     "Legacy adapters are not implemented for CellFoundation."
+            # )
+            legacy_adapter_type = None
         model_class = CellFoundationModel
         peft_task_type = TaskType.FEATURE_EXTRACTION
 
@@ -652,23 +665,27 @@ class GenBioCellFoundation(HFSequenceBackbone):
             Union[Tensor, list]: Last hidden state or list of all hidden states or logits
         """
         X = torch.tensor(
-            input_ids, dtype=torch.bfloat16
+            input_ids, dtype=torch.float32
         )  # Converting from torch.long; should be counts.
 
         # https://github.com/fm4bio/scFoundation-repro/blob/9f706d807b68ec7b7f2df735d2a96fb4b1b67a0c/annotation/cell_annotation.py#L126-L141:
-        rawcountsidx = max(torch.log10(X.sum()), 5)
-        inputcountidx = max(torch.log10(X.sum()), 5)
-        X = torch.log1p(X / X.sum() * 10000).to(torch.float)
+        rawcountsidx = torch.maximum(
+            torch.log10(X.sum(dim=1, keepdim=True)), torch.tensor(5, device=X.device)
+        )
+        inputcountidx = torch.maximum(
+            torch.log10(X.sum(dim=1, keepdim=True)), torch.tensor(5, device=X.device)
+        )
+        X = torch.log1p(X / X.sum(dim=1, keepdim=True) * 10000)
         X = torch.cat(
             (
                 X,
-                torch.tensor([rawcountsidx, inputcountidx])
-                .repeat(X.shape[0], 1)
-                .to(X.device),
+                rawcountsidx.to(X.device),
+                inputcountidx.to(X.device),
             ),
             axis=1,
-        ).float()
+        )
         X[X > 20] = 20
+        X = X.to(torch.float16)
 
         outputs = self.encoder(
             input_ids=X,
@@ -705,10 +722,7 @@ class GenBioCellFoundation(HFSequenceBackbone):
         Returns:
             tuple[Tensor, Tensor]: Token IDs with padding and special tokens, and attention mask
         """
-        input_ids = sequences
-        attention_mask = torch.ones_like(sequences)
-        special_tokens_mask = torch.ones_like(sequences)
-        return input_ids, attention_mask, special_tokens_mask
+        return sequences, None, None
 
     def decode_tokens(self, tokenized_sequences: Tensor) -> list[str]:
         raise NotImplementedError("Not implemented for CellFoundation.")
@@ -735,7 +749,7 @@ class GenBioCellFoundation(HFSequenceBackbone):
     def get_vocab_size(self) -> int:
         raise NotImplementedError("Not implemented for CellFoundation.")
 
-    def on_save_checkpoint(self, checkpoint: dict):
+    def on_save_checkpoint(self, checkpoint: dict, prefix: str = "backbone"):
         if (not self.use_peft and not self.frozen) or not self.save_peft_only:
             return
         adapter_name = "default"
@@ -743,9 +757,9 @@ class GenBioCellFoundation(HFSequenceBackbone):
             peft_dict = get_peft_model_state_dict(
                 self.encoder, adapter_name=adapter_name
             )
-            prefixed_dict = {f"backbone.encoder.{k}": v for k, v in peft_dict.items()}
+            prefixed_dict = {f"{prefix}.encoder.{k}": v for k, v in peft_dict.items()}
         for k in list(checkpoint["state_dict"].keys()):
-            if not k.startswith("backbone.encoder."):
+            if not k.startswith(f"{prefix}.encoder."):
                 # keep all decoder weights
                 continue
             if self.frozen or (
@@ -774,9 +788,14 @@ class Onehot(HFSequenceBackbone):
         Does not contain any parameters, and cannot be used without an adapter.
 
     Args:
-        vocab_file (str, optional): Path to the vocabulary file. Defaults to "DNA-Transformers/src/transformers/models/rnabert/vocab.txt".
+        vocab_file (str, optional): Path to the vocabulary file. Defaults to
+            "modelgenerator/huggingface_models/rnabert/vocab.txt".
         max_length (Optional[int], optional): Maximum sequence length. Defaults to 512.
     """
+
+    fsdp_wrap_modules = [
+        "modelgenerator.huggingface_models.rnabert.modeling_rnabert.RNABertLayer"
+    ]
 
     vocab_file: str = os.path.join(
         Path(__file__).resolve().parent.parent.parent,
@@ -824,7 +843,7 @@ class Onehot(HFSequenceBackbone):
         Returns:
             nn.Module: Decoder
         """
-        return nn.Identity()
+        return _Identity()
 
     def tokenize(
         self,
@@ -850,9 +869,7 @@ class Onehot(HFSequenceBackbone):
         )
         input_ids = seq_tokenized["input_ids"]
         attention_mask = seq_tokenized["attention_mask"]
-        special_mask = torch.tensor(
-            seq_tokenized["special_tokens_mask"], dtype=torch.bool
-        )
+        special_mask = seq_tokenized["special_tokens_mask"]
         return input_ids, attention_mask, special_mask
 
     def decode_tokens(self, tokenized_sequences: Tensor) -> list[str]:
@@ -901,11 +918,16 @@ class Onehot(HFSequenceBackbone):
         """
         return self.tokenizer.vocab_size
 
-    def on_save_checkpoint(self, checkpoint: dict):
+    def on_save_checkpoint(self, checkpoint: dict, prefix: str = "backbone"):
         return
 
     def get_num_layer(self) -> int:
         return
+
+
+class _Identity(nn.Identity):
+    def forward(self, input: torch.Tensor, *args, **kwargs):
+        return input
 
 
 class Huggingface(HFSequenceBackbone):
@@ -1029,7 +1051,7 @@ class Huggingface(HFSequenceBackbone):
         Returns:
             nn.Module: Decoder
         """
-        return nn.Identity()
+        return _Identity()
 
     def tokenize(self, sequences: list[str]) -> tuple[Tensor, Tensor]:
         """Tokenizes a list of sequences
@@ -1049,9 +1071,7 @@ class Huggingface(HFSequenceBackbone):
         )
         input_ids = seq_tokenized["input_ids"]
         attention_mask = seq_tokenized["attention_mask"]
-        special_tokens_mask = torch.tensor(
-            seq_tokenized["special_tokens_mask"], dtype=torch.bool
-        )
+        special_tokens_mask = seq_tokenized["special_tokens_mask"]
         return input_ids, attention_mask, special_tokens_mask
 
     def decode_tokens(self, tokenized_sequences: Tensor) -> list[str]:
@@ -1100,12 +1120,12 @@ class Huggingface(HFSequenceBackbone):
         """
         return self.tokenizer.vocab_size
 
-    def on_save_checkpoint(self, checkpoint: dict):
+    def on_save_checkpoint(self, checkpoint: dict, prefix: str = "backbone"):
         if not self.use_peft or not self.save_peft_only:
             return
         adapter_name = "default"
         peft_dict = get_peft_model_state_dict(self.model, adapter_name=adapter_name)
-        prefixed_dict = {f"backbone.model.{k}": v for k, v in peft_dict.items()}
+        prefixed_dict = {f"{prefix}.model.{k}": v for k, v in peft_dict.items()}
         head_keys = tuple(self.loading_info["missing_keys"])
         for k in list(checkpoint["state_dict"].keys()):
             if k.endswith(head_keys):
@@ -1116,4 +1136,616 @@ class Huggingface(HFSequenceBackbone):
                 and k not in prefixed_dict
             ):
                 # get_peft_model_state_dict may or may not remove the adapter name
+                checkpoint["state_dict"].pop(k)
+
+
+class Enformer(HFSequenceBackbone):
+    """Wrap Enformer https://github.com/lucidrains/enformer-pytorch in ModelGenerator backbone
+
+    Note: Do not support LoRA
+
+    Args:
+        legacy_adapter_type (LegacyAdapterType, None): Type of legacy adapter, setting it to None disables it.
+        default_config (dict, None): Default values set by downstream tasks. Defaults to None.
+        config_overwrites (dict, optional): Optional model arguments for PretrainedConfig. Defaults to None.
+        model_init_args (dict, optional): Optional model arguments passed to its init method. Defaults to None.
+        from_scratch (bool, optional): Whether to create the model from scratch. Defaults to False.
+        max_length (int, optional): Maximum sequence length. Defaults to 196_608.
+        frozen (bool, optional): Whether to freeze model. Defaults to False.
+    """
+
+    def __init__(
+        self,
+        legacy_adapter_type: Union[LegacyAdapterType, None],
+        default_config: Union[DefaultConfig, None],
+        from_scratch: bool = False,
+        max_length: Optional[int] = 196_608,
+        frozen: bool = False,
+        **kwargs,
+    ):
+        from enformer_pytorch import Enformer, str_to_one_hot, EnformerConfig
+
+        if legacy_adapter_type is not None:
+            raise NotImplementedError("Enformer does not support legacy adapters.")
+
+        super().__init__(legacy_adapter_type, default_config, **kwargs)
+        if from_scratch:
+            config = EnformerConfig()
+        else:
+            config = EnformerConfig.from_pretrained(self.model_path)
+        for k, v in self.config_overwrites.items():
+            setattr(config, k, v)
+        if from_scratch:
+            model = Enformer(config=config, **self.model_init_args)
+        else:
+            model = Enformer.from_pretrained(
+                self.model_path, config=config, **self.model_init_args
+            )
+        self.tokenizer = str_to_one_hot
+        self.vocab_size = 6  # ACGTN., where . means padding
+        self.encoder = model
+        if self.use_legacy_adapter:
+            self.decoder = model._heads
+        else:
+            self.decoder = None
+        self.target_length = self.encoder.target_length
+        self.max_length = max_length
+        if max_length is None:
+            rank_zero_info(
+                "You didn't set a max_length for the data in the downstream task"
+            )
+        self.frozen = frozen
+        if frozen:
+            rank_zero_info(f"> {type(self.encoder).__name__} is frozen.")
+            for _, param in self.encoder.named_parameters():
+                param.requires_grad = False
+
+    def forward(
+        self,
+        input_ids: Tensor,
+        attention_mask: Tensor = None,
+        all_hidden_states: bool = False,
+    ) -> Union[Tensor, list]:
+        """Encoder-only forward pass
+
+        Args:
+            input_ids (torch.Tensor): Input token IDs (n, seq_len, 4)
+            attention_mask (torch.Tensor): Attention mask (n, target_length)
+            all_hidden_states (bool, optional): Whether to return all hidden states. Defaults to False.
+
+        Returns:
+            Union[Tensor, list]: Last hidden state or list of all hidden states
+        """
+        embeddings = self.encoder(input_ids.float(), return_only_embeddings=True)
+        return embeddings
+
+    def get_decoder(self) -> nn.Module:
+        """Returns the pre-trained decoder
+
+        Returns:
+            nn.Module: Decoder
+        """
+        return self.decoder
+
+    def tokenize(
+        self,
+        sequences: list[str],
+        padding: bool = True,
+        add_special_tokens: bool = False,
+    ) -> tuple[Tensor, Tensor]:
+        """Tokenizes a list of sequences
+
+        Args:
+            sequences (list[str]): List of sequences, should be of the same length
+
+        Returns:
+            tuple[Tensor, Tensor, Tensor]: Token IDs with padding and special tokens, attention mask, and special tokens mask
+        """
+        input_ids = self.tokenizer(sequences)  # onehot coding, of shape (bs, 197k, 4)
+        attention_mask = torch.ones(
+            input_ids.size()[0], self.target_length
+        )  # (bs, target_length)
+        special_mask = None
+        return input_ids, attention_mask, special_mask
+
+    def decode_tokens(self, tokenized_sequences: Tensor) -> list[str]:
+        """Decodes a Tensor of token id sequences
+
+        Args:
+            tokenized_sequences (Tensor): Tokenized sequences
+
+        Returns:
+            list[str]: List of decoded sequences
+        """
+        raise NotImplementedError
+
+    def get_token_id(self, token: str) -> int:
+        """Returns the one hot embedding of a token in the vocabulary
+
+        Args:
+            token (str): Token
+
+        Returns:
+            torch.tensor: one hot embedding
+        """
+        return self.tokenizer(token)
+
+    def get_max_context(self) -> int:
+        """Returns the maximum context length of the pre-trained model
+
+        Returns:
+            int: Maximum context length
+        """
+        return self.max_length
+
+    def get_embedding_size(self) -> int:
+        """Returns the hidden size of the pre-trained model
+
+        Returns:
+            int: Hidden size
+        """
+        return self.encoder.config.dim * 2
+
+    def get_vocab_size(self) -> int:
+        """Returns the vocabulary size of the pre-trained model
+
+        Returns:
+            int: Vocabulary size
+        """
+        return self.vocab_size
+
+    def on_save_checkpoint(self, checkpoint: dict, prefix: str = "backbone"):
+        if not self.frozen:
+            return
+        for k in list(checkpoint["state_dict"].keys()):
+            if not k.startswith(f"{prefix}.encoder."):
+                continue
+            checkpoint["state_dict"].pop(k)
+
+    def get_num_layer(self) -> int:
+        """Returns the number of attention layer in the pre-trained model
+
+        Returns:
+            int: the number of attention layer
+        """
+        return self.encoder.config.depth
+
+
+class ESM(HFSequenceBackbone):
+    """A wrapper allows for using ESM series model as backbone.
+
+    Args:
+        legacy_adapter_type (LegacyAdapterType, None): Type of legacy adapter, setting it to None disables it.
+        default_config (dict, None): Default values set by downstream tasks. Defaults to None.
+        config_overwrites (dict, optional): Optional model arguments for PretrainedConfig. Defaults to None.
+        model_init_args (dict, optional): Optional model arguments passed to its init method. Defaults to None.
+        max_length (int, optional): Maximum sequence length. Defaults to 1024.
+        use_peft (bool, optional): Whether to use LoRA PEFT. Defaults to False.
+        frozen (bool, optional): Whether to freeze encoder. Defaults to False.
+        save_peft_only (bool, optional): Whether to save only the PEFT weights. Defaults to True.
+        lora_r (int, optional): LoRA r parameter. Defaults to 16.
+        lora_alpha (int, optional): LoRA alpha parameter. Defaults to 32.
+        lora_dropout (float, optional): LoRA dropout. Defaults to 0.1.
+        lora_target_modules (Optional[List[str]], optional): LoRA target modules. Defaults to ["query", "value"].
+        lora_modules_to_save (Optional[List[str]], optional): LoRA modules to save. Defaults to None.
+        lora_use_rslora (bool, optional): Whether to use RSLora. Defaults to False.
+    """
+
+    def __init__(
+        self,
+        legacy_adapter_type: Union[LegacyAdapterType, None],
+        default_config: Union[DefaultConfig, None],
+        max_length: Optional[int] = None,
+        use_peft: bool = False,
+        frozen: bool = False,
+        save_peft_only: bool = True,
+        lora_r: int = 16,
+        lora_alpha: int = 32,
+        lora_dropout: float = 0.1,
+        lora_target_modules: Optional[List[str]] = None,
+        lora_modules_to_save: Optional[List[str]] = None,
+        lora_use_rslora: bool = False,
+        **kwargs,
+    ):
+        from transformers import (
+            AutoConfig,
+            AutoModel,
+            AutoModelForMaskedLM,
+            AutoModelForTokenClassification,
+            AutoModelForSequenceClassification,
+            AutoTokenizer,
+        )
+
+        super().__init__(legacy_adapter_type, default_config, **kwargs)
+        self.max_length = max_length
+        self.use_peft = use_peft
+        self.frozen = frozen
+        self.save_peft_only = save_peft_only
+        if self.legacy_adapter_type is LegacyAdapterType.SEQ_CLS:
+            model_class = AutoModelForSequenceClassification
+            peft_task_type = TaskType.SEQ_CLS
+        elif self.legacy_adapter_type is LegacyAdapterType.TOKEN_CLS:
+            model_class = AutoModelForTokenClassification
+            peft_task_type = TaskType.TOKEN_CLS
+        elif self.legacy_adapter_type is LegacyAdapterType.MASKED_LM:
+            model_class = AutoModelForMaskedLM
+            peft_task_type = TaskType.FEATURE_EXTRACTION
+        elif self.legacy_adapter_type is None:
+            model_class = AutoModel
+            peft_task_type = TaskType.FEATURE_EXTRACTION
+        else:
+            raise ValueError(
+                f"There is no standard huggingface head for the task type: {self.legacy_adapter_type}. "
+                "Please create a backbone for your huggingfce model."
+            )
+        config = AutoConfig.from_pretrained(self.model_path, trust_remote_code=True)
+
+        def nested_set_config(config, config_overwrites):
+            for k, v in config_overwrites.items():
+                if isinstance(v, dict):
+                    nested_set_config(getattr(config, k), v)
+                else:
+                    setattr(config, k, v)
+
+        nested_set_config(config, self.config_overwrites)
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            self.model_path, config=config, trust_remote_code=True
+        )
+        model, self.loading_info = model_class.from_pretrained(
+            self.model_path,
+            config=config,
+            trust_remote_code=True,
+            output_loading_info=True,
+            **self.model_init_args,
+        )
+        if not self.use_legacy_adapter:
+            self.encoder = model
+        else:
+            self.encoder = model.esm
+        self.decoder = None
+        if model_class == AutoModelForMaskedLM:
+            self.decoder = model.lm_head
+        elif model_class == AutoModelForTokenClassification:
+            self.decoder = model.classifier
+        elif model_class == AutoModelForSequenceClassification:
+            self.decoder = model.classifier
+        if use_peft:
+            peft_config = LoraConfig(
+                task_type=peft_task_type,
+                target_modules=lora_target_modules,
+                r=lora_r,
+                lora_alpha=lora_alpha,
+                lora_dropout=lora_dropout,
+                use_rslora=lora_use_rslora,
+                inference_mode=False,
+                modules_to_save=lora_modules_to_save,
+            )
+            self.encoder = get_peft_model(self.encoder, peft_config)
+            rank_zero_only(self.encoder.print_trainable_parameters)()
+        else:
+            if frozen:
+                rank_zero_info(f"> {type(self.encoder).__name__} is frozen.")
+                for _, param in self.encoder.named_parameters():
+                    param.requires_grad = False
+
+    def forward(
+        self, input_ids: Tensor, attention_mask: Tensor, all_hidden_states: bool = False
+    ) -> Union[Tensor, list]:
+        """Encoder-only forward pass
+
+        Args:
+            input_ids (torch.Tensor): Input token IDs (n, seq_len)
+            attention_mask (torch.Tensor): Attention mask (n, seq_len)
+            all_hidden_states (bool, optional): Whether to return all hidden states. Defaults to False.
+
+        Returns:
+            Union[Tensor, list]: Last hidden state or list of all hidden states
+        """
+        outputs = self.encoder(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            output_hidden_states=True,
+        )
+        if all_hidden_states:
+            return outputs.hidden_states
+        return outputs.hidden_states[-1]
+
+    def get_decoder(self) -> nn.Module:
+        """
+        Returns a dummy pass-through decoder
+
+        Returns:
+            nn.Module: Decoder
+        """
+        return self.decoder
+
+    def tokenize(self, sequences: list[str]) -> tuple[Tensor, Tensor]:
+        """Tokenizes a list of sequences
+
+        Args:
+            sequences (list[str]): List of sequences
+
+        Returns:
+            tuple[Tensor, Tensor]: Token IDs with padding and special tokens, and attention mask
+        """
+        seq_tokenized = self.tokenizer(
+            sequences,
+            truncation=self.max_length is not None,
+            padding=True,
+            max_length=self.max_length,
+            return_special_tokens_mask=True,
+        )
+        input_ids = seq_tokenized["input_ids"]
+        attention_mask = seq_tokenized["attention_mask"]
+        special_tokens_mask = seq_tokenized["special_tokens_mask"]
+        return input_ids, attention_mask, special_tokens_mask
+
+    def decode_tokens(self, tokenized_sequences: Tensor) -> list[str]:
+        """Decodes a Tensor of token id sequences
+
+        Args:
+            tokenized_sequences (Tensor): Tokenized sequences
+
+        Returns:
+            list[str]: List of decoded sequences
+        """
+        return self.tokenizer.batch_decode(tokenized_sequences)
+
+    def get_token_id(self, token: str) -> int:
+        """Returns the index of a token in the vocabulary
+
+        Args:
+            token (str): Token
+
+        Returns:
+            int: Token id
+        """
+        return self.tokenizer.convert_tokens_to_ids(token)
+
+    def get_max_context(self) -> int:
+        """Returns the arbitrary max context specified by the user
+
+        Returns:
+            int: Maximum context length
+        """
+        return self.max_length
+
+    def get_embedding_size(self) -> int:
+        """Returns the embedding size
+
+        Returns:
+            int: Embedding size
+        """
+        return self.encoder.config.hidden_size
+
+    def get_vocab_size(self) -> int:
+        """Returns the vocabulary size
+
+        Returns:
+            int: Vocabulary size
+        """
+        return self.tokenizer.vocab_size
+
+    def on_save_checkpoint(self, checkpoint: dict, prefix: str = "backbone"):
+        if (not self.use_peft and not self.frozen) or not self.save_peft_only:
+            return
+        adapter_name = "default"
+        if self.use_peft:
+            peft_dict = get_peft_model_state_dict(
+                self.encoder, adapter_name=adapter_name
+            )
+            prefixed_dict = {f"{prefix}.encoder.{k}": v for k, v in peft_dict.items()}
+
+        for k in list(checkpoint["state_dict"].keys()):
+            if not k.startswith(f"{prefix}.encoder."):
+                # keep all decoder weights
+                continue
+            if self.frozen or (
+                self.use_peft
+                and k.replace(f".{adapter_name}", "") not in prefixed_dict
+                and k not in prefixed_dict
+            ):
+                # get_peft_model_state_dict may or may not remove the adapter name
+                checkpoint["state_dict"].pop(k)
+
+
+# TODO: This is not a Huggingface model, should inherit from a different class
+class SCFoundation(HFSequenceBackbone):
+    """Wraps SCFoundation model in ModelGenerator backbone with multiple gene embedding modes
+
+    Note:
+        Models using this interface include `aido_scfoundation`
+
+    Args:
+        legacy_adapter_type: Type of legacy adapter
+        default_config: Default values set by downstream tasks
+        max_length: Maximum sequence length
+        frozen: Whether to freeze model
+        output_type: Type of output embedding ('cell', 'gene', 'gene_batch', 'gene_expression')
+        pool_type: Pooling type for cell embedding ('all', 'max')
+        input_type: Input data type ('singlecell', 'bulk')
+        pre_normalized: Whether input is pre-normalized ('T', 'F', 'A')
+        train_last_n_layers: Number of layers to train in the encoder
+    """
+
+    def __init__(
+        self,
+        legacy_adapter_type: Union[LegacyAdapterType, None],
+        default_config: Union[DefaultConfig, None],
+        num_genes: Optional[int] = 19264,
+        frozen: bool = False,
+        output_type: str = 'cell',
+        pool_type: str = 'all',
+        input_type: str = 'singlecell',
+        pre_normalized: str = 'F',
+        train_last_n_layers: int = 0,
+        **kwargs,
+    ):
+
+        from ..biomap_models.scfoundation.load_scfoundation import (
+            load_model_frommmf,
+            getEncoerDecoderData,
+            gatherData
+        )
+
+        super().__init__(legacy_adapter_type, default_config, **kwargs)
+        self.frozen = frozen
+        self.num_genes = num_genes
+        self.output_type = output_type
+        self.pool_type = pool_type
+        self.input_type = input_type
+        self.pre_normalized = pre_normalized
+
+        self.gatherData = gatherData
+        self.getEncoerDecoderData = getEncoerDecoderData
+
+        # Load model
+        if output_type == 'cell':
+            key = 'cell'
+        elif output_type in ['gene', 'gene_batch', 'gene_expression']:
+            key = 'gene'
+        else:
+            raise ValueError('Invalid output_type')
+
+        model_file = "models.ckpt"
+        local_model_path = cached_file(self.model_path, model_file)
+        model, self.model_config = load_model_frommmf(local_model_path, key)
+        self.token_emb = model.token_emb
+        self.pos_emb = model.pos_emb
+        self.encoder = model.encoder
+        self.decoder = model.decoder if self.use_legacy_adapter else None
+        if frozen:
+            rank_zero_info(f"> {type(self.model).__name__} is frozen.")
+            for _, param in self.model.named_parameters():
+                param.requires_grad = False
+
+            if train_last_n_layers > 0:
+                num_layers = len(self.encoder.transformer_encoder)
+                start_idx = max(0, num_layers - train_last_n_layers)
+
+                # unfreeze train_last_n_layers
+                for i in range(start_idx, num_layers):
+                    rank_zero_info(f"> Unfreezing layer {i}")
+                    for param in self.encoder.transformer_encoder[i].parameters():
+                        param.requires_grad = True
+
+    def _preprocess_input(self, input_data: Tensor) -> Tensor:
+        """Preprocess input data based on input type and normalization settings"""
+        if self.input_type == 'bulk':
+            if self.pre_normalized == 'T':
+                total_count = input_data.sum(dim=1, keepdim=True)
+            elif self.pre_normalized == 'F':
+                total_count = torch.log10(input_data.sum(dim=1, keepdim=True))
+            else:
+                raise ValueError('pre_normalized must be T or F for bulk input')
+
+            return torch.cat([input_data, total_count.repeat(1, 2)], dim=1)
+
+        elif self.input_type == 'singlecell':
+            if self.pre_normalized == 'F':
+                input_data = torch.log1p(input_data / input_data.sum(dim=1, keepdim=True) * 1e4)
+                total_count = input_data.sum(dim=1, keepdim=True)
+            elif self.pre_normalized == 'T':
+                total_count = input_data.sum(dim=1, keepdim=True)
+            elif self.pre_normalized == 'A':
+                total_count = input_data[:, -1:]
+                input_data = input_data[:, : -1]
+            else:
+                raise ValueError('pre_normalized must be T, F or A for single cell input')
+
+            return torch.cat([
+                input_data,
+                torch.log10(total_count),
+                torch.log10(total_count)
+            ], dim=1)
+
+    def forward(
+        self,
+        input_ids: Tensor,
+        attention_mask: Tensor = None,
+        all_hidden_states: bool = False
+    ) -> Union[Tensor, List[Tensor]]:
+        """Forward pass with multiple embedding modes
+
+        Args:
+            input_ids: Input token IDs (batch_size, seq_len)
+            attention_mask: Attention mask
+            all_hidden_states: Whether to return all hidden states
+
+        Returns:
+            Embeddings based on output_type setting
+        """
+        # Preprocess input
+        x = self._preprocess_input(input_ids)
+        value_labels = x > 0
+        x, x_padding = self.gatherData(x, value_labels, self.model_config['pad_token_id'])
+
+        data_gene_ids = torch.arange(self.num_genes + 2, device=x.device).repeat(x.shape[0], 1)
+        position_gene_ids, _ = self.gatherData(data_gene_ids, value_labels, self.model_config['pad_token_id'])
+        x = self.token_emb(torch.unsqueeze(x, 2).float(), output_weight=0)
+        position_emb = self.pos_emb(position_gene_ids)
+        x += position_emb
+        embeddings = self.encoder(x, x_padding)
+
+        return embeddings
+
+    def get_decoder(self) -> Optional[nn.Module]:
+        """Returns the pre-trained decoder
+
+        Returns:
+            nn.Module: Decoder
+        """
+        return self.decoder
+
+    def tokenize(
+        self,
+        sequences: list[str],
+        padding: bool = True,
+        add_special_tokens: bool = True,
+    ) -> tuple[Tensor, Tensor]:
+        """Tokenizes a list of sequences
+
+        Note:
+            This is a dummy tokenizer from since CellFoundation.
+
+        Args:
+            sequences (list[str]): List of sequences
+
+        Returns:
+            tuple[Tensor, Tensor]: Token IDs with padding and special tokens, and attention mask
+        """
+        return sequences, None, None
+
+    def decode_tokens(self, tokenized_sequences: Tensor) -> List[str]:
+        """Decodes tokenized sequences"""
+        raise NotImplementedError
+
+    def get_token_id(self, token: str) -> int:
+        """Gets token ID"""
+        raise NotImplementedError
+
+    def get_max_context(self) -> int:
+        """Gets maximum context length"""
+        return self.max_length
+
+    def get_embedding_size(self) -> int:
+        """Gets embedding size"""
+        return self.model_config['encoder']['hidden_dim']
+
+    def get_vocab_size(self) -> int:
+        """Gets vocabulary size"""
+        raise NotImplementedError
+
+    def get_num_layer(self) -> int:
+        """Gets number of layers"""
+        return len(self.encoder.transformer_encoder)
+
+    def on_save_checkpoint(self, checkpoint: dict):
+        """Handles checkpoint saving"""
+        if not self.frozen:
+            return
+        for k in list(checkpoint["state_dict"].keys()):
+            if not k.startswith("backbone.model."):
+                continue
+            if self.frozen:
                 checkpoint["state_dict"].pop(k)

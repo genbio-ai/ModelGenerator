@@ -1,0 +1,19 @@
+program: mgen
+project: autotune-test  # CHANGE_ME
+method: grid
+metric:
+  goal: minimize
+  name: val_loss
+parameters:
+  model.optimizer.lr:
+    values: [0.01, 0.001, 0.0001]
+command:
+  - echo  # DO NOT CHANGE
+  - ${program}
+  - fit
+  - --config
+  - .local/test.yaml  # CHANGE_ME
+  # more mgen arguments here e.g.,
+  # - --trainer.devices
+  # - 2
+  - ${args}  # paramenters set by wandb agents

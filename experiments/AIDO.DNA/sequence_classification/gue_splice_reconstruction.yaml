@@ -25,6 +25,12 @@ model:
       class_path: modelgenerator.backbones.aido_dna_7b
       init_args:
         use_peft: true
+        lora_r: 16
+        lora_alpha: 32
+        lora_dropout: 0.1
+        lora_target_modules:
+        - query
+        - value
     adapter:
       class_path: modelgenerator.adapters.MLPPoolAdapter
       init_args:

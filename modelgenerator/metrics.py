@@ -100,3 +100,99 @@ class AUPRC(Metric):
     def reset(self):
         self.preds = []
         self.targets = []
+
+
+class SpearmanCorrCoef(tm.SpearmanCorrCoef):
+    def __init__(self, num_outputs, multioutput="uniform_average", **kwargs):
+        """Compute spearmans rank correlation coefficient for single/multi-task regression
+
+        Args:
+            num_outputs (int): Number of outputs in multioutput setting
+            multioutput (str): Defines aggregation in the case of multiple output scores. Can be one of the following strings:
+                'raw_values' returns full set of scores
+                'uniform_average' scores are uniformly averaged
+        """
+        super().__init__(num_outputs, **kwargs)
+        self.multioutput = multioutput
+
+    def compute(self):
+        if self.num_outputs > 1 and self.multioutput == "uniform_average":
+            return super().compute().mean()
+        elif self.num_outputs == 1 or self.multioutput == "raw_values":
+            return super().compute()
+        else:
+            raise NotImplementedError(
+                "Currently multioutput only suports raw_values or uniform_average."
+            )
+
+
+class PearsonCorrCoef(tm.PearsonCorrCoef):
+    def __init__(self, num_outputs, multioutput="uniform_average", **kwargs):
+        """Compute pearson correlation coefficient for single/multi-task regression
+
+        Args:
+            num_outputs (int): Number of outputs in multioutput setting
+            multioutput (str): Defines aggregation in the case of multiple output scores. Can be one of the following strings:
+                'raw_values' returns full set of scores
+                'uniform_average' scores are uniformly averaged
+        """
+        super().__init__(num_outputs, **kwargs)
+        self.multioutput = multioutput
+
+    def compute(self):
+        if self.num_outputs > 1 and self.multioutput == "uniform_average":
+            return super().compute().mean()
+        elif self.num_outputs == 1 or self.multioutput == "raw_values":
+            return super().compute()
+        else:
+            raise NotImplementedError(
+                "Currently multioutput only suports raw_values or uniform_average."
+            )
+
+
+class MeanAbsoluteError(tm.MeanAbsoluteError):
+    def __init__(self, num_outputs, multioutput="uniform_average", **kwargs):
+        """Compute mean absolute error for single/multi-task regression
+
+        Args:
+            num_outputs (int): Number of outputs in multioutput setting
+            multioutput (str): Defines aggregation in the case of multiple output scores. Can be one of the following strings:
+                'raw_values' returns full set of scores
+                'uniform_average' scores are uniformly averaged
+        """
+        super().__init__(num_outputs, **kwargs)
+        self.multioutput = multioutput
+
+    def compute(self):
+        if self.num_outputs > 1 and self.multioutput == "uniform_average":
+            return super().compute().mean()
+        elif self.num_outputs == 1 or self.multioutput == "raw_values":
+            return super().compute()
+        else:
+            raise NotImplementedError(
+                "Currently multioutput only suports raw_values or uniform_average."
+            )
+
+
+class MeanSquaredError(tm.MeanSquaredError):
+    def __init__(self, num_outputs, multioutput="uniform_average", **kwargs):
+        """Compute mean square error for single/multi-task regression
+
+        Args:
+            num_outputs (int): Number of outputs in multioutput setting
+            multioutput (str): Defines aggregation in the case of multiple output scores. Can be one of the following strings:
+                'raw_values' returns full set of scores
+                'uniform_average' scores are uniformly averaged
+        """
+        super().__init__(squared=True, num_outputs=num_outputs, **kwargs)
+        self.multioutput = multioutput
+
+    def compute(self):
+        if self.num_outputs > 1 and self.multioutput == "uniform_average":
+            return super().compute().mean()
+        elif self.num_outputs == 1 or self.multioutput == "raw_values":
+            return super().compute()
+        else:
+            raise NotImplementedError(
+                "Currently multioutput only suports raw_values or uniform_average."
+            )

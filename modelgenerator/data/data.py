@@ -1,5 +1,7 @@
 # data.py
+import anndata as ad
 import os
+import pandas as pd
 import re
 import random
 import datasets
@@ -105,25 +107,6 @@ class DiffusionDataset(Dataset):
     def __len__(self):
         return len(self.dataset)
 
-    def get_masked_sample(self, seq_target: str, masking_rate: float) -> str:
-        """Mask a sequence with a given masking rate
-
-        Args:
-            seq_target (str): The target sequence
-            masking_rate (float): The masking rate
-
-        Returns:
-            str: The masked sequence with masking_rate tokens replaced by '[MASK]'
-        """
-        num_mask_tokens = max(1, int(len(seq_target) * masking_rate))
-        perm = torch.randperm(len(seq_target))
-        input_mask_indices = perm[:num_mask_tokens]
-        # Mask the input sequence
-        seq_input = replace_characters_at_indices(
-            s=seq_target, indices=input_mask_indices, replacement_char="[MASK]"
-        )
-        return seq_input
-
     def __getitem__(self, idx):
         # One sample includes timesteps_per_sample sequences at different noise levels defined by the interval partitions
         # Ref: MDLM, Appendix C.3 Low discrepancy sampler (LDS).
@@ -215,6 +198,7 @@ class MLMDataset(Dataset):
         return {"__empty__": 0, **data_dict}
 
 
+# TODO: This class is just a use case of ColumnRetrievalDataModule.
 class SequencesDataModule(DataInterface, HFDatasetLoaderMixin):
     """Data module for loading a simple dataset of sequences.
 
@@ -242,8 +226,10 @@ class SequencesDataModule(DataInterface, HFDatasetLoaderMixin):
 
     def setup(self, stage: Optional[str] = None) -> None:
         """Set up the data module by loading the whole datasets and splitting them into training, validation, and test sets."""
-        train_dataset, val_dataset, test_dataset = self.load_and_split_dataset()
-        self.train_dataset = train_dataset
+        train_dataset, val_dataset, test_dataset = self.load_and_split_dataset(**self.extra_reader_kwargs)
+        self.train_dataset = AnyDataset(
+            ids=train_dataset[self.id_col], sequences=train_dataset[self.x_col]
+        )
         self.val_dataset = AnyDataset(
             ids=val_dataset[self.id_col], sequences=val_dataset[self.x_col]
         )
@@ -275,8 +261,11 @@ class DependencyMappingDataModule(SequencesDataModule):
 
     def setup(self, stage: Optional[str] = None) -> None:
         """Set up the data module by loading the whole datasets and splitting them into training, validation, and test sets."""
-        train_dataset, val_dataset, test_dataset = self.load_and_split_dataset()
-        self.train_dataset = None
+        train_dataset, val_dataset, test_dataset = self.load_and_split_dataset(**self.extra_reader_kwargs)
+        self.train_dataset = self.DependencyMappingDataset(
+            AnyDataset(ids=train_dataset[self.id_col], sequences=train_dataset[self.x_col]),
+            vocab_file=self.vocab_file,
+        )
         self.val_dataset = self.DependencyMappingDataset(
             AnyDataset(ids=val_dataset[self.id_col], sequences=val_dataset[self.x_col]),
             vocab_file=self.vocab_file,
@@ -381,7 +370,7 @@ class SequenceClassificationDataModule(DataInterface, HFDatasetLoaderMixin):
     def setup(self, stage: Optional[str] = None) -> None:
         """Set up the data module by loading the whole datasets and splitting them into training, validation, and test sets."""
         is_multi_label = isinstance(self.y_col, list)
-        train_dataset, val_dataset, test_dataset = self.load_and_split_dataset()
+        train_dataset, val_dataset, test_dataset = self.load_and_split_dataset(**self.extra_reader_kwargs)
         if not is_multi_label:
             train_dataset, val_dataset, test_dataset = self.filter_by_class(
                 (train_dataset, val_dataset, test_dataset)
@@ -497,7 +486,7 @@ class TokenClassificationDataModule(DataInterface, HFDatasetLoaderMixin):
             Assumes no default validation set. Splits into training and validation sets using a fixed random seed.
 
         """
-        train_dataset, valid_dataset, test_dataset = self.load_and_split_dataset()
+        train_dataset, valid_dataset, test_dataset = self.load_and_split_dataset(**self.extra_reader_kwargs)
         train_dataset, valid_dataset, test_dataset = self.get_split_by_fold_id(
             train_dataset,
             valid_dataset,
@@ -560,6 +549,7 @@ class StructureTokenDataModule(DataInterface, HFDatasetLoaderMixin):
         **kwargs: Additional keyword arguments passed to the parent class, in which training and validation split
             settings are overridden so that only the test split is loaded.
     """
+
     def __init__(
         self,
         path: str,
@@ -587,7 +577,7 @@ class StructureTokenDataModule(DataInterface, HFDatasetLoaderMixin):
 
     def setup(self, stage: Optional[str] = None) -> None:
         self.train_dataset, self.val_dataset, test_dataset = (
-            self.load_and_split_dataset()
+            self.load_and_split_dataset(**self.extra_reader_kwargs)
         )
         # For prediction, labels are not necessary. You could set labels to a sequence of zeros.
         self.test_dataset = AnyDataset(
@@ -646,7 +636,7 @@ class ZeroshotClassificationRetrieveDataModule(DataInterface, HFDatasetLoaderMix
 
     def setup(self, stage: Optional[str] = None) -> None:
         self.train_dataset, self.val_dataset, test_dataset = (
-            self.load_and_split_dataset()
+            self.load_and_split_dataset(**self.extra_reader_kwargs)
         )
         test_dataset: datasets.Dataset
         if os.path.exists(self.reference_file):
@@ -812,7 +802,7 @@ class DiffusionDataModule(DataInterface, HFDatasetLoaderMixin):
             Validation and test allow for full multi-step denoising process with a random [0,1] masking ratio for each sample
             where timesteps_per_sample=1 (i.e. one masked sequence per sample)
         """
-        train_dataset, valid_dataset, test_dataset = self.load_and_split_dataset()
+        train_dataset, valid_dataset, test_dataset = self.load_and_split_dataset(**self.extra_reader_kwargs)
         self.train_dataset = DiffusionDataset(
             dataset=AnyDataset(sequences=train_dataset[self.x_col]),
             timesteps_per_sample=self.timesteps_per_sample,
@@ -886,6 +876,7 @@ class ClassDiffusionDataModule(SequenceClassificationDataModule):
         )
 
 
+# TODO: This data module should not require labels.
 class MLMDataModule(SequenceClassificationDataModule):
     """Data module for continuing pretraining on a masked language modeling task. Inherits from SequenceClassificationDataModule.
 
@@ -925,8 +916,8 @@ class SequenceRegressionDataModule(DataInterface, HFDatasetLoaderMixin):
     """Data module sequence regression datasets.
 
     Args:
-        x_col (str, optional): The name of the column containing the sequences. Defaults to "sequence".
-        y_col (str, optional): The name of the column containing the labels. Defaults to "label".
+        x_col (union[str, list], optional): The name of columns containing the sequences. Defaults to "sequence".
+        y_col (union[str, list], optional): The name of columns containing the labels. Defaults to "label".
         normalize (bool, optional): Whether to normalize the labels. Defaults to True.
     """
 
@@ -942,10 +933,12 @@ class SequenceRegressionDataModule(DataInterface, HFDatasetLoaderMixin):
         self.x_col = x_col
         self.y_col = y_col
         self.normalize = normalize
+        if isinstance(self.y_col, list):
+            rank_zero_info(f"> Multi-task regression for {self.y_col}")
 
     def setup(self, stage: Optional[str] = None):
         """Set up the data module by loading the whole datasets and splitting them into training, validation, and test sets."""
-        train_dataset, valid_dataset, test_dataset = self.load_and_split_dataset()
+        train_dataset, valid_dataset, test_dataset = self.load_and_split_dataset(**self.extra_reader_kwargs)
         train_dataset, valid_dataset, test_dataset = self.get_split_by_fold_id(
             train_dataset,
             valid_dataset,
@@ -954,29 +947,53 @@ class SequenceRegressionDataModule(DataInterface, HFDatasetLoaderMixin):
             self.cv_val_offset,
         )
         # train_dataset cannot be empty or None
-        train_sequences = train_dataset[self.x_col]
-        train_labels = np.array(train_dataset[self.y_col]).astype(np.float32)
-        valid_sequences = valid_dataset[self.x_col]
-        valid_labels = np.array(valid_dataset[self.y_col]).astype(np.float32)
-        test_sequences = test_dataset[self.x_col]
-        test_labels = np.array(test_dataset[self.y_col]).astype(np.float32)
+        train_sequences = self.select_input_columns(train_dataset)
+        train_labels = self.select_label_columns(train_dataset)
+        valid_sequences = self.select_input_columns(valid_dataset)
+        valid_labels = self.select_label_columns(valid_dataset)
+        test_sequences = self.select_input_columns(test_dataset)
+        test_labels = self.select_label_columns(test_dataset)
         if self.normalize:
-            label_mean = np.mean(np.concatenate([train_labels, valid_labels]))
-            label_std = np.std(np.concatenate([train_labels, valid_labels]))
+            label_mean = np.mean(np.concatenate([train_labels, valid_labels]), axis=0)
+            label_std = np.std(np.concatenate([train_labels, valid_labels]), axis=0)
             rank_zero_info(f"label: mean = {label_mean}, std = {label_std}")
             train_labels = (train_labels - label_mean) / label_std
             valid_labels = (valid_labels - label_mean) / label_std
             test_labels = (test_labels - label_mean) / label_std
+        if isinstance(self.y_col, list):
+            self.train_dataset = AnyDataset(
+                sequences=train_sequences, labels=train_labels
+            )
+            self.val_dataset = AnyDataset(
+                sequences=valid_sequences, labels=valid_labels
+            )
+            self.test_dataset = AnyDataset(sequences=test_sequences, labels=test_labels)
+        else:
+            self.train_dataset = AnyDataset(
+                sequences=train_sequences, labels=train_labels[:, None]
+            )
+            self.val_dataset = AnyDataset(
+                sequences=valid_sequences, labels=valid_labels[:, None]
+            )
+            self.test_dataset = AnyDataset(
+                sequences=test_sequences, labels=test_labels[:, None]
+            )
 
-        self.train_dataset = AnyDataset(
-            sequences=train_sequences, labels=train_labels[:, None]
-        )
-        self.val_dataset = AnyDataset(
-            sequences=valid_sequences, labels=valid_labels[:, None]
-        )
-        self.test_dataset = AnyDataset(
-            sequences=test_sequences, labels=test_labels[:, None]
-        )
+    def select_label_columns(self, dataset: datasets.Dataset) -> datasets.Dataset:
+        if not isinstance(self.y_col, list):
+            labels = dataset[self.y_col]
+            if len(labels) > 0 and isinstance(labels[0], str):
+                labels = [float(y) for y in labels]
+            return np.array(labels)
+        return dataset.select_columns(self.y_col).to_pandas().to_numpy()
+
+    def select_input_columns(self, dataset: datasets.Dataset) -> datasets.Dataset:
+        if not isinstance(self.x_col, list):
+            return dataset[self.x_col]
+        # TODO: select_columns returns a dictionary of columns, which introduces unnecessary
+        # dependency on the data source column names. We should either return ndarrays as lables
+        # or allow the user to rename the columns for input sequences.
+        return dataset.select_columns(self.x_col)
 
 
 class ColumnRetrievalDataModule(DataInterface, HFDatasetLoaderMixin):
@@ -994,7 +1011,7 @@ class ColumnRetrievalDataModule(DataInterface, HFDatasetLoaderMixin):
         self.out_cols = out_cols or in_cols
 
     def setup(self, stage: Optional[str] = None):
-        train_dataset, valid_dataset, test_dataset = self.load_and_split_dataset()
+        train_dataset, valid_dataset, test_dataset = self.load_and_split_dataset(**self.extra_reader_kwargs)
         self.train_dataset = AnyDataset(
             **{
                 out_col: train_dataset[in_col]
@@ -1015,6 +1032,7 @@ class ColumnRetrievalDataModule(DataInterface, HFDatasetLoaderMixin):
         )
 
 
+# TODO: Almost identical to SequenceRegressionDataModule, except for label unsqueezing.
 class RNAMeanRibosomeLoadDataModule(SequenceRegressionDataModule):
     def __init__(
         self,
@@ -1037,7 +1055,7 @@ class RNAMeanRibosomeLoadDataModule(SequenceRegressionDataModule):
 
     def setup(self, stage: Optional[str] = None):
         """Set up the data module by loading the whole datasets and splitting them into training, validation, and test sets."""
-        train_dataset, valid_dataset, test_dataset = self.load_and_split_dataset()
+        train_dataset, valid_dataset, test_dataset = self.load_and_split_dataset(**self.extra_reader_kwargs)
         train_dataset, valid_dataset, test_dataset = self.get_split_by_fold_id(
             train_dataset, valid_dataset, test_dataset, self.cv_test_fold_id
         )
@@ -1197,15 +1215,110 @@ class CellClassificationDataModule(DataInterface):
                 adata_train.obs.columns = self.rename_columns
                 adata_val.obs.columns = self.rename_columns
                 adata_test.obs.columns = self.rename_columns
-        D_train = {key: adata_train.obs[key].values for key in adata_train.obs.columns}
+        D_train = {key: torch.from_numpy(adata_train.obs[key].values) for key in adata_train.obs.columns}
         # D_train['sequences'] = np.array(list(adata_train.X)) # Note: "sequences" nomenclature is due to SequenceClassification task requirements.
         # TODO: Support sparse. Hitting problems in default_collate.
         D_train["sequences"] = adata_train.X.toarray()
-        D_val = {key: adata_val.obs[key].values for key in adata_val.obs.columns}
+        D_val = {key: torch.from_numpy(adata_val.obs[key].values) for key in adata_val.obs.columns}
         # D_val['sequences'] = np.array(list(adata_val.X))
         D_val["sequences"] = adata_val.X.toarray()
-        D_test = {key: adata_test.obs[key].values for key in adata_test.obs.columns}
+        D_test = {key: torch.from_numpy(adata_test.obs[key].values) for key in adata_test.obs.columns}
         # D_test['sequences'] = np.array(list(adata_test.X))
+        D_test["sequences"] = adata_test.X.toarray()
+
+        self.train_dataset = AnyDataset(**D_train)
+        self.val_dataset = AnyDataset(**D_val)
+        self.test_dataset = AnyDataset(**D_test)
+
+class ClockDataModule(DataInterface):
+    """Data module for transcriptomic clock tasks. Inherits from BaseDataModule.
+
+    Note:
+        Each sample includes a feature vector (one of the rows in <adata.X>) and a single scalar corresponding to donor age (one of the columns in <adata.obs>)
+
+    Args:
+        split_column (str): The column of <obs> that defines the split assignments.
+        gene_set_file (str): Path to a csv file containing gene symbols in the order expected by the model being used. 
+        filter_columns (Optional[list[str]], optional): The columns of <obs> we want to use. Defaults to None, in which case all columns are used.
+        rename_columns (Optional[list[str]], optional): New name of columns. Defaults to None, in which case columns are not renamed. Does nothing if filter_colums is None.
+        # TODO: Add option to return a subset of genes by filtering on <var>.
+    """
+
+    def __init__(
+        self,
+        *args,
+        split_column: str,
+        gene_set_file: str,
+        label_scaling: Optional[str] = 'z_scaling',
+        filter_columns: Optional[list[str]] = None,
+        rename_columns: Optional[list[str]] = None,
+        **kwargs,
+    ):
+        super().__init__(*args, **kwargs)
+        if len(self.train_split_files) != 1:
+            raise NotImplementedError("Multiple files not yet supported.")
+        if (self.valid_split_files is not None) or (self.test_split_files is not None):
+            raise NotImplementedError("Data should live in a single file with splits defined by a column of <obs>.")
+        self.split_column = split_column
+        self.gene_set_file = gene_set_file
+        self.label_scaling = label_scaling
+        self.trainfile = self.train_split_files[0]
+        self.rename_columns = rename_columns
+        self.filter_columns = filter_columns
+
+    def setup(self, stage: Optional[str] = None):
+        """Set up the data module by loading the whole datasets and splitting them into training, validation, and test sets."""
+        adata = ad.read_h5ad(os.path.join(self.path, self.trainfile))
+
+        # align genes
+        adata.var.index = adata.var['feature_name']
+        model_genes = pd.read_csv(self.gene_set_file, sep='\t')['gene_name'].to_numpy()
+        data_genes = adata.var.index
+        common_genes = np.intersect1d(model_genes, data_genes)
+        if len(common_genes) == 0:
+            raise ValueError(f'Gene alignment failed, no common genes found. Are the gene names in the same format? (model: {model_genes[:5]}, data: {data_genes[:5]})')
+        missing_genes = np.setdiff1d(model_genes, data_genes)
+        adata_missing = ad.AnnData(np.zeros((adata.shape[0], len(missing_genes))))
+        adata_missing.var.index = missing_genes
+        adata_missing.obs = adata.obs
+        adata_aligned = ad.concat((adata, adata_missing), axis=1, join='inner', merge='same')
+        adata_aligned = adata_aligned[:, model_genes]
+        rank_zero_info(f'\n***\ngene alignment results: {len(common_genes)} common genes; {len(missing_genes)} missing genes filled with zeros\n***\n')
+
+        adata_train = adata_aligned[adata_aligned.obs[self.split_column] == 'train']
+        adata_val = adata_aligned[adata_aligned.obs[self.split_column] == 'val']
+        adata_test = adata_aligned[adata_aligned.obs[self.split_column] == 'test']
+
+        # label scaling
+        if self.label_scaling == 'z_scaling':
+            train_labels = adata_train.obs['numeric_age'].to_numpy()
+            mu = np.mean(train_labels)
+            sigma = np.std(train_labels)
+            if np.isnan(sigma):
+                raise ValueError('z_scaling failed: std is nan')
+            adata_train.obs['numeric_age'] = (adata_train.obs['numeric_age'] - mu) / sigma
+            adata_val.obs['numeric_age'] = (adata_val.obs['numeric_age'] - mu) / sigma
+            adata_test.obs['numeric_age'] = (adata_test.obs['numeric_age'] - mu) / sigma
+        else:
+            raise NotImplementedError(f'label_scaling {self.label_scaling} not recognized.')
+        
+        # only retain useful data for regression
+        if self.filter_columns is not None:
+            adata_train.obs = adata_train.obs[self.filter_columns]
+            adata_val.obs = adata_val.obs[self.filter_columns]
+            adata_test.obs = adata_test.obs[self.filter_columns]
+            # rename columns to adapt to regression task
+            if self.rename_columns is not None:
+                # Only rename columns if we filter first - otherwise order not guaranteed.
+                adata_train.obs.columns = self.rename_columns
+                adata_val.obs.columns = self.rename_columns
+                adata_test.obs.columns = self.rename_columns
+        
+        D_train = {key: torch.from_numpy(adata_train.obs[key].values)[:, None] for key in adata_train.obs.columns}
+        D_train["sequences"] = adata_train.X.toarray()
+        D_val = {key: torch.from_numpy(adata_val.obs[key].values)[:, None] for key in adata_val.obs.columns}
+        D_val["sequences"] = adata_val.X.toarray()
+        D_test = {key: torch.from_numpy(adata_test.obs[key].values)[:, None] for key in adata_test.obs.columns}
         D_test["sequences"] = adata_test.X.toarray()
 
         self.train_dataset = AnyDataset(**D_train)

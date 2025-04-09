@@ -29,14 +29,16 @@ Install [ModelGenerator](https://github.com/genbio-ai/modelgenerator).
 
 #### Download and merge model checkpoint chunks:
 
-- Download all the 15 model checkpoint chunks (named as `chunk_<chunk_ID>.bin`) from [here](https://huggingface.co/genbio-ai/AIDO.ProteinIF-16B/tree/main). Place them inside the directory `${MGEN_DATA_DIR}/modelgenerator/huggingface_models/protein_inv_fold/AIDO.ProteinIF-16B/model_chunks`. 
+- Download all the 15 model checkpoint chunks (named as `chunk_<chunk_ID>.bin`) from [here](https://huggingface.co/genbio-ai/AIDO.ProteinIF-16B/tree/main). Place them inside the directory `${MGEN_DATA_DIR}/modelgenerator/huggingface_models/protein_inv_fold/AIDO.ProteinIF-16B/model_chunks` and merge them. 
 
-  **Alternatively**, you can do this by simply running the following script:
+  You can do this by simply running the following script:
   ```
   mkdir -p ${MGEN_DATA_DIR}/modelgenerator/huggingface_models/protein_inv_fold/AIDO.ProteinIF-16B/
   huggingface-cli download genbio-ai/AIDO.ProteinIF-16B \
   --repo-type model \
   --local-dir ${MGEN_DATA_DIR}/modelgenerator/huggingface_models/protein_inv_fold/AIDO.ProteinIF-16B/
+  # cd to the folder: /workspace/experiments/AIDO.Protein/protein_inverse_folding/
+  cd /workspace/experiments/AIDO.Protein/protein_inverse_folding/
   # Merge chunks
   python merge_ckpt.py ${MGEN_DATA_DIR}/modelgenerator/huggingface_models/protein_inv_fold/AIDO.ProteinIF-16B/model_chunks ${MGEN_DATA_DIR}/modelgenerator/huggingface_models/protein_inv_fold/AIDO.ProteinIF-16B/model.ckpt
   ```
@@ -55,7 +57,7 @@ Install [ModelGenerator](https://github.com/genbio-ai/modelgenerator).
 #### Run inference:
 - From your terminal, change directory to `experiments/AIDO.Protein/protein_inverse_folding` folder and run the following script:
     ```
-    cd experiments/AIDO.Protein/protein_inverse_folding
+    cd /workspace/experiments/AIDO.Protein/protein_inverse_folding/
     # Run inference
     mgen test --config protein_inv_fold_test.yaml \
             --trainer.default_root_dir ${MGEN_DATA_DIR}/modelgenerator/logs/protein_inv_fold/ \

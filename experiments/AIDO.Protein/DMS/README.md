@@ -86,7 +86,7 @@ trainer:
   strategy:
     class_path: lightning.pytorch.strategies.FSDPStrategy
     init_args:
-      auto_wrap_policy: [modelgenerator.huggingface_models.fm4bio.modeling_fm4bio.FM4BioLayer]
+      auto_wrap_policy: modelgenerator.distributed.fsdp.wrap.AutoWrapPolicy
       sharding_strategy: HYBRID_SHARD
 ```
 

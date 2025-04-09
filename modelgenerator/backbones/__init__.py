@@ -172,3 +172,69 @@ aido_cell_100m = type(
     (GenBioCellFoundation,),
     {"model_path": "genbio-ai/AIDO.Cell-100M"},
 )
+
+
+esm2_8m = type(
+    "esm2_8m",
+    (ESM,),
+    {
+        "model_path": "facebook/esm2_t6_8M_UR50D",
+    },
+)
+
+esm2_35m = type(
+    "esm2_35m",
+    (ESM,),
+    {
+        "model_path": "facebook/esm2_t12_35M_UR50D",
+    },
+)
+
+esm2_150m = type(
+    "esm2_150m",
+    (ESM,),
+    {
+        "model_path": "facebook/esm2_t30_150M_UR50D",
+    },
+)
+
+esm2_650m = type(
+    "esm2_650m",
+    (ESM,),
+    {
+        "model_path": "facebook/esm2_t33_650M_UR50D",
+    },
+)
+
+esm2_3b = type(
+    "esm2_3b",
+    (ESM,),
+    {
+        "model_path": "facebook/esm2_t36_3B_UR50D",
+    },
+)
+
+esm2_15b = type(
+    "esm2_15b",
+    (ESM,),
+    {
+        "model_path": "facebook/esm2_t48_15B_UR50D",
+    },
+)
+
+
+enformer = type(
+    "enformer",
+    (Enformer,),
+    {
+        "model_path": "EleutherAI/enformer-official-rough",
+    },
+)
+
+scfoundation = type(
+    "scfoundation",
+    (SCFoundation,),
+    {
+        "model_path": "genbio-ai/AIDO.scFoundation",
+    },
+)
