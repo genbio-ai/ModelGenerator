@@ -266,7 +266,7 @@ scfoundation = type(
     "scfoundation",
     (SCFoundation,),
     {
-        "model_path": "genbio-ai/AIDO.scFoundation",
+        "model_path": "genbio-ai/scFoundation",
     },
 )
 

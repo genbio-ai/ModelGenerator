@@ -2,7 +2,7 @@ seed_everything: 42
 data:
   class_path: modelgenerator.data.CellClassificationDataModule
   init_args:
-    path: '/workspace/wangyixuan/ModelGenerator/experiments/AIDO.Cell/cell-downstream-tasks/zheng/'
+    path: '/workspace/modelgenerator/cell-downstream-tasks/zheng/'
     # path: '/workspace/modelgenerator/cell-downstream-tasks/Segerstolpe/'
     batch_size: 16
     train_split_files:
