@@ -21,6 +21,7 @@ data:
     neighbor_num: 10
     num_workers: 4
     persistent_workers: True
+    generate_uid: True
 model:
   class_path: modelgenerator.tasks.Embed
   init_args:
@@ -46,6 +47,6 @@ trainer:
       filetype: 'pt'
       write_cols:
         - 'predictions'
-        - 'ids'
+        - 'uid'
 return_predictions: True
 # TODO: Clean up parameter dependencies.

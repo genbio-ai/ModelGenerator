@@ -16,6 +16,8 @@ from modelgenerator.backbones.base import *
 
 from modelgenerator.data import gather_data
 
+import numpy as np
+
 
 class GenBioBERT(HFSequenceBackbone):
     """GenBioBERT model
@@ -147,7 +149,11 @@ class GenBioBERT(HFSequenceBackbone):
                     param.requires_grad = False
 
     def forward(
-        self, input_ids: Tensor, attention_mask: Tensor, all_hidden_states: bool = False
+        self,
+        input_ids: Tensor,
+        attention_mask: Tensor,
+        all_hidden_states: bool = False,
+        **kwargs,
     ) -> Union[Tensor, list]:
         """Encoder-only forward pass
 
@@ -181,14 +187,15 @@ class GenBioBERT(HFSequenceBackbone):
         sequences: list[str],
         padding: bool = True,
         add_special_tokens: bool = True,
-    ) -> tuple[Tensor, Tensor]:
+        **kwargs,
+    ) -> dict:
         """Tokenizes a list of sequences
 
         Args:
             sequences (list[str]): List of sequences
 
         Returns:
-            tuple[Tensor, Tensor, Tensor]: Token IDs with padding and special tokens, attention mask, and special tokens mask
+            dict: contains input_ids, attention_mask, special_tokens_mask
         """
         seq_tokenized = self.tokenizer(
             sequences,
@@ -198,10 +205,8 @@ class GenBioBERT(HFSequenceBackbone):
             truncation=self.max_length is not None,
             return_special_tokens_mask=True,
         )
-        input_ids = seq_tokenized["input_ids"]
-        attention_mask = seq_tokenized["attention_mask"]
-        special_mask = seq_tokenized["special_tokens_mask"]
-        return input_ids, attention_mask, special_mask
+        output_keys = ["input_ids", "attention_mask", "special_tokens_mask"]
+        return {k: seq_tokenized[k] for k in output_keys}
 
     def decode_tokens(self, tokenized_sequences: Tensor) -> list[str]:
         """Decodes a Tensor of token id sequences
@@ -416,7 +421,11 @@ class GenBioFM(HFSequenceBackbone):
                     param.requires_grad = False
 
     def forward(
-        self, input_ids: Tensor, attention_mask: Tensor, all_hidden_states: bool = False
+        self,
+        input_ids: Tensor,
+        attention_mask: Tensor,
+        all_hidden_states: bool = False,
+        **kwargs,
     ) -> Union[Tensor, list]:
         """Encoder-only forward pass
 
@@ -428,11 +437,40 @@ class GenBioFM(HFSequenceBackbone):
         Returns:
             Union[Tensor, list]: Last hidden state or list of all hidden states or logits
         """
+
+        # cast extra args to the right dtyps
+        for k, v in kwargs.items():
+            if (
+                k in ("full_attention_mask", "position_ids", "query_tokens_mask")
+                and v is not None
+            ):
+                kwargs[k] = torch.tensor(v, dtype=torch.long).to(input_ids.device)
+            elif k == "inputs_str_embeds" and v is not None:
+                kwargs[k] = torch.tensor(v, dtype=torch.float).to(input_ids.device)
+
         outputs = self.encoder(
             input_ids=input_ids,
-            attention_mask=attention_mask,
+            attention_mask=(
+                attention_mask
+                if kwargs.get("full_attention_mask") is None
+                else kwargs["full_attention_mask"]
+            ),
             output_hidden_states=True,
+            position_ids=kwargs.get("position_ids"),
+            inputs_str_embeds=kwargs.get("inputs_str_embeds"),
         )
+
+        query_tokens_mask = kwargs.get("query_tokens_mask")  # [B, L]
+        if query_tokens_mask is not None:
+            # [B, L] -> [L]
+            q_mask = (query_tokens_mask.sum(0) > 0).to(input_ids.device)
+            # list of [B, L, D] -> [B, l, D]
+            outputs.hidden_states = tuple(
+                [state[:, q_mask] for state in outputs.hidden_states]
+            )
+            # [B, L, D] -> [B, l, D]
+            outputs.last_hidden_state = outputs.last_hidden_state[:, q_mask]
+
         if all_hidden_states:
             return outputs.hidden_states
         return outputs.last_hidden_state
@@ -450,28 +488,153 @@ class GenBioFM(HFSequenceBackbone):
         sequences: list[str],
         padding: bool = True,
         add_special_tokens: bool = True,
-    ) -> tuple[Tensor, Tensor, Tensor]:
+        **kwargs,
+    ) -> dict:
         """Tokenizes a list of sequences
 
         Args:
             sequences (list[str]): List of sequences
 
         Returns:
-            tuple[Tensor, Tensor, Tensor]: Token IDs with padding and special tokens, attention mask, and special tokens mask
+            dict: if `msa` and `str_emb` are None, contains input_ids, attention_mask, special_tokens_mask
+                    else adds full_attention_mask, query_tokens_mask, position_ids, str_emb
         """
+
+        msa = kwargs.get("msa")
+        str_embs = kwargs.get("str_emb")
+        if msa is None or str_embs is None:
+            seq_tokenized = self.tokenizer(
+                sequences,
+                truncation=self.max_length is not None,
+                padding=padding,
+                max_length=self.max_length,
+                add_special_tokens=add_special_tokens,
+                return_special_tokens_mask=True,
+            )
+            input_ids = seq_tokenized["input_ids"]
+            attention_mask = seq_tokenized["attention_mask"]
+            special_mask = seq_tokenized["special_tokens_mask"]
+            output_keys = ["input_ids", "attention_mask", "special_tokens_mask"]
+            return {k: seq_tokenized[k] for k in output_keys}
+        if torch.is_tensor(str_embs):
+            str_embs = str_embs.cpu().numpy()
+
+        assert self.encoder.config.position_embedding_type == "rope_2d"
+        # sequences: str
+        # msa: List[str]
+        # str_emb: np.ndarray
+        new_sequences = []
+        position_ids = []
+        str_embs_new = []
+        query_tokens_mask = []
+
+        for i, seq in enumerate(sequences):
+            msa = msa[i]
+            str_emb = str_embs[i]
+
+            len_seq = len(seq)
+            new_seq = list(seq)
+            num_seq = 1
+            for msa_seq in msa:
+                assert (
+                    len(msa_seq) == len_seq
+                ), f"len(msa_seq)={len(msa_seq)}, len_seq={len_seq}"
+                new_seq += list(msa_seq)
+                num_seq += 1
+            new_seq = np.array(new_seq)
+            gap_mask = new_seq != "-"
+            new_seq = "".join(new_seq[gap_mask])
+            new_seq = new_seq[:self.max_length]
+            new_sequences.append(new_seq)
+
+            # 2D RoPE encoding
+            pos_encoding = np.stack(
+                [
+                    np.tile(np.arange(len_seq), num_seq),
+                    np.repeat(np.arange(num_seq), len_seq),
+                ]
+            )
+            pos_encoding = pos_encoding[:, gap_mask]
+            pos_encoding = pos_encoding[
+                :, : self.max_length
+            ]  # if add_special_tokens else pos_encoding[:, :self.max_length]
+            position_ids.append(pos_encoding)
+
+            assert (
+                str_emb.shape[0] == len_seq
+            ), f"str_emb.shape={str_emb.shape}, len_seq={len_seq}"
+            str_embs_new.append(str_emb)
+
+            q_mask = np.zeros(len(new_seq))
+            q_mask[: min(len_seq, self.max_length)] = 1
+            query_tokens_mask.append(q_mask)
+
         seq_tokenized = self.tokenizer(
-            sequences,
+            new_sequences,
             truncation=self.max_length is not None,
             padding=padding,
             max_length=self.max_length,
             add_special_tokens=add_special_tokens,
             return_special_tokens_mask=True,
         )
-
         input_ids = seq_tokenized["input_ids"]
         attention_mask = seq_tokenized["attention_mask"]
         special_mask = seq_tokenized["special_tokens_mask"]
-        return input_ids, attention_mask, special_mask
+
+        # 1. Make attention_mask and special_mask same length with query sequence
+
+        # Final padding
+
+        if padding:
+            final_L = len(input_ids[0])
+            position_ids = [
+                (
+                    pos_enc[:, :final_L]
+                    if final_L < pos_enc.shape[1]
+                    else np.pad(pos_enc, [(0, 0), (0, final_L - pos_enc.shape[1])])
+                )
+                for pos_enc in position_ids
+            ]
+            query_tokens_mask = [
+                (
+                    q_mask[:final_L]
+                    if final_L < q_mask.shape[0]
+                    else np.pad(q_mask, [(0, final_L - q_mask.shape[0])])
+                )
+                for q_mask in query_tokens_mask
+            ]
+            str_embs_new = [
+                (
+                    str_emb[:final_L]
+                    if final_L < str_emb.shape[0]
+                    else np.pad(str_emb, [(0, final_L - str_emb.shape[0]), (0, 0)])
+                )
+                for str_emb in str_embs_new
+            ]
+
+            full_attention_mask = attention_mask
+            attention_mask = [
+                np.array(a_mask)[q_mask == 1].tolist()
+                for a_mask, q_mask in zip(attention_mask, query_tokens_mask)
+            ]
+            special_mask = [
+                np.array(s_mask)[q_mask == 1].tolist()
+                for s_mask, q_mask in zip(special_mask, query_tokens_mask)
+            ]
+        else:
+            raise NotImplementedError(
+                "Padding has to be True to enable RAG data processing"
+            )
+
+        return {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "special_tokens_mask": special_mask,
+            "full_attention_mask": full_attention_mask,
+            "query_tokens_mask": query_tokens_mask,
+            "position_ids": position_ids,
+            "inputs_str_embeds": str_embs_new,
+        }
 
     def decode_tokens(self, tokenized_sequences: Tensor) -> list[str]:
         """Decodes a Tensor of token id sequences
@@ -657,7 +820,11 @@ class GenBioCellFoundation(HFSequenceBackbone):
                     param.requires_grad = False
 
     def forward(
-        self, input_ids: Tensor, attention_mask: Tensor, all_hidden_states: bool = False
+        self,
+        input_ids: Tensor,
+        attention_mask: Tensor,
+        all_hidden_states: bool = False,
+        **kwargs,
     ) -> Union[Tensor, list]:
         """Encoder-only forward pass
 
@@ -715,7 +882,8 @@ class GenBioCellFoundation(HFSequenceBackbone):
         sequences: list[str],
         padding: bool = True,
         add_special_tokens: bool = True,
-    ) -> tuple[Tensor, Tensor]:
+        **kwargs,
+    ) -> dict:
         """Tokenizes a list of sequences
 
         Note:
@@ -725,9 +893,9 @@ class GenBioCellFoundation(HFSequenceBackbone):
             sequences (list[str]): List of sequences
 
         Returns:
-            tuple[Tensor, Tensor]: Token IDs with padding and special tokens, and attention mask
+            dict: contains input_ids
         """
-        return sequences, None, None
+        return {"input_ids": sequences}
 
     def decode_tokens(self, tokenized_sequences: Tensor) -> list[str]:
         raise NotImplementedError("Not implemented for CellFoundation.")
@@ -895,7 +1063,11 @@ class GenBioCellSpatialFoundation(HFSequenceBackbone):
         self.sep_value = sep_value
 
     def forward(
-        self, input_ids: Tensor, attention_mask: Tensor, all_hidden_states: bool = False
+        self,
+        input_ids: Tensor,
+        attention_mask: Tensor,
+        all_hidden_states: bool = False,
+        **kwargs,
     ) -> Union[Tensor, list]:
         """Encoder-only forward pass
 
@@ -929,7 +1101,7 @@ class GenBioCellSpatialFoundation(HFSequenceBackbone):
 
         if cell_num > 1:
             # multiple cells, pool over 1st cell then return embedding of 1st cell
-            # need get dim from outputs.last_hidden_state when encoder_cell_id==0 and others fill with pad dim, and set pad postion =0 in encoder_attention_mask
+            # need get dim from outputs.last_hidden_state when encoder_cell_id==0 and others fill with pad dim, and set pad position=0 in encoder_attention_mask
             if self.rope2d_use_xy:
                 cell_id_full = (
                     torch.tensor(
@@ -1146,7 +1318,8 @@ class GenBioCellSpatialFoundation(HFSequenceBackbone):
         sequences: list[str],
         padding: bool = True,
         add_special_tokens: bool = True,
-    ) -> tuple[Tensor, Tensor]:
+        **kwargs,
+    ) -> dict:
         """Tokenizes a list of sequences
 
         Note:
@@ -1158,7 +1331,7 @@ class GenBioCellSpatialFoundation(HFSequenceBackbone):
             sequences (list[str]): List of sequences
 
         Returns:
-            tuple[Tensor, Tensor]: Token IDs with padding and special tokens, and attention mask
+            dict: contains input_ids, attention_mask
         """
 
         (
@@ -1193,8 +1366,8 @@ class GenBioCellSpatialFoundation(HFSequenceBackbone):
             else:
                 first_cell_max_len = (encoder_rope_id[:, 1, :] == 0).sum(dim=1).max()
                 first_cell_mask = encoder_rope_id[:, 1, :first_cell_max_len] == 0
-            return sequences, first_cell_mask.long(), None
-        return sequences, encoder_attention_mask, None
+            return {"input_ids": sequences, "attention_mask": first_cell_mask.long()}
+        return {"input_ids": sequences, "attention_mask": encoder_attention_mask}
 
     def decode_tokens(self, tokenized_sequences: Tensor) -> list[str]:
         raise NotImplementedError("Not implemented for CellFoundation.")
@@ -1290,7 +1463,7 @@ class Onehot(HFSequenceBackbone):
             self.vocab_file = vocab_file
         self.tokenizer = FM4BioTokenizer(self.vocab_file, version="v1")
 
-    def forward(self, input_ids: Tensor, attention_mask: Tensor) -> Tensor:
+    def forward(self, input_ids: Tensor, attention_mask: Tensor, **kwargs) -> Tensor:
         """
         Returns one-hot encoding of input_ids.
 
@@ -1322,14 +1495,15 @@ class Onehot(HFSequenceBackbone):
         sequences: list[str],
         padding: bool = True,
         add_special_tokens: bool = True,
-    ) -> tuple[Tensor, Tensor, Tensor]:
+        **kwargs,
+    ) -> dict:
         """Tokenizes a list of sequences
 
         Args:
             sequences (list[str]): List of sequences
 
         Returns:
-            tuple[Tensor, Tensor, Tensor]: Token IDs with padding and special tokens, attention mask, and special tokens mask.
+            dict: contains input_ids, attention_mask, special_tokens_mask
         """
         seq_tokenized = self.tokenizer(
             sequences,
@@ -1339,10 +1513,8 @@ class Onehot(HFSequenceBackbone):
             add_special_tokens=add_special_tokens,
             return_special_tokens_mask=True,
         )
-        input_ids = seq_tokenized["input_ids"]
-        attention_mask = seq_tokenized["attention_mask"]
-        special_mask = seq_tokenized["special_tokens_mask"]
-        return input_ids, attention_mask, special_mask
+        output_keys = ["input_ids", "attention_mask", "special_tokens_mask"]
+        return {k: seq_tokenized[k] for k in output_keys}
 
     def decode_tokens(self, tokenized_sequences: Tensor) -> list[str]:
         """Decodes a Tensor of token id sequences
@@ -1504,7 +1676,7 @@ class Huggingface(HFSequenceBackbone):
             self.model = get_peft_model(self.model, peft_config)
             rank_zero_only(self.model.print_trainable_parameters)()
 
-    def forward(self, input_ids: Tensor, attention_mask: Tensor) -> Tensor:
+    def forward(self, input_ids: Tensor, attention_mask: Tensor, **kwargs) -> Tensor:
         """
         Returns the final logits.
 
@@ -1525,14 +1697,14 @@ class Huggingface(HFSequenceBackbone):
         """
         return _Identity()
 
-    def tokenize(self, sequences: list[str]) -> tuple[Tensor, Tensor]:
+    def tokenize(self, sequences: list[str], **kwargs) -> dict:
         """Tokenizes a list of sequences
 
         Args:
             sequences (list[str]): List of sequences
 
         Returns:
-            tuple[Tensor, Tensor]: Token IDs with padding and special tokens, and attention mask
+            dict: contains input_ids, attention_mask, special_tokens_mask
         """
         seq_tokenized = self.tokenizer(
             sequences,
@@ -1541,10 +1713,8 @@ class Huggingface(HFSequenceBackbone):
             max_length=self.max_length,
             return_special_tokens_mask=True,
         )
-        input_ids = seq_tokenized["input_ids"]
-        attention_mask = seq_tokenized["attention_mask"]
-        special_tokens_mask = seq_tokenized["special_tokens_mask"]
-        return input_ids, attention_mask, special_tokens_mask
+        output_keys = ["input_ids", "attention_mask", "special_tokens_mask"]
+        return {k: seq_tokenized[k] for k in output_keys}
 
     def decode_tokens(self, tokenized_sequences: Tensor) -> list[str]:
         """Decodes a Tensor of token id sequences
@@ -1681,6 +1851,7 @@ class Enformer(HFSequenceBackbone):
         input_ids: Tensor,
         attention_mask: Tensor = None,
         all_hidden_states: bool = False,
+        **kwargs,
     ) -> Union[Tensor, list]:
         """Encoder-only forward pass
 
@@ -1710,21 +1881,22 @@ class Enformer(HFSequenceBackbone):
         sequences: list[str],
         padding: bool = True,
         add_special_tokens: bool = False,
-    ) -> tuple[Tensor, Tensor]:
+        **kwargs,
+    ) -> dict:
         """Tokenizes a list of sequences
 
         Args:
             sequences (list[str]): List of sequences, should be of the same length
 
         Returns:
-            tuple[Tensor, Tensor, Tensor]: Token IDs with padding and special tokens, attention mask, and special tokens mask
+            dict: contains input_ids, attention_mask
         """
         input_ids = self.tokenizer(sequences)  # onehot coding, of shape (bs, 197k, 4)
         attention_mask = torch.ones(
             input_ids.size()[0], self.target_length
         )  # (bs, target_length)
-        special_mask = None
-        return input_ids, attention_mask, special_mask
+
+        return {"input_ids": input_ids, "attention_mask": attention_mask}
 
     def decode_tokens(self, tokenized_sequences: Tensor) -> list[str]:
         """Decodes a Tensor of token id sequences
@@ -1802,7 +1974,7 @@ class Borzoi(HFSequenceBackbone):
         config_overwrites (dict, optional): Optional model arguments for PretrainedConfig. Defaults to None.
         model_init_args (dict, optional): Optional model arguments passed to its init method. Defaults to None.
         from_scratch (bool, optional): Whether to create the model from scratch. Defaults to False.
-        max_length (int, optional): Maximum sequence length. Defaults to 196_608.
+        max_length (int, optional): Maximum sequence length. Defaults to 524_288.
         frozen (bool, optional): Whether to freeze model. Defaults to False.
         delete_crop_layer: Whether to skip cropping layer. Defaults to False.
     """
@@ -1812,7 +1984,7 @@ class Borzoi(HFSequenceBackbone):
         legacy_adapter_type: Union[LegacyAdapterType, None],
         default_config: Union[DefaultConfig, None],
         from_scratch: bool = False,
-        max_length: Optional[int] = 196_608,
+        max_length: Optional[int] = 524_288,
         frozen: bool = False,
         delete_crop_layer: bool = False,
         **kwargs,
@@ -1860,6 +2032,7 @@ class Borzoi(HFSequenceBackbone):
         input_ids: Tensor,
         attention_mask: Tensor = None,
         all_hidden_states: bool = False,
+        **kwargs,
     ) -> Union[Tensor, list]:
         """Encoder-only forward pass
 
@@ -1869,7 +2042,7 @@ class Borzoi(HFSequenceBackbone):
             all_hidden_states (bool, optional): Whether to return all hidden states. Defaults to False.
 
         Returns:
-            Union[Tensor, list]: Last hidden state or list of all hidden states
+            Union[Tensor, list]: Last hidden state or list of all hidden states, hidden state (n, target_length, d)
         """
         embeddings = self.encoder(input_ids.float(), return_only_embeddings=True, delete_crop_layer=self.delete_crop_layer, )
         if all_hidden_states:
@@ -1889,21 +2062,21 @@ class Borzoi(HFSequenceBackbone):
         sequences: list[str],
         padding: bool = True,
         add_special_tokens: bool = False,
-    ) -> tuple[Tensor, Tensor]:
+        **kwargs,
+    ) -> dict:
         """Tokenizes a list of sequences
 
         Args:
             sequences (list[str]): List of sequences, should be of the same length
 
         Returns:
-            tuple[Tensor, Tensor, Tensor]: Token IDs with padding and special tokens, attention mask, and special tokens mask
+            dict: contains input_ids, attention_mask
         """
         input_ids = self.tokenizer(sequences).transpose(-1,-2)  # onehot coding, of shape (bs, 4, L), Borzoi
         attention_mask = torch.ones(
             input_ids.size()[0], self.target_length
         )  # (bs, target_length)
-        special_mask = None
-        return input_ids, attention_mask, special_mask
+        return {"input_ids": input_ids, "attention_mask": attention_mask}
 
     def decode_tokens(self, tokenized_sequences: Tensor) -> list[str]:
         """Decodes a Tensor of token id sequences
@@ -2089,7 +2262,7 @@ class ESM(HFSequenceBackbone):
                     param.requires_grad = False
 
     def forward(
-        self, input_ids: Tensor, attention_mask: Tensor, all_hidden_states: bool = False
+        self, input_ids: Tensor, attention_mask: Tensor, all_hidden_states: bool = False, **kwargs
     ) -> Union[Tensor, list]:
         """Encoder-only forward pass
 
@@ -2119,14 +2292,14 @@ class ESM(HFSequenceBackbone):
         """
         return self.decoder
 
-    def tokenize(self, sequences: list[str]) -> tuple[Tensor, Tensor]:
+    def tokenize(self, sequences: list[str], **kwargs) -> dict:
         """Tokenizes a list of sequences
 
         Args:
             sequences (list[str]): List of sequences
 
         Returns:
-            tuple[Tensor, Tensor]: Token IDs with padding and special tokens, and attention mask
+            dict: contains input_ids, attention_mask, special_tokens_mask
         """
         seq_tokenized = self.tokenizer(
             sequences,
@@ -2135,10 +2308,8 @@ class ESM(HFSequenceBackbone):
             max_length=self.max_length,
             return_special_tokens_mask=True,
         )
-        input_ids = seq_tokenized["input_ids"]
-        attention_mask = seq_tokenized["attention_mask"]
-        special_tokens_mask = seq_tokenized["special_tokens_mask"]
-        return input_ids, attention_mask, special_tokens_mask
+        output_keys = ["input_ids", "attention_mask", "special_tokens_mask"]
+        return {k: seq_tokenized[k] for k in output_keys}
 
     def decode_tokens(self, tokenized_sequences: Tensor) -> list[str]:
         """Decodes a Tensor of token id sequences
@@ -2326,6 +2497,7 @@ class SCFoundation(HFSequenceBackbone):
         input_ids: Tensor,
         attention_mask: Tensor = None,
         all_hidden_states: bool = False,
+        **kwargs,
     ) -> Union[Tensor, List[Tensor]]:
         """Forward pass with multiple embedding modes
 
@@ -2370,7 +2542,8 @@ class SCFoundation(HFSequenceBackbone):
         sequences: list[str],
         padding: bool = True,
         add_special_tokens: bool = True,
-    ) -> tuple[Tensor, Tensor]:
+        **kwargs,
+    ) -> dict:
         """Tokenizes a list of sequences
 
         Note:
@@ -2380,9 +2553,9 @@ class SCFoundation(HFSequenceBackbone):
             sequences (list[str]): List of sequences
 
         Returns:
-            tuple[Tensor, Tensor]: Token IDs with padding and special tokens, and attention mask
+            dict: contains input_ids
         """
-        return sequences, None, None
+        return {"input_ids": sequences}
 
     def decode_tokens(self, tokenized_sequences: Tensor) -> List[str]:
         """Decodes tokenized sequences"""

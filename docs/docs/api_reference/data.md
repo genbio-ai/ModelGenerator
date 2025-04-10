@@ -62,3 +62,10 @@
       members: false
       show_root_heading: true
       show_source: false
+
+::: modelgenerator.data.PertClassificationDataModule
+    handler: python
+    options:
+      members: false
+      show_root_heading: true
+      show_source: false

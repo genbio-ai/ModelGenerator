@@ -1,0 +1,87 @@
+# Elijah Cole
+seed_everything: 42
+data:
+  class_path: modelgenerator.data.PertClassificationDataModule
+  init_args:
+    path: '/workspace/modelgenerator/cell-downstream-tasks/tahoe/'
+    batch_size: 32 # For 3M model on H100
+    train_split_files: # Can include as many plates as your resources allow. Takes 8-10 minutes to load one plate.
+      - 'h5ad/plate1_filt_Vevo_Tahoe100M_WServicesFrom_ParseGigalab.h5ad.gz'
+      # - 'h5ad/plate2_filt_Vevo_Tahoe100M_WServicesFrom_ParseGigalab.h5ad.gz'
+      # - 'h5ad/plate3_filt_Vevo_Tahoe100M_WServicesFrom_ParseGigalab.h5ad.gz'
+      # ...
+      # - 'h5ad/plate14_filt_Vevo_Tahoe100M_WServicesFrom_ParseGigalab.h5ad.gz'
+    pert_column: 'drug'
+    cell_line_column: 'cell_line'
+    cell_line: 'CVCL_0546'
+    filter_columns:
+      - 'drug'
+    rename_columns:
+      - 'labels'
+    gene_set_file: '/workspace/experiments/AIDO.Cell/OS_scRNA_gene_index.19264.tsv'
+model:
+  class_path: modelgenerator.tasks.SequenceClassification
+  init_args:
+    n_classes: 93 # If you use more plates, make sure to adjust to the proper number of drugs.
+    use_legacy_adapter: false
+    optimizer:
+      class_path: torch.optim.AdamW
+      init_args:
+        lr: 1e-3
+        weight_decay: 0.01
+        betas: [0.9, 0.95]
+    lr_scheduler:
+      class_path: modelgenerator.lr_schedulers.CosineWithWarmup
+      init_args:
+        warmup_ratio: 0.01
+    backbone:
+      class_path: modelgenerator.backbones.aido_cell_3m
+      init_args:
+        from_scratch: False
+    adapter:
+      class_path: modelgenerator.adapters.LinearMeanPoolAdapter
+trainer:
+  log_every_n_steps: 10
+  val_check_interval: 300
+  precision: bf16
+  devices: auto
+  max_epochs: 5
+  gradient_clip_val: 0
+  profiler: null
+  callbacks: 
+    - class_path: lightning.pytorch.callbacks.LearningRateMonitor
+      dict_kwargs:
+        logging_interval: "step"
+    # Save a checkpoint for max val f1:
+    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+      dict_kwargs:
+        monitor: val_f1
+        mode: max
+        save_top_k: 1
+        filename: "best_val_f1:{step}-{val_f1:.3f}"
+    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+      dict_kwargs:
+        monitor: train_loss
+        mode: min
+        save_top_k: 1
+        filename: "best_train_loss:{step}-{train_loss:.3f}"
+    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+      dict_kwargs:
+        monitor: val_loss
+        mode: min
+        save_top_k: 1
+        filename: "best_val_loss:{step}-{val_loss:.3f}"
+    # Save latest:
+    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+      dict_kwargs:
+        filename: "latest:{step}"
+  default_root_dir: '/workspace/modelgenerator/logs'
+  strategy:
+    class_path: lightning.pytorch.strategies.DDPStrategy
+  logger: 
+    class_path: lightning.pytorch.loggers.wandb.WandbLogger
+    init_args:
+      name: "default"
+      save_dir: "logs"
+      project: "mgen-pert-classification"
+      save_code: true

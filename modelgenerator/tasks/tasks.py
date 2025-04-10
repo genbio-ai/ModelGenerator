@@ -6,6 +6,7 @@ import torch
 from torch import Tensor
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.linalg import vector_norm
 
 from lightning.pytorch.utilities import grad_norm
 
@@ -95,12 +96,13 @@ class MLM(TaskInterface):
         Returns:
             dict[str, Union[list, Tensor]]: The collated batch with input_ids, attention_mask, and target_ids
         """
-        input_ids, attention_mask, special_tokens_mask = self.backbone.tokenize(
-            batch["sequences"]
-        )
+        tokenized_result = self.backbone.tokenize(batch["sequences"])
+        input_ids = tokenized_result.pop("input_ids", None)
+        attention_mask = tokenized_result.pop("attention_mask", None)
+        special_tokens_mask = tokenized_result.pop("special_tokens_mask", None)
         target_ids = None
         if batch.get("target_sequences", None) is not None:
-            target_ids, _, _ = self.backbone.tokenize(batch["target_sequences"])
+            target_ids = self.backbone.tokenize(batch["target_sequences"])["input_ids"]
             target_ids = torch.tensor(target_ids, dtype=torch.long).to(self.device)
         input_ids = torch.tensor(input_ids, dtype=torch.long).to(self.device)
         attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(self.device)
@@ -109,6 +111,7 @@ class MLM(TaskInterface):
             "attention_mask": attention_mask,
             "target_ids": target_ids,
             "special_tokens_mask": special_tokens_mask,
+            **tokenized_result,
         }
 
     def forward(self, collated_batch: dict[str, Union[list, Tensor]]) -> Tensor:
@@ -120,9 +123,7 @@ class MLM(TaskInterface):
         Returns:
             Tensor: The decoder logits
         """
-        encoder_hidden = self.backbone(
-            collated_batch["input_ids"], collated_batch["attention_mask"]
-        )
+        encoder_hidden = self.backbone(**collated_batch)
         decoder_logits = self.adapter(encoder_hidden)
         return decoder_logits
 
@@ -185,17 +186,21 @@ class Inference(MLM):
         Returns:
             dict[str, Union[list, Tensor]]: The collated batch with input_ids, attention_mask, and target_ids
         """
-        input_ids, attention_mask, special_tokens_mask = self.backbone.tokenize(
-            batch["sequences"]
-        )
+        sequences = batch.pop("sequences")
+        tokenized_result = self.backbone.tokenize(sequences, **batch)
+        input_ids = tokenized_result.pop("input_ids", None)
+        attention_mask = tokenized_result.pop("attention_mask", None)
+        special_tokens_mask = tokenized_result.pop("special_tokens_mask", None)
         input_ids = torch.tensor(input_ids, dtype=torch.long).to(self.device)
         if attention_mask is not None:
             attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(self.device)
         batch.update(
             {
+                "sequences": sequences,
                 "input_ids": input_ids,
                 "attention_mask": attention_mask,
                 "special_tokens_mask": special_tokens_mask,
+                **tokenized_result,
             }
         )
         return batch
@@ -260,7 +265,7 @@ class SequenceClassification(TaskInterface):
                 task = "binary" if n_classes == 2 else "multiclass"
                 self.metrics[f"{stage}_metrics"] = nn.ModuleDict(
                     {
-                        # Note: `average` need to be set explicity for accuracy and f1
+                        # Note: `average` need to be set explicitly for accuracy and f1
                         # see https://github.com/Lightning-AI/torchmetrics/issues/2280
                         "accuracy": tm.Accuracy(
                             task, num_classes=n_classes, average="micro"
@@ -342,25 +347,30 @@ class SequenceClassification(TaskInterface):
         Returns:
             dict[str, Union[list, Tensor]]: The collated batch containing input_ids, attention_mask, and labels
         """
-        input_ids, attention_mask, special_tokens_mask = self.backbone.tokenize(
-            batch["sequences"]
-        )
+
+        sequences = batch.pop("sequences")
+        tokenized_result = self.backbone.tokenize(sequences, **batch)
+        input_ids = tokenized_result.pop("input_ids", None)
+        attention_mask = tokenized_result.pop("attention_mask", None)
+        special_tokens_mask = tokenized_result.pop("special_tokens_mask", None)
         input_ids = torch.tensor(input_ids, dtype=torch.long).to(self.device)
         if attention_mask is not None:
             attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(self.device)
-        if batch.get("labels", None) is not None:
-            if isinstance(batch["labels"], torch.Tensor):
+
+        if batch.get("labels") is not None:
+            if torch.is_tensor(batch["labels"]):
                 labels = batch["labels"].to(self.device, dtype=torch.long)
             else:
-                labels = torch.tensor(batch["labels"], dtype=torch.long).to(self.device)
+                labels = torch.as_tensor(batch["labels"]).to(self.device, dtype=torch.long)
         else:
             labels = None
         return {
-            "sequences": batch["sequences"],
+            "sequences": sequences,
             "input_ids": input_ids,
             "attention_mask": attention_mask,
             "special_tokens_mask": special_tokens_mask,
             "labels": labels,
+            **tokenized_result,
         }
 
     def forward(self, collated_batch: dict[str, Union[list, Tensor]]) -> Tensor:
@@ -372,9 +382,8 @@ class SequenceClassification(TaskInterface):
         Returns:
             Tensor: The classifier logits
         """
-        hidden_states = self.backbone(
-            collated_batch["input_ids"], collated_batch["attention_mask"]
-        )
+
+        hidden_states = self.backbone(**collated_batch)
         logits = self.adapter(hidden_states, collated_batch["attention_mask"])
         return logits
 
@@ -396,6 +405,7 @@ class SequenceClassification(TaskInterface):
         Returns:
             Tensor: The loss.
         """
+
         labels = collated_batch["labels"]
         if not self.multilabel:
             labels = labels.view(-1)  # (bs,)
@@ -423,6 +433,7 @@ class SequenceClassification(TaskInterface):
         else:
             for metric in metrics.values():
                 self.call_or_update_metric(stage, metric, preds, labels)
+
         return {"loss": loss}
 
 
@@ -468,9 +479,7 @@ class TokenClassification(SequenceClassification):
         Returns:
             Tensor: The classifier logits
         """
-        hidden_states = self.backbone(
-            collated_batch["input_ids"], collated_batch["attention_mask"]
-        )  # (bs, seq_len, hidden_size)
+        hidden_states = self.backbone(**collated_batch)
         logits = self.adapter(hidden_states)
         return logits
 
@@ -527,14 +536,21 @@ class PairwiseTokenClassification(SequenceClassification):
         self,
         *args,
         adapter: Optional[Callable[[int, int], TokenAdapter]] = LinearAdapter,
+        adapter_dim_multiplier: int = 2,
         n_classes: int = 2,
         **kwargs,
     ):
+        """
+        If the we use MLPAdapter and outer_concat, then adapter_dim_multiplier should be 2;
+        if we use MLPAdapterWithoutOutConcat, then adapter_dim_multiplier should be 1.
+        The outer_concat operation is very memory intensive.
+        """
         # TODO: multi-class support in evaluate
         if n_classes != 2:
             raise ValueError(
                 "PairwiseTokenClassification currenlty only supports binary classification"
             )
+        self.adapter_dim_multiplier = adapter_dim_multiplier
         super().__init__(
             *args, adapter=adapter, n_classes=n_classes, multilabel=False, **kwargs
         )
@@ -561,7 +577,7 @@ class PairwiseTokenClassification(SequenceClassification):
         else:
             self.backbone = self.backbone_fn(None, None)
             self.adapter = self.adapter_fn(
-                self.backbone.get_embedding_size() * 2,
+                self.backbone.get_embedding_size() * self.adapter_dim_multiplier,
                 self.n_classes,
             )
 
@@ -574,14 +590,15 @@ class PairwiseTokenClassification(SequenceClassification):
         Returns:
             Tensor: The classifier logits
         """
-        hidden_states = self.backbone(
-            collated_batch["input_ids"], collated_batch["attention_mask"]
-        )
+        hidden_states = self.backbone(**collated_batch)
+
         if self.use_legacy_adapter:
             logits = self.adapter(hidden_states)
-        else:
+        elif self.adapter_dim_multiplier > 1:
             x = self.outer_concat(hidden_states)
             logits = self.adapter(x)
+        else:
+            logits = self.adapter(hidden_states)
         return logits
 
     def outer_concat(self, x):
@@ -647,12 +664,13 @@ class PairwiseTokenClassification(SequenceClassification):
             padded_labels != -100
         ]  # vector: (seq_len-1) * (seq_len-1)
         if collated_batch["special_tokens_mask"] is not None:
-            special_tokens_mask = torch.logical_not(torch.tensor(collated_batch["special_tokens_mask"]))
+            special_tokens_mask = torch.logical_not(torch.tensor(collated_batch["special_tokens_mask"]).to(logits.device))
             # (bs, seq_len) -> (bs, seq_len, seq_len) by batch wise outer product
             special_tokens_mask_expanded = torch.einsum(
                 "bp, bq -> bpq", special_tokens_mask, special_tokens_mask
             )
             logits = logits[special_tokens_mask_expanded]  # (labels.shape[0], n_classes)
+
         loss = self.loss(logits, labels)
         if loss_only:
             return {"loss": loss}
@@ -754,9 +772,10 @@ class Diffusion(TaskInterface):
         """
         # Each sample in a batch is a list of noised sequences at various noise levels. Stack them for easy training.
         input_seqs = [seq for seqs in batch["sequences"] for seq in seqs]
-        input_ids, attention_mask, special_tokens_mask = self.backbone.tokenize(
-            input_seqs
-        )
+        tokenized_result = self.backbone.tokenize(input_seqs)
+        input_ids = tokenized_result.pop("input_ids", None)
+        attention_mask = tokenized_result.pop("attention_mask", None)
+        special_tokens_mask = tokenized_result.pop("special_tokens_mask", None)
         input_ids = torch.tensor(input_ids, dtype=torch.long).to(self.device)
         input_mask = torch.where(input_ids == self.mask_id, 1, 0)
         if attention_mask is not None:
@@ -767,7 +786,7 @@ class Diffusion(TaskInterface):
         posterior_weights = None
         if batch.get("target_sequences", None) is not None:
             target_seqs = [seq for seqs in batch["target_sequences"] for seq in seqs]
-            target_ids, _, _ = self.backbone.tokenize(target_seqs)
+            target_ids = self.backbone.tokenize(target_seqs)["input_ids"]
             target_ids = torch.tensor(target_ids, dtype=torch.long).to(self.device)
             target_mask = torch.where(target_ids == self.mask_id, 1, 0)
         if batch.get("posterior_weights", None) is not None:
@@ -788,6 +807,7 @@ class Diffusion(TaskInterface):
             "target_masks": target_mask,
             "target_seqs": target_seqs,
             "posterior_weights": posterior_weights,
+            **tokenized_result,
         }
 
     def forward(self, collated_batch: dict[str, Union[list, Tensor]]) -> Tensor:
@@ -799,9 +819,7 @@ class Diffusion(TaskInterface):
         Returns:
             Tensor: The decoder logits
         """
-        encoder_hidden = self.backbone(
-            collated_batch["input_ids"], collated_batch["attention_mask"]
-        )
+        encoder_hidden = self.backbone(**collated_batch)
         decoder_logits = self.adapter(encoder_hidden)
         return decoder_logits
 
@@ -1122,15 +1140,16 @@ class ConditionalMLM(TaskInterface):
         Returns:
             dict[str, Union[list, Tensor]]: The collated batch with input_ids, attention_mask, target_ids, and labels
         """
-        input_ids, attention_mask, special_tokens_mask = self.backbone.tokenize(
-            batch["sequences"]
-        )
+        tokenized_result = self.backbone.tokenize(batch["sequences"])
+        input_ids = tokenized_result.pop("input_ids", None)
+        attention_mask = tokenized_result.pop("attention_mask", None)
+        special_tokens_mask = tokenized_result.pop("special_tokens_mask", None)
         input_ids = torch.tensor(input_ids, dtype=torch.long).to(self.device)
         if attention_mask is not None:
             attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(self.device)
         target_ids = None
         if batch.get("target_sequences", None) is not None:
-            target_ids, _, _ = self.backbone.tokenize(batch["target_sequences"])
+            target_ids = self.backbone.tokenize(batch["target_sequences"])["input_ids"]
             target_ids = torch.tensor(target_ids, dtype=torch.long).to(self.device)
         labels = batch["labels"].type(self.dtype)
         if len(batch["labels"].shape) == 1:
@@ -1141,6 +1160,7 @@ class ConditionalMLM(TaskInterface):
             "special_tokens_mask": special_tokens_mask,
             "target_ids": target_ids,
             "labels": labels,
+            **tokenized_result,
         }
 
     def forward(self, collated_batch: dict[str, Union[list, Tensor]]) -> Tensor:
@@ -1152,9 +1172,7 @@ class ConditionalMLM(TaskInterface):
         Returns:
             Tensor: The decoder logits
         """
-        encoder_hidden = self.backbone(
-            collated_batch["input_ids"], collated_batch["attention_mask"]
-        )
+        encoder_hidden = self.backbone(**collated_batch)
         logits = self.adapter(encoder_hidden, collated_batch["labels"])
         return logits
 
@@ -1273,9 +1291,7 @@ class ConditionalDiffusion(Diffusion):
         Returns:
             Tensor: The decoder logits
         """
-        encoder_hidden = self.backbone(
-            collated_batch["input_ids"], collated_batch["attention_mask"]
-        )
+        encoder_hidden = self.backbone(**collated_batch)
         logits = self.adapter(encoder_hidden, collated_batch["labels"])
         return logits
 
@@ -1303,6 +1319,7 @@ class SequenceRegression(TaskInterface):
         adapter: Optional[Callable[[int, int], SequenceAdapter]] = LinearCLSAdapter,
         num_outputs: int = 1,
         loss_func: Callable[..., torch.nn.Module] = torch.nn.MSELoss,
+        log_grad_norm_step: int = 0,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -1314,6 +1331,7 @@ class SequenceRegression(TaskInterface):
         self.backbone = None
         self.adapter = None
         self.loss = loss_func()
+        self.log_grad_norm_step = log_grad_norm_step
         for stage in ["train", "val", "test"]:
             self.metrics[f"{stage}_metrics"] = nn.ModuleDict(
                 {
@@ -1403,9 +1421,13 @@ class SequenceRegression(TaskInterface):
         Returns:
             dict[str, Union[list, Tensor]]: The collated batch containing sequences, input_ids, attention_mask, and labels
         """
-        input_ids, attention_mask, special_tokens_mask = self.backbone.tokenize(
-            batch["sequences"]
-        )
+
+        sequences = batch.pop("sequences")
+        tokenized_result = self.backbone.tokenize(sequences, **batch)
+        input_ids = tokenized_result.pop("input_ids", None)
+        attention_mask = tokenized_result.pop("attention_mask", None)
+        special_tokens_mask = tokenized_result.pop("special_tokens_mask", None)
+
         input_ids = torch.tensor(input_ids, dtype=torch.long).to(self.device)
         if attention_mask is not None:
             attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(self.device)
@@ -1413,11 +1435,12 @@ class SequenceRegression(TaskInterface):
         if batch.get("labels") is not None:
             labels = batch["labels"].to(self.device, dtype=self.dtype)
         return {
-            "sequences": batch["sequences"],
+            "sequences": sequences,
             "input_ids": input_ids,
             "attention_mask": attention_mask,
             "special_tokens_mask": special_tokens_mask,
             "labels": labels,
+            **tokenized_result,
         }
 
     def forward(self, collated_batch: dict[str, Union[list, Tensor]]) -> Tensor:
@@ -1429,9 +1452,8 @@ class SequenceRegression(TaskInterface):
         Returns:
             Tensor: The regression predictions
         """
-        hidden_states = self.backbone(
-            collated_batch["input_ids"], collated_batch["attention_mask"]
-        )  # (bs, seq_len, dim)
+
+        hidden_states = self.backbone(**collated_batch)  # (bs, seq_len, dim)
         preds = self.adapter(hidden_states, collated_batch["attention_mask"])
         return preds
 
@@ -1452,11 +1474,13 @@ class SequenceRegression(TaskInterface):
         Returns:
             dict[str, Union[Tensor, float]]: A dictionary of metrics containing loss and mse
         """
+
         labels = collated_batch["labels"]
         loss = self.loss(preds, labels)
         if loss_only:
             return {"loss": loss}
         metrics = self.get_metrics_by_stage(stage)
+
         if self.num_outputs > 1 and stage == "test":
             for name, metric in metrics.items():
                 if len(name.split("_")) == 1:
@@ -1467,7 +1491,52 @@ class SequenceRegression(TaskInterface):
         else:
             for metric in metrics.values():
                 self.call_or_update_metric(stage, metric, preds, labels)
+
         return {"loss": loss}
+
+    def log_grad_norm(self, optimizer):
+        """
+        Log the total total_norm, adaptor_param_norm and adaptor_grad_norm.
+
+        Refer to
+        https://github.com/Lightning-AI/pytorch-lightning/blob/master/src/lightning/pytorch/plugins/precision/precision.py
+        https://github.com/Lightning-AI/pytorch-lightning/blob/master/src/lightning/pytorch/core/module.py
+        for the calculation of the gradient norm
+        """
+        parameters = self.trainer.precision_plugin.main_params(optimizer)
+        parameters = list(parameters)
+        if len(parameters) > 0:
+            assert all([p.requires_grad for p in parameters])
+            if all([p.grad is not None for p in parameters]):
+                total_norm = vector_norm(
+                    torch.stack([vector_norm(p.grad, ord=2) for p in parameters]), ord=2
+                )
+                adaptor_param_norm = vector_norm(
+                    torch.stack(
+                        [vector_norm(p, ord=2) for p in self.adapter.parameters()]
+                    ),
+                    ord=2,
+                )
+                adaptor_grad_norm = vector_norm(
+                    torch.stack(
+                        [vector_norm(p.grad, ord=2) for p in self.adapter.parameters()]
+                    ),
+                    ord=2,
+                )
+
+                self.log("total_norm", total_norm, rank_zero_only=True)
+                self.log("adaptor_param_norm", adaptor_param_norm, rank_zero_only=True)
+                self.log("adaptor_grad_norm", adaptor_grad_norm, rank_zero_only=True)
+
+    def on_before_optimizer_step(self, optimizer):
+        """
+        Log gradient norm of adaptor's parameters
+        """
+        if (
+            self.log_grad_norm_step > 0
+            and self.trainer.global_step % self.log_grad_norm_step == 0
+        ):
+            self.log_grad_norm(optimizer)
 
 
 class SequenceRegressionWithScaling(SequenceRegression):
@@ -1530,9 +1599,7 @@ class SequenceRegressionWithScaling(SequenceRegression):
         """
         ## Adapted from https://github.com/lbcb-sci/RiNALMo/blob/main/train_ribosome_loading.py
 
-        hidden_states = self.backbone(
-            collated_batch["input_ids"], collated_batch["attention_mask"]
-        )  # (bs, seq_len, dim)
+        hidden_states = self.backbone(**collated_batch)  # (bs, seq_len, dim)
 
         # Nullify padding token representations
         if collated_batch["attention_mask"] is not None:
@@ -1661,17 +1728,20 @@ class Embed(TaskInterface):
         Returns:
             dict[str, Union[list, Tensor]]: The collated batch with sequences, input_ids, and attention_mask
         """
-        input_ids, attention_mask, special_tokens_mask = self.backbone.tokenize(
-            batch["sequences"]
-        )
+        sequences = batch.pop("sequences")
+        tokenized_result = self.backbone.tokenize(sequences, **batch)
+        input_ids = tokenized_result.pop("input_ids", None)
+        attention_mask = tokenized_result.pop("attention_mask", None)
+        special_tokens_mask = tokenized_result.pop("special_tokens_mask", None)
         input_ids = torch.tensor(input_ids, dtype=torch.long).to(self.device)
         if attention_mask is not None:
             attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(self.device)
         return {
-            "sequences": batch["sequences"],
+            "sequences": sequences,
             "input_ids": input_ids,
             "attention_mask": attention_mask,
             "special_tokens_mask": special_tokens_mask,
+            **tokenized_result,
         }
 
     def forward(self, collated_batch: dict[str, Union[list, Tensor]]) -> Tensor:
@@ -1683,9 +1753,7 @@ class Embed(TaskInterface):
         Returns:
             Tensor: The decoder logits
         """
-        encoder_hidden = self.backbone(
-            collated_batch["input_ids"], collated_batch["attention_mask"]
-        )
+        encoder_hidden = self.backbone(**collated_batch)  # (bs, seq_len, dim)
         return encoder_hidden
 
 
@@ -1731,35 +1799,35 @@ class ZeroshotPredictionDiff(TaskInterface):
         Returns:
             dict[str, Union[list, Tensor]]: The collated batch with input_ids, attention_mask, and target_ids
         """
-        input_ids, attention_mask, special_tokens_mask = self.backbone.tokenize(
-            batch["sequences"]
-        )
+        tokenized_result = self.backbone.tokenize(batch["sequences"])
+        input_ids = tokenized_result.pop("input_ids", None)
+        tokenized_result.pop("attention_mask", None)
+        special_tokens_mask = tokenized_result.pop("special_tokens_mask", None)
         labels = None
         ref_ids = None
         mutation_ids = None
         if batch.get("labels") is not None:
             labels = batch["labels"]
         if batch.get("refs") is not None:
-            ref_ids, _, _ = self.backbone.tokenize(
+            ref_ids = self.backbone.tokenize(
                 batch["refs"], add_special_tokens=False
-            )
+            )["input_ids"]
             ref_ids = torch.tensor(ref_ids, dtype=torch.long, device=self.device)
         if batch.get("mutations") is not None:
-            mutation_ids, _, _ = self.backbone.tokenize(
+            mutation_ids = self.backbone.tokenize(
                 batch["mutations"], add_special_tokens=False
-            )
+            )["input_ids"]
             mutation_ids = torch.tensor(
                 mutation_ids, dtype=torch.long, device=self.device
             )
         input_ids = torch.tensor(input_ids, dtype=torch.long).to(self.device)
-        if attention_mask is not None:
-            attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(self.device)
         return {
             "input_ids": input_ids,
             "ref_ids": ref_ids,
             "mutation_ids": mutation_ids,
             "labels": labels,
             "special_tokens_mask": special_tokens_mask,
+            **tokenized_result,
         }
 
     def forward(self, collated_batch: dict[str, Union[list, Tensor]]) -> Tensor:
@@ -1771,7 +1839,7 @@ class ZeroshotPredictionDiff(TaskInterface):
         Returns:
             Tensor: The decoder logits
         """
-        encoder_hidden = self.backbone(collated_batch["input_ids"], attention_mask=None)
+        encoder_hidden = self.backbone(**collated_batch, attention_mask=None)
         decoder_logits = self.adapter(encoder_hidden)
         b, l, d = decoder_logits.shape
         if collated_batch["special_tokens_mask"] is not None:
@@ -1893,9 +1961,10 @@ class ZeroshotPredictionDistance(TaskInterface):
         for key in batch.keys():
             if "sequences" in key:  # tokenize sequence
                 # Note: previous version, add_special_token = False
-                input_ids, attention_mask, special_tokens_mask = self.backbone.tokenize(
-                    batch[key]
-                )
+                tokenized_result = self.backbone.tokenize(batch[key])
+                input_ids = tokenized_result.pop("input_ids", None)
+                attention_mask = tokenized_result.pop("attention_mask", None)
+                special_tokens_mask = tokenized_result.pop("special_tokens_mask", None)
                 input_ids = torch.tensor(input_ids, dtype=torch.long).to(self.device)
                 if attention_mask is not None:
                     attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(
@@ -2191,17 +2260,19 @@ class MMSequenceRegression(TaskInterface):
             labels = batch["labels"].to(self.device, dtype=self.dtype)
 
         omic_name = self.backbone_order[0]
-        input_ids, attention_mask, special_tokens_mask = self.backbone.tokenize(
-            batch["sequences"][f"{omic_name}"]
-        )
+        tokenized_result = self.backbone.tokenize(batch["sequences"][f"{omic_name}"])
+        input_ids = tokenized_result.pop("input_ids", None)
+        attention_mask = tokenized_result.pop("attention_mask", None)
+        special_tokens_mask = tokenized_result.pop("special_tokens_mask", None)
         input_ids = torch.tensor(input_ids, dtype=torch.long).to(self.device)
         if attention_mask is not None:
             attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(self.device)
 
         omic_name1 = self.backbone_order[1]
-        input_ids1, attention_mask1, special_tokens_mask1 = self.backbone1.tokenize(
-            batch["sequences"][f"{omic_name1}"]
-        )
+        tokenized_result1 = self.backbone1.tokenize(batch["sequences"][f"{omic_name1}"])
+        input_ids1 = tokenized_result1.pop("input_ids", None)
+        attention_mask1 = tokenized_result1.pop("attention_mask", None)
+        special_tokens_mask1 = tokenized_result1.pop("special_tokens_mask", None)
         input_ids1 = torch.tensor(input_ids1, dtype=torch.long).to(self.device)
         if attention_mask1 is not None:
             attention_mask1 = torch.tensor(attention_mask1, dtype=torch.long).to(
@@ -2210,9 +2281,10 @@ class MMSequenceRegression(TaskInterface):
 
         if self.num_backbones == 3:
             omic_name2 = self.backbone_order[2]
-            input_ids2, attention_mask2, special_tokens_mask2 = self.backbone2.tokenize(
-                batch["sequences"][f"{omic_name2}"]
-            )
+            tokenized_result2 = self.backbone2.tokenize(batch["sequences"][f"{omic_name2}"])
+            input_ids2 = tokenized_result2.pop("input_ids", None)
+            attention_mask2 = tokenized_result2.pop("attention_mask", None)
+            special_tokens_mask2 = tokenized_result2.pop("special_tokens_mask", None)
             input_ids2 = torch.tensor(input_ids2, dtype=torch.long).to(self.device)
             if attention_mask2 is not None:
                 attention_mask2 = torch.tensor(attention_mask2, dtype=torch.long).to(

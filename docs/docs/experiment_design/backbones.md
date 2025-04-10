@@ -16,7 +16,7 @@ Available Backbones:
 
 - DNA: `aido_dna_7b`, `aido_dna_300m`, `aido_dna_dummy`, `aido_dna_debug`, `dna_onehot`
 - RNA: `aido_rna_1b600m`, `aido_rna_1b600m_cds`, `aido_rna_650m`, `aido_rna_650m_cds`, `aido_rna_300m_mars`, `aido_rna_25m_mars`, `aido_rna_1m_mars`, `aido_dna_dummy`, `aido_dna_debug`, `dna_onehot`
-- Protein: `aido_protein_16b`, `aido_protein_16b_v1`, `aido_protein2structoken_16b`, `aido_protein_debug`, `protein_onehot`
+- Protein: `aido_protein_16b`, `aido_protein_16b_v1`, `aido_protein2structoken_16b`, `aido_protein_debug`, `protein_onehot`, `aido_protein_rag_16b`, `aido_protein_rag_3b`
 - Cell (gene expression): `aido_cell_100m`, `aido_cell_10m`, `aido_cell_3m`
 - OneHot: dummy model, only tokenizes, useful for non-FM baselines and quick tests
 

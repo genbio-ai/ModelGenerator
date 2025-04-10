@@ -9,6 +9,7 @@ from modelgenerator.adapters.adapters import (
     ResNet1DAdapter,
     ResNet2DAdapter,
     MLPAdapter,
+    MLPAdapterWithoutOutConcat,
     LinearAdapter,
 )
 
@@ -96,6 +97,13 @@ def test_sequence_adapter_output_shapes(
             (4, 10, 16),
             (4, 10),
             (4, 10, 8),
+        ),
+        (
+            MLPAdapterWithoutOutConcat,
+            {"in_features": 16, "out_features": 8, "hidden_sizes": [32, 16]},
+            (4, 10, 16),
+            (4, 10),
+            (4, 10, 10, 8),
         ),
         (
             LinearAdapter,

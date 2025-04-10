@@ -12,21 +12,30 @@ def test_genbiobert(genbiobert):
 
     # Test tokenize method
     sequences = ["ACGT", "TGC"]
-    input_ids, attention_mask, special_mask = model.tokenize(
+    tokenized_result = model.tokenize(
         sequences, padding=True, add_special_tokens=True
     )
+    input_ids = tokenized_result["input_ids"]
+    attention_mask = tokenized_result["attention_mask"]
+    special_mask = tokenized_result["special_tokens_mask"]
     assert tuple(map(len, input_ids)) == (6, 6)
     assert tuple(map(len, attention_mask)) == (6, 6)
     assert tuple(map(len, special_mask)) == (6, 6)
-    input_ids, attention_mask, special_mask = model.tokenize(
+    tokenized_result = model.tokenize(
         sequences, padding=True, add_special_tokens=False
     )
+    input_ids = tokenized_result["input_ids"]
+    attention_mask = tokenized_result["attention_mask"]
+    special_mask = tokenized_result["special_tokens_mask"]
     assert tuple(map(len, input_ids)) == (4, 4)
     assert tuple(map(len, attention_mask)) == (4, 4)
     assert tuple(map(len, special_mask)) == (4, 4)
-    input_ids, attention_mask, special_mask = model.tokenize(
+    tokenized_result = model.tokenize(
         sequences, padding=False, add_special_tokens=False
     )
+    input_ids = tokenized_result["input_ids"]
+    attention_mask = tokenized_result["attention_mask"]
+    special_mask = tokenized_result["special_tokens_mask"]
     assert tuple(map(len, input_ids)) == (4, 3)
     assert tuple(map(len, attention_mask)) == (4, 3)
     assert tuple(map(len, special_mask)) == (4, 3)
@@ -67,21 +76,30 @@ def test_genbiofm(genbiofm):
 
     # Test tokenize method
     sequences = ["ACGT", "TGC"]
-    input_ids, attention_mask, special_mask = model.tokenize(
+    tokenized_result = model.tokenize(
         sequences, padding=True, add_special_tokens=True
     )
+    input_ids = tokenized_result["input_ids"]
+    attention_mask = tokenized_result["attention_mask"]
+    special_mask = tokenized_result["special_tokens_mask"]
     assert tuple(map(len, input_ids)) == (5, 5)
     assert tuple(map(len, attention_mask)) == (5, 5)
     assert tuple(map(len, special_mask)) == (5, 5)
-    input_ids, attention_mask, special_mask = model.tokenize(
+    tokenized_result = model.tokenize(
         sequences, padding=True, add_special_tokens=False
     )
+    input_ids = tokenized_result["input_ids"]
+    attention_mask = tokenized_result["attention_mask"]
+    special_mask = tokenized_result["special_tokens_mask"]
     assert tuple(map(len, input_ids)) == (4, 4)
     assert tuple(map(len, attention_mask)) == (4, 4)
     assert tuple(map(len, special_mask)) == (4, 4)
-    input_ids, attention_mask, special_mask = model.tokenize(
+    tokenized_result = model.tokenize(
         sequences, padding=False, add_special_tokens=False
     )
+    input_ids = tokenized_result["input_ids"]
+    attention_mask = tokenized_result["attention_mask"]
+    special_mask = tokenized_result["special_tokens_mask"]
     assert tuple(map(len, input_ids)) == (4, 3)
     assert tuple(map(len, attention_mask)) == (4, 3)
     assert tuple(map(len, special_mask)) == (4, 3)
@@ -122,12 +140,13 @@ def test_genbiocellfoundation(genbiocellfoundation, flash_attn_available):
 
     # Test tokenize method
     sequences = torch.randint(0, 128, (4, 8), device=device, dtype=torch.bfloat16)
-    input_ids, attention_mask, special_mask = model.tokenize(
+    tokenized_result = model.tokenize(
         sequences, padding=True, add_special_tokens=True
     )
+    input_ids = tokenized_result["input_ids"]
     assert sequences.equal(input_ids)
-    assert attention_mask is None
-    assert special_mask is None
+    assert "attention_mask" not in tokenized_result
+    assert "special_tokens_mask" not in tokenized_result
 
     # Test get_max_context method
     max_context = model.get_max_context()
@@ -173,18 +192,22 @@ def test_genbiocellspatialfoundation(genbiocellspatialfoundation, flash_attn_ava
     # Test tokenize method
     # Single cell
     sequences = torch.randint(0, 128, (4, max_context), device=device, dtype=torch.bfloat16)
-    input_ids, attention_mask, special_mask = model.tokenize(sequences)
+    tokenized_result = model.tokenize(sequences)
+    input_ids = tokenized_result["input_ids"]
+    attention_mask = tokenized_result["attention_mask"]
     assert sequences.equal(input_ids)
     assert attention_mask.shape[0] == 4
-    assert special_mask is None
+    assert "special_tokens_mask" not in tokenized_result
     # check for nonzero positions in input_ids & attention_mask
     assert (input_ids[0, :] > 0).sum() + 2 == (attention_mask[0, :] > 0).sum()
     # Two cells
     sequences = torch.randint(0, 128, (4, max_context * 2), device=device, dtype=torch.bfloat16)
-    input_ids, attention_mask, special_mask = model.tokenize(sequences)
+    tokenized_result = model.tokenize(sequences)
+    input_ids = tokenized_result["input_ids"]
+    attention_mask = tokenized_result["attention_mask"]
     assert sequences.equal(input_ids)
     assert attention_mask.shape[0] == 4
-    assert special_mask is None
+    assert "special_tokens_mask" not in tokenized_result
     # attention_mask is 1st cell padding mask, not all cells
     assert (input_ids[0, :max_context] > 0).sum() + 2 == (attention_mask[0, :] > 0).sum()
 
@@ -200,12 +223,14 @@ def test_enformer(enformer):
 
     # Test tokenize method
     sequences = ["ACGT" * 64, "TGCA" * 64]
-    input_ids, attention_mask, special_mask = model.tokenize(
+    tokenized_result = model.tokenize(
         sequences, padding=True, add_special_tokens=False
     )
+    input_ids = tokenized_result["input_ids"]
+    attention_mask = tokenized_result["attention_mask"]
     assert input_ids.shape == (2, 256, 4)
     assert attention_mask.shape == (2, 2)
-    assert special_mask is None
+    assert "special_tokens_mask" not in tokenized_result
 
     # Test get_max_context method
     max_context = model.get_max_context()
@@ -232,12 +257,14 @@ def test_borzoi(borzoi):
 
     # Test tokenize method
     sequences = ["ACGT" * 64, "TGCA" * 64]
-    input_ids, attention_mask, special_mask = model.tokenize(
+    tokenized_result = model.tokenize(
         sequences, padding=True, add_special_tokens=False
     )
+    input_ids = tokenized_result["input_ids"]
+    attention_mask = tokenized_result["attention_mask"]
     assert input_ids.shape == (2, 4, 256)
     assert attention_mask.shape == (2, 2)
-    assert special_mask is None
+    assert "special_tokens_mask" not in tokenized_result
 
     # Test get_max_context method
     max_context = model.get_max_context()
@@ -262,7 +289,10 @@ def test_esm(esm):
 
     # Test tokenize method
     sequences = ["ACDEFGHIK", "LMNPQRSTVWY"]
-    input_ids, attention_mask, special_mask = model.tokenize(sequences)
+    tokenized_result = model.tokenize(sequences)
+    input_ids = tokenized_result["input_ids"]
+    attention_mask = tokenized_result["attention_mask"]
+    special_mask = tokenized_result["special_tokens_mask"]
     assert tuple(map(len, input_ids)) == (13, 13)
     assert tuple(map(len, attention_mask)) == (13, 13)
     assert tuple(map(len, special_mask)) == (13, 13)

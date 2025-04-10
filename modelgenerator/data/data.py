@@ -9,7 +9,7 @@ from typing import List, Literal, Optional, Tuple
 from pyfaidx import Fasta
 import numpy as np
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 from lightning.pytorch.utilities import rank_zero_info, rank_zero_warn
 from modelgenerator.data.base import *
 
@@ -58,7 +58,7 @@ class AnyDataset(Dataset):
         **kwargs: Key-value pairs of dataset names and the corresponding datasets
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, generate_uid: bool = False, **kwargs):
         self.datasets = []
         self.keys = []
         for key, dataset in kwargs.items():
@@ -67,12 +67,30 @@ class AnyDataset(Dataset):
         self.size = len(self.datasets[0])
         for dataset in self.datasets:
             assert len(dataset) == self.size, "All datasets must have the same length"
+        if generate_uid:
+            self.add_dataset("uid", np.arange(self.size))
 
     def __len__(self):
         return self.size
 
     def __getitem__(self, idx):
         return {key: dataset[idx] for key, dataset in zip(self.keys, self.datasets)}
+
+    def add_dataset(self, key, dataset):
+        """Add a new dataset to the AnyDataset
+
+        Args:
+            dataset (Dataset): The dataset to add
+            key (str): The name of the dataset
+        """
+        if key in self.keys:
+            raise ValueError(f"Dataset with key {key} already exists")
+        if len(dataset) != self.size:
+            raise ValueError(
+                f"Dataset {key} has length {len(dataset)} but expected {self.size}"
+            )
+        self.datasets.append(dataset)
+        self.keys.append(key)
 
 
 class DiffusionDataset(Dataset):
@@ -350,7 +368,10 @@ class SequenceClassificationDataModule(DataInterface, HFDatasetLoaderMixin):
     Args:
         x_col (str, optional): The name of the column containing the sequences. Defaults to "sequence".
         y_col (str | List[str], optional): The name of the column(s) containing the labels. Defaults to "label".
+        extra_cols (List[str] | optional): Additional columns to include in the dataset. Defaults to None.
+        extra_col_aliases (List[str], optional): The name of the columns to use as the alias for the extra columns. Defaults to None.
         class_filter (List[int] | int, optional): The class to filter. Defaults to None.
+        generate_uid (bool, optional): Whether to generate a unique ID for each sample. Defaults to False.
     """
 
     def __init__(
@@ -358,12 +379,22 @@ class SequenceClassificationDataModule(DataInterface, HFDatasetLoaderMixin):
         *args,
         x_col: str = "sequence",
         y_col: str | List[str] = "label",
+        extra_cols: List[str] | None = None,
+        extra_col_aliases: List[str] | None = None,
         class_filter: int | List[int] | None = None,
+        generate_uid: bool = False,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
         self.x_col = x_col
         self.y_col = y_col
+        self.extra_cols = extra_cols or []
+        self.extra_col_aliases = extra_col_aliases or self.extra_cols
+        self.generate_uid = generate_uid
+        if len(self.extra_cols) != len(self.extra_col_aliases):
+            raise ValueError(
+                "extra_cols and extra_col_aliases must have the same length"
+            )
         self.class_filter = None
         if class_filter is not None:
             self.class_filter = (
@@ -391,28 +422,43 @@ class SequenceClassificationDataModule(DataInterface, HFDatasetLoaderMixin):
         )
 
         self.train_dataset = AnyDataset(
+            generate_uid=self.generate_uid,
             sequences=train_dataset[self.x_col],
             labels=(
                 train_dataset[self.y_col]
                 if not is_multi_label
                 else self.to_multihot(train_dataset)
             ),
+            **{
+                alias: train_dataset[col]
+                for alias, col in zip(self.extra_col_aliases, self.extra_cols)
+            },
         )
         self.val_dataset = AnyDataset(
+            generate_uid=self.generate_uid,
             sequences=val_dataset[self.x_col],
             labels=(
                 val_dataset[self.y_col]
                 if not is_multi_label
                 else self.to_multihot(val_dataset)
             ),
+            **{
+                alias: val_dataset[col]
+                for alias, col in zip(self.extra_col_aliases, self.extra_cols)
+            },
         )
         self.test_dataset = AnyDataset(
+            generate_uid=self.generate_uid,
             sequences=test_dataset[self.x_col],
             labels=(
                 test_dataset[self.y_col]
                 if not is_multi_label
                 else self.to_multihot(test_dataset)
             ),
+            **{
+                alias: test_dataset[col]
+                for alias, col in zip(self.extra_col_aliases, self.extra_cols)
+            },
         )
 
     def filter_by_class(
@@ -445,8 +491,11 @@ class TokenClassificationDataModule(DataInterface, HFDatasetLoaderMixin):
     Args:
         x_col (str, optional): The name of the column containing the sequences. Defaults to "sequence".
         y_col (str, optional): The name of the column containing the labels. Defaults to "label".
+        extra_cols (List[str] | optional): Additional columns to include in the dataset. Defaults to None.
+        extra_col_aliases (List[str], optional): The name of the columns to use as the alias for the extra columns. Defaults to None.
         max_length (int, optional): The maximum length of the sequences. Defaults to None.
         pairwise (bool, optional): Whether the labels are pairwise. Defaults to False.
+        generate_uid (bool, optional): Whether to generate a unique ID for each sample. Defaults to False.
     """
 
     def __init__(
@@ -454,8 +503,13 @@ class TokenClassificationDataModule(DataInterface, HFDatasetLoaderMixin):
         *args,
         x_col: str = "sequence",
         y_col: str = "label",
+        extra_cols: List[str] | None = None,
+        extra_col_aliases: List[str] | None = None,
         max_length: Optional[int] = None,
+        truncate_extra_cols: bool = False,
         pairwise: bool = False,
+        collate_fn: Optional[callable] = None,
+        generate_uid: bool = False,
         **kwargs,
     ):
         def collate_pad_labels(batch):
@@ -471,16 +525,35 @@ class TokenClassificationDataModule(DataInterface, HFDatasetLoaderMixin):
                     constant_values=-100,
                 )
                 padded_labels.append(padded_label)
-            return {
-                "sequences": [item["sequences"] for item in batch],
-                "labels": torch.tensor(np.array(padded_labels)),
-            }
 
-        super().__init__(*args, collate_fn=collate_pad_labels, **kwargs)
+            padded_batch = {}
+            for key in batch[0].keys():
+                if key != "labels":
+                    padded_batch[key] = [item[key] for item in batch]
+                else:
+                    padded_batch[key] = torch.tensor(np.array(padded_labels))
+
+            return padded_batch
+
+        def final_collate_fn(batch):
+            batch = collate_pad_labels(batch)
+            if collate_fn is not None:
+                batch = collate_fn(batch)
+            return batch
+
+        super().__init__(*args, collate_fn=final_collate_fn, **kwargs)
         self.x_col = x_col
         self.y_col = y_col
+        self.extra_cols = extra_cols or []
+        self.extra_col_aliases = extra_col_aliases or self.extra_cols
+        if len(self.extra_cols) != len(self.extra_col_aliases):
+            raise ValueError(
+                "extra_cols and extra_col_aliases must have the same length"
+            )
         self.max_length = max_length
+        self.truncate_extra_cols = truncate_extra_cols
         self.pairwise = pairwise
+        self.generate_uid = generate_uid
 
     def setup(self, stage: Optional[str] = None) -> None:
         """Set up the data module by loading the whole datasets and splitting them into training, validation, and test sets.
@@ -500,9 +573,54 @@ class TokenClassificationDataModule(DataInterface, HFDatasetLoaderMixin):
         train_sequences, train_labels = self.process_dataset(train_dataset)
         valid_sequences, valid_labels = self.process_dataset(valid_dataset)
         test_sequences, test_labels = self.process_dataset(test_dataset)
-        self.train_dataset = AnyDataset(sequences=train_sequences, labels=train_labels)
-        self.test_dataset = AnyDataset(sequences=test_sequences, labels=test_labels)
-        self.val_dataset = AnyDataset(sequences=valid_sequences, labels=valid_labels)
+
+        truncate_extra_cols = (self.truncate_extra_cols and self.max_length is not None)
+
+        self.train_dataset = AnyDataset(
+            generate_uid=self.generate_uid,
+            sequences=train_sequences,
+            labels=train_labels,
+            **{
+                alias: (
+                    torch.utils._pytree.tree_map(
+                        lambda x: x[: self.max_length - 1], list(train_dataset[col])
+                    )
+                    if truncate_extra_cols
+                    else train_dataset[col]
+                )
+                for alias, col in zip(self.extra_col_aliases, self.extra_cols)
+            },
+        )
+        self.val_dataset = AnyDataset(
+            generate_uid=self.generate_uid,
+            sequences=valid_sequences,
+            labels=valid_labels,
+            **{
+                alias: (
+                    torch.utils._pytree.tree_map(
+                        lambda x: x[: self.max_length - 1], list(valid_dataset[col])
+                    )
+                    if truncate_extra_cols
+                    else valid_dataset[col]
+                )
+                for alias, col in zip(self.extra_col_aliases, self.extra_cols)
+            },
+        )
+        self.test_dataset = AnyDataset(
+            generate_uid=self.generate_uid,
+            sequences=test_sequences,
+            labels=test_labels,
+            **{
+                alias: (
+                    torch.utils._pytree.tree_map(
+                        lambda x: x[: self.max_length - 1], list(test_dataset[col])
+                    )
+                    if truncate_extra_cols
+                    else test_dataset[col]
+                )
+                for alias, col in zip(self.extra_col_aliases, self.extra_cols)
+            },
+        )
 
     def process_dataset(self, dataset):
         seqs = []
@@ -779,6 +897,8 @@ class DiffusionDataModule(DataInterface, HFDatasetLoaderMixin):
 
     Args:
         x_col (str, optional): The column with the data to train on, defaults to "sequence"
+        extra_cols (List[str], optional): Additional columns to include in the dataset, defaults to None
+        extra_col_aliases (List[str], optional): The name of the columns to use as the alias for the extra columns, defaults to None
         timesteps_per_sample (int, optional): The number of timesteps per sample, defaults to 10
         randomize_targets (bool, optional): Whether to randomize the target sequences for each timestep (experimental efficiency boost proposed by Sazan)
         batch_size (int, optional): The batch size, defaults to 10
@@ -788,6 +908,8 @@ class DiffusionDataModule(DataInterface, HFDatasetLoaderMixin):
         self,
         *args,
         x_col: str = "sequence",
+        extra_cols: List[str] | None = None,
+        extra_col_aliases: List[str] | None = None,
         timesteps_per_sample: int = 10,
         randomize_targets: bool = False,
         batch_size: int = 10,
@@ -795,6 +917,12 @@ class DiffusionDataModule(DataInterface, HFDatasetLoaderMixin):
     ):
         super().__init__(*args, batch_size=batch_size, **kwargs)
         self.x_col = x_col
+        self.extra_cols = extra_cols or []
+        self.extra_col_aliases = extra_col_aliases or self.extra_cols
+        if len(self.extra_cols) != len(self.extra_col_aliases):
+            raise ValueError(
+                "extra_cols and extra_col_aliases must have the same length"
+            )
         self.timesteps_per_sample = timesteps_per_sample
         self.randomize_targets = randomize_targets
 
@@ -807,18 +935,36 @@ class DiffusionDataModule(DataInterface, HFDatasetLoaderMixin):
         """
         train_dataset, valid_dataset, test_dataset = self.load_and_split_dataset(**self.extra_reader_kwargs)
         self.train_dataset = DiffusionDataset(
-            dataset=AnyDataset(sequences=train_dataset[self.x_col]),
+            dataset=AnyDataset(
+                sequences=train_dataset[self.x_col],
+                **{
+                    alias: train_dataset[col]
+                    for alias, col in zip(self.extra_col_aliases, self.extra_cols)
+                },
+            ),
             timesteps_per_sample=self.timesteps_per_sample,
             randomize_targets=self.randomize_targets,
         )
         # For valid and test, we denoise a single masked sample and compute MLM recovery loss
         self.val_dataset = DiffusionDataset(
-            dataset=AnyDataset(sequences=valid_dataset[self.x_col]),
+            dataset=AnyDataset(
+                sequences=valid_dataset[self.x_col],
+                **{
+                    alias: valid_dataset[col]
+                    for alias, col in zip(self.extra_col_aliases, self.extra_cols)
+                },
+            ),
             timesteps_per_sample=1,
             randomize_targets=False,
         )
         self.test_dataset = DiffusionDataset(
-            dataset=AnyDataset(sequences=test_dataset[self.x_col]),
+            dataset=AnyDataset(
+                sequences=test_dataset[self.x_col],
+                **{
+                    alias: test_dataset[col]
+                    for alias, col in zip(self.extra_col_aliases, self.extra_cols)
+                },
+            ),
             timesteps_per_sample=1,
             randomize_targets=False,
         )
@@ -835,6 +981,8 @@ class ClassDiffusionDataModule(SequenceClassificationDataModule):
         timesteps_per_sample (int, optional): The number of timesteps per sample, defaults to 10
         randomize_targets (bool, optional): Whether to randomize the target sequences for each timestep (experimental efficiency boost proposed by Sazan)
         batch_size (int, optional): The batch size, defaults to 10
+        extra_cols (List[str], optional): Additional columns to include in the dataset, defaults to None
+        extra_col_aliases (List[str], optional): The name of the columns to use as the alias for the extra columns, defaults to None
     """
 
     def __init__(
@@ -921,7 +1069,10 @@ class SequenceRegressionDataModule(DataInterface, HFDatasetLoaderMixin):
     Args:
         x_col (union[str, list], optional): The name of columns containing the sequences. Defaults to "sequence".
         y_col (union[str, list], optional): The name of columns containing the labels. Defaults to "label".
+        extra_cols (list, optional): Additional columns to include in the dataset. Defaults to None.
+        extra_col_aliases (list, optional): The name of the columns to use as the alias for the extra columns. Defaults to None.
         normalize (bool, optional): Whether to normalize the labels. Defaults to True.
+        generate_uid (bool, optional): Whether to generate a unique ID for each sample. Defaults to False.
     """
 
     def __init__(
@@ -929,13 +1080,23 @@ class SequenceRegressionDataModule(DataInterface, HFDatasetLoaderMixin):
         *args,
         x_col: str = "sequence",
         y_col: str = "label",
+        extra_cols: List[str] = None,
+        extra_col_aliases: List[str] = None,
         normalize: bool = True,
+        generate_uid: bool = False,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
         self.x_col = x_col
         self.y_col = y_col
+        self.extra_cols = extra_cols or []
+        self.extra_col_aliases = extra_col_aliases or self.extra_cols
+        if len(self.extra_cols) != len(self.extra_col_aliases):
+            raise ValueError(
+                "extra_cols and extra_col_aliases must have the same length"
+            )
         self.normalize = normalize
+        self.generate_uid = generate_uid
         if isinstance(self.y_col, list):
             rank_zero_info(f"> Multi-task regression for {self.y_col}")
 
@@ -963,31 +1124,40 @@ class SequenceRegressionDataModule(DataInterface, HFDatasetLoaderMixin):
             train_labels = (train_labels - label_mean) / label_std
             valid_labels = (valid_labels - label_mean) / label_std
             test_labels = (test_labels - label_mean) / label_std
-        if isinstance(self.y_col, list):
-            self.train_dataset = AnyDataset(
-                sequences=train_sequences, labels=train_labels
-            )
-            self.val_dataset = AnyDataset(
-                sequences=valid_sequences, labels=valid_labels
-            )
-            self.test_dataset = AnyDataset(sequences=test_sequences, labels=test_labels)
-        else:
-            self.train_dataset = AnyDataset(
-                sequences=train_sequences, labels=train_labels[:, None]
-            )
-            self.val_dataset = AnyDataset(
-                sequences=valid_sequences, labels=valid_labels[:, None]
-            )
-            self.test_dataset = AnyDataset(
-                sequences=test_sequences, labels=test_labels[:, None]
-            )
+        self.train_dataset = AnyDataset(
+            generate_uid=self.generate_uid,
+            sequences=train_sequences,
+            labels=train_labels,
+            **{
+                alias: train_dataset[col]
+                for alias, col in zip(self.extra_col_aliases, self.extra_cols)
+            },
+        )
+        self.val_dataset = AnyDataset(
+            generate_uid=self.generate_uid,
+            sequences=valid_sequences,
+            labels=valid_labels,
+            **{
+                alias: valid_dataset[col]
+                for alias, col in zip(self.extra_col_aliases, self.extra_cols)
+            },
+        )
+        self.test_dataset = AnyDataset(
+            generate_uid=self.generate_uid,
+            sequences=test_sequences,
+            labels=test_labels,
+            **{
+                alias: test_dataset[col]
+                for alias, col in zip(self.extra_col_aliases, self.extra_cols)
+            },
+        )
 
     def select_label_columns(self, dataset: datasets.Dataset) -> datasets.Dataset:
         if not isinstance(self.y_col, list):
             labels = dataset[self.y_col]
             if len(labels) > 0 and isinstance(labels[0], str):
                 labels = [float(y) for y in labels]
-            return np.array(labels)
+            return np.array(labels)[:, None]
         return dataset.select_columns(self.y_col).to_pandas().to_numpy()
 
     def select_input_columns(self, dataset: datasets.Dataset) -> datasets.Dataset:
@@ -1076,42 +1246,29 @@ class RNAMeanRibosomeLoadDataModule(SequenceRegressionDataModule):
             valid_labels = (valid_labels - label_mean) / label_std
             test_labels = (test_labels - label_mean) / label_std
 
-        self.train_dataset = AnyDataset(sequences=train_sequences, labels=train_labels)
-        self.val_dataset = AnyDataset(sequences=valid_sequences, labels=valid_labels)
-        self.test_dataset = AnyDataset(sequences=test_sequences, labels=test_labels)
-
-        # def val_dataloader(self) -> DataLoader:
-        #     """Get the validation data loader
-
-        #     Returns:
-        #         DataLoader: The validation data loader
-        #     """
-        #     return DataLoader(
-        #         self.val_dataset,
-        #         batch_size=self.batch_size * 2,
-        #         shuffle=False,
-        #         sampler=self.sampler,
-        #         num_workers=self.num_workers,
-        #         collate_fn=self.collate_fn,
-        #         pin_memory=self.pin_memory,
-        #         persistent_workers=self.persistent_workers,
-        #     )
-
-        # def test_dataloader(self) -> DataLoader:
-        """Get the test data loader
-
-        Returns:
-            DataLoader: The test data loader
-        """
-        return DataLoader(
-            self.test_dataset,
-            batch_size=self.batch_size * 2,
-            shuffle=False,
-            sampler=self.sampler,
-            num_workers=self.num_workers,
-            collate_fn=self.collate_fn,
-            pin_memory=self.pin_memory,
-            persistent_workers=self.persistent_workers,
+        self.train_dataset = AnyDataset(
+            sequences=train_sequences,
+            labels=train_labels,
+            **{
+                alias: train_dataset[col]
+                for alias, col in zip(self.extra_col_aliases, self.extra_cols)
+            },
+        )
+        self.val_dataset = AnyDataset(
+            sequences=valid_sequences,
+            labels=valid_labels,
+            **{
+                alias: valid_dataset[col]
+                for alias, col in zip(self.extra_col_aliases, self.extra_cols)
+            },
+        )
+        self.test_dataset = AnyDataset(
+            sequences=test_sequences,
+            labels=test_labels,
+            **{
+                alias: test_dataset[col]
+                for alias, col in zip(self.extra_col_aliases, self.extra_cols)
+            },
         )
 
 
@@ -1233,6 +1390,7 @@ class CellClassificationDataModule(DataInterface):
         self.val_dataset = AnyDataset(**D_val)
         self.test_dataset = AnyDataset(**D_test)
 
+
 class ClockDataModule(DataInterface):
     """Data module for transcriptomic clock tasks. Inherits from BaseDataModule.
 
@@ -1304,6 +1462,8 @@ class ClockDataModule(DataInterface):
             adata_test.obs['numeric_age'] = (adata_test.obs['numeric_age'] - mu) / sigma
         else:
             raise NotImplementedError(f'label_scaling {self.label_scaling} not recognized.')
+
+
         # only retain useful data for regression
         if self.filter_columns is not None:
             adata_train.obs = adata_train.obs[self.filter_columns]
@@ -1315,6 +1475,8 @@ class ClockDataModule(DataInterface):
                 adata_train.obs.columns = self.rename_columns
                 adata_val.obs.columns = self.rename_columns
                 adata_test.obs.columns = self.rename_columns
+
+
         D_train = {key: torch.from_numpy(adata_train.obs[key].values)[:, None] for key in adata_train.obs.columns}
         D_train["sequences"] = adata_train.X.toarray()
         D_val = {key: torch.from_numpy(adata_val.obs[key].values)[:, None] for key in adata_val.obs.columns}
@@ -1424,6 +1586,7 @@ class CellWithNeighborDataModule(DataInterface):
         use_random_neighbor=False,
         copy_center_as_neighbor=False,
         neighbor_num=10,
+        generate_uid=False,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
@@ -1442,6 +1605,7 @@ class CellWithNeighborDataModule(DataInterface):
         self.copy_center_as_neighbor = copy_center_as_neighbor
         self.neighbor_num = neighbor_num
         self.setup_complete = False
+        self.generate_uid = generate_uid
 
     def setup(self, stage=None):
         """Initialize datasets with lazy loading"""
@@ -1450,19 +1614,19 @@ class CellWithNeighborDataModule(DataInterface):
             self.val_gen = self._create_generator(self.valfile)
             self.test_gen = self._create_generator(self.testfile)
             self.train_dataset = AnyDataset(
+                generate_uid=self.generate_uid,
                 sequences=_KeyDataset(self.train_gen, "sequences"),
                 labels=_KeyDataset(self.train_gen, "labels"),
-                ids=np.arange(len(self.train_gen)),
             )
             self.val_dataset = AnyDataset(
+                generate_uid=self.generate_uid,
                 sequences=_KeyDataset(self.val_gen, "sequences"),
                 labels=_KeyDataset(self.val_gen, "labels"),
-                ids=np.arange(len(self.val_gen)),
             )
             self.test_dataset = AnyDataset(
+                generate_uid=self.generate_uid,
                 sequences=_KeyDataset(self.test_gen, "sequences"),
                 labels=_KeyDataset(self.test_gen, "labels"),
-                ids=np.arange(len(self.test_gen)),
             )
             self.setup_complete = True
 
@@ -1519,3 +1683,173 @@ def gather_data(data, labels, pad_token_id):
     padding_labels = fake_label_gene_value == 1
 
     return new_data, padding_labels
+
+class PertClassificationDataModule(DataInterface):
+    """Data module for perturbation classification. Inherits from BaseDataModule.
+
+    Note:
+        Each sample includes a feature vector (one of the rows in <adata.X>) and a single class label (one of the columns in <adata.obs>)
+
+    Args:
+        gene_set_file (str): Path to a csv file containing gene symbols in the order expected by the model being used.
+        pert_column (str): Column of <obs> containing perturbation labels.
+        cell_line_column (str): Column of <obs> containing cell line labels.
+        cell_line (str): Name of cell line to consider.
+        split_seed (int): Seed for train/val/test splits.
+        train_frac (float): Fraction of examples to assign to train set.
+        val_frac (float): Fraction of examples to assign to val set.
+        test_frac (float): Fraction of examples to assign to test set.
+        filter_columns (Optional[list[str]], optional): The columns of <obs> we want to use. Defaults to None, in which case all columns are used.
+        rename_columns (Optional[list[str]], optional): New name of columns. Defaults to None, in which case columns are not renamed. Does nothing if filter_colums is None.
+    """
+
+    def __init__(
+        self,
+        *args,
+        gene_set_file: str,
+        pert_column: str,
+        cell_line_column: str,
+        cell_line: str,
+        split_seed: int = 1234,
+        train_frac: float = 0.7,
+        val_frac: float = 0.15,
+        test_frac: float = 0.15,
+        filter_columns: Optional[list[str]] = None,
+        rename_columns: Optional[list[str]] = None,
+        **kwargs,
+    ):
+        super().__init__(*args, **kwargs)
+        if len(self.train_split_files) != 1:
+            raise NotImplementedError("Multiple files not yet supported.")
+        if (self.valid_split_files is not None) or (self.test_split_files is not None):
+            raise NotImplementedError("Data should live in a single file with splits defined by a column of <obs>.")
+        self.file = self.train_split_files[0]
+        self.gene_set_file = gene_set_file
+        self.pert_column = pert_column
+        self.cell_line_column = cell_line_column
+        self.cell_line = cell_line
+        self.split_seed = split_seed
+        self.train_frac = train_frac
+        self.val_frac = val_frac
+        self.test_frac = test_frac
+        self.rename_columns = rename_columns
+        self.filter_columns = filter_columns
+
+    def setup(self, stage: Optional[str] = None):
+        """Set up the data module by loading the whole datasets and splitting them into training, validation, and test sets."""
+        rank_zero_info('***')
+        rank_zero_info(f'loading {self.file}')
+        adata = ad.read_h5ad(os.path.join(self.path, self.file))
+        rank_zero_info(f'loaded {adata.shape[0]} cells')
+
+        # Filter to cell line of interest:
+        adata = adata[adata.obs[self.cell_line_column] == self.cell_line]
+        rank_zero_info(f'{adata.shape[0]} cells after filtering to cell line {self.cell_line}')
+
+        # Map drug names to IDs:
+        pert_set = np.sort(adata.obs[self.pert_column].unique().to_numpy())
+        pert_name_to_id = {pert_set[i]: i for i in range(len(pert_set))}
+        adata.obs['drug'] = adata.obs['drug'].map(pert_name_to_id)
+
+        # align genes (assumes gene symbols live in adata.var.index)
+        model_genes = pd.read_csv(self.gene_set_file, sep='\t')['gene_name'].to_numpy()
+        data_genes = adata.var.index
+        common_genes = np.intersect1d(model_genes, data_genes)
+        if len(common_genes) == 0:
+            raise ValueError(f'Gene alignment failed, no common genes found. Are the gene names in the same format? (model: {model_genes[:5]}, data: {data_genes[:5]})')
+        missing_genes = np.setdiff1d(model_genes, data_genes)
+        adata_missing = ad.AnnData(np.zeros((adata.shape[0], len(missing_genes))))
+        adata_missing.var.index = missing_genes
+        adata_missing.obs = adata.obs
+        adata_aligned = ad.concat((adata, adata_missing), axis=1, join='inner', merge='same')
+        adata_aligned = adata_aligned[:, model_genes]
+        rank_zero_info(f'\n***\ngene alignment results: {len(common_genes)} common genes; {len(missing_genes)} missing genes filled with zeros\n***\n')
+
+        # IID split:
+        rng = np.random.default_rng(self.split_seed)
+        idx_rand = rng.permutation(adata_aligned.shape[0])
+        num_train = int(np.round(self.train_frac * len(idx_rand)))
+        num_val = int(np.round(self.val_frac * len(idx_rand)))
+
+        adata_train = adata_aligned[idx_rand[:num_train], :]
+        adata_val = adata_aligned[idx_rand[num_train:(num_train+num_val)], :]
+        adata_test = adata_aligned[idx_rand[(num_train+num_val):], :]
+        rank_zero_info(f'split sizes: {adata_train.shape[0]} / {adata_val.shape[0]} / {adata_test.shape[0]}')
+        rank_zero_info('***')
+
+        # Only retain useful data for classification:
+        if self.filter_columns is not None:
+            adata_train.obs = adata_train.obs[self.filter_columns]
+            adata_val.obs = adata_val.obs[self.filter_columns]
+            adata_test.obs = adata_test.obs[self.filter_columns]
+            # Rename columns to adapt to classification task:
+            if self.rename_columns is not None:
+                # Only rename columns if we filter first - otherwise order not guaranteed.
+                adata_train.obs.columns = self.rename_columns
+                adata_val.obs.columns = self.rename_columns
+                adata_test.obs.columns = self.rename_columns
+
+        # Format:
+        D_train = {key: torch.from_numpy(adata_train.obs[key].to_numpy()) for key in adata_train.obs.columns}
+        D_train["sequences"] = adata_train.X.toarray()
+        D_val = {key: torch.from_numpy(adata_val.obs[key].to_numpy()) for key in adata_val.obs.columns}
+        D_val["sequences"] = adata_val.X.toarray()
+        D_test = {key: torch.from_numpy(adata_test.obs[key].to_numpy()) for key in adata_test.obs.columns}
+        D_test["sequences"] = adata_test.X.toarray()
+
+        self.train_dataset = AnyDataset(**D_train)
+        self.val_dataset = AnyDataset(**D_val)
+        self.test_dataset = AnyDataset(**D_test)
+
+
+def rag_collate_fn(batch, max_context_length, rng):
+
+    # Convert batch into a dict
+    if not isinstance(batch, dict):
+        assert isinstance(batch, (list, tuple)), f"Unexpected input type: {type(batch)}"
+        data_list = batch
+        batch = {}
+        for data in data_list:
+            for k, v in data.items():
+                batch[k] = batch.get(k, []) + [v]
+
+    if "seq" in batch and "sequences" not in batch:
+        batch["sequences"] = batch.pop("seq")
+
+    assert "sequences" in batch, f"sequences not in batch: {batch.keys()}"
+    assert "msa" in batch, f"msa not in batch: {batch.keys()}"
+    assert "str_emb" in batch, f"str_emb not in batch: {batch.keys()}"
+    assert (
+        len(batch["sequences"]) == len(batch["msa"]) == len(batch["str_emb"])
+    ), f"sequences: {len(batch['sequences'])}, msa: {len(batch['msa'])}, str_emb: {len(batch['str_emb'])}"
+
+    for i in range(len(batch["sequences"])):
+        sequence = batch["sequences"][i]
+        msa = batch["msa"][i]
+        str_emb = batch["str_emb"][i]
+
+        if torch.is_tensor(str_emb):
+            batch["str_emb"][i] = str_emb.cpu().numpy()
+        elif isinstance(str_emb, list):
+            batch["str_emb"][i] = np.array(str_emb)
+
+        assert len(sequence) == len(
+            msa[0]
+        ), f"msa: {len(msa[0])}, sequences: {len(sequence)}"
+        assert len(sequence) == len(
+            str_emb
+        ), f"str_emb: {len(str_emb)}, sequences: {len(sequence)}"
+
+        num_msa = int(max_context_length / len(sequence) / 0.75)
+        msa = rng.sample(msa, num_msa) if num_msa < len(msa) else msa
+        msa.sort(key=lambda x: x.count("-"))
+        batch["msa"][i] = msa
+
+    # convert labels to tensor
+    for k, v in batch.items():
+        if k != "sequences" and isinstance(
+            v[0], (int, float, np.ndarray, torch.Tensor)
+        ):
+            batch[k] = torch.as_tensor(v)  # labels should be torch.Tensor
+
+    return batch

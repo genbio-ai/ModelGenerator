@@ -9,55 +9,6 @@ from torch.distributions.categorical import Categorical
 from typing import Union
 from pathlib import Path
 
-"""
-### v1: [CLS] [BOS]  A  A  A [EOS] [SEP] [PAD] [PAD] [PAD] [PAD]
-### v1:   2     11   5  5  5   12    3     0     0     0     0
-
-### v2: [CLS] A  A  A [SEP] [PAD] [PAD] [PAD] [PAD]
-### v2:   2   5  5  5   3     0     0     0     0
-
-vocab_a2n_lm = {
-    '[PAD]': 0, 
-    '[MASK]': 1,
-    '[CLS]': 2,
-    '[SEP]': 3,
-    '[UNK]': 4, ## there should be no unknown tokens. we must address that in the preprocessing steps. 
-    'A': 5,
-    'G': 6,
-    'C': 7,
-    'T': 8, 
-    'U': 9,
-    'N': 10, ## for inverse_folding we are ignoring non-standard nucleotides.
-    '[BOS]': 11,
-    '[EOS]': 12,
-}
-vocab_n2a_lm = {n:a for a,n in vocab_a2n_lm.items()}
-
-vocab_grnade2lm = {
-    0:5,    #A
-    1:6,    #G
-    2:7,    #C
-    3:9,    #U
-    4:1,    #[MASK]
-}
-vocab_lm2grnade = {n:a for a,n in vocab_grnade2lm.items()}
-"""
-
-# List of possible RNA nucleotides
-vocab_a2n_grnade = {
-    "A": 0,
-    "G": 1,
-    "C": 2,
-    "U": 3,
-    "[MASK]": 4,  # placeholder for missing/unknown nucleotides
-    # '_': 4,  # placeholder for missing/unknown nucleotides
-}
-vocab_n2a_grnade = {n: a for a, n in vocab_a2n_grnade.items()}
-mapping_tensor_grnade2lm = torch.tensor([5, 6, 7, 9, 1])
-mapping_tensor_lm2grnade = torch.tensor(
-    [-1000, 4, -1000, -1000, -1000, 0, 1, 2, -1000, 3]
-)
-
 
 def getPositionEncoding(seq_len, d, n=10000):
 

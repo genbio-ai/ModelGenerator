@@ -1,0 +1,14 @@
+# lightning.pytorch==2.4.0
+seed_everything: 42
+trainer:
+  callbacks:
+  - class_path: modelgenerator.callbacks.PredictionWriter
+    dict_kwargs:
+      output_dir: DMS_output/
+      filetype: tsv
+      write_cols: ['uid', 'sequences', 'predictions', 'labels']
+      remove_duplicates: true
+      delete_intermediate_files: true
+data:
+  init_args:
+    generate_uid: true

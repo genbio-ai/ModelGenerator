@@ -36,6 +36,8 @@ class KFoldMixin:
             if self.cv_enable_val_fold
             else []
         )
+        if not self.cv_enable_val_fold and self.cv_replace_val_fold_as_test_fold:
+            val_idx = test_idx
         train_idx = list(set(range(len(train_dataset))) - set(test_idx) - set(val_idx))
         return (
             train_dataset.select(train_idx),
@@ -207,6 +209,7 @@ class DataInterface(pl.LightningDataModule, KFoldMixin):
         cv_num_folds (int, optional): The number of cross-validation folds, disables cv when <= 1. Defaults to 1.
         cv_test_fold_id (int, optional): The fold id to use for cross-validation evaluation. Defaults to 0.
         cv_enable_val_fold (bool, optional): Whether to enable a validation fold. Defaults to True.
+        cv_replace_val_fold_as_test_fold (bool, optional): Replace validation fold with test fold. Only useful when cv_enable_val_fold is False. Defaults to False
         cv_fold_id_col (Optional[str], optional): The column name containing the fold id from a pre-split dataset. Set to None to enable automatic splitting. Defaults to None.
         cv_val_offset (int, optional): the offset applied to cv_test_fold_id to determin val_fold_id
     """
@@ -236,6 +239,7 @@ class DataInterface(pl.LightningDataModule, KFoldMixin):
         cv_num_folds: int = 1,
         cv_test_fold_id: int = 0,
         cv_enable_val_fold: bool = True,
+        cv_replace_val_fold_as_test_fold: bool = False,
         cv_fold_id_col: Optional[str] = None,
         cv_val_offset: int = 1,
     ):
@@ -268,6 +272,7 @@ class DataInterface(pl.LightningDataModule, KFoldMixin):
         self.cv_num_folds = cv_num_folds
         self.cv_test_fold_id = cv_test_fold_id
         self.cv_enable_val_fold = cv_enable_val_fold
+        self.cv_replace_val_fold_as_test_fold = cv_replace_val_fold_as_test_fold
         self.cv_fold_id_col = cv_fold_id_col
         self.cv_val_offset = cv_val_offset
 

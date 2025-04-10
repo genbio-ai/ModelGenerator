@@ -4,8 +4,7 @@ import warnings
 from typing import Union, List
 from modelgenerator.data.base import *
 from modelgenerator.data.data import *
-from typing import Union
-
+from functools import partial
 
 class NTClassification(SequenceClassificationDataModule):
     """Handle for the default Nucleotide Transformer benchmarks https://www.biorxiv.org/content/10.1101/2023.01.11.523679v3"""
@@ -36,14 +35,24 @@ class ContactPredictionBinary(TokenClassificationDataModule):
         x_col: str = "seq",
         y_col: str = "label",
         batch_size: int = 1,
+        max_context_length: int = 12800,
+        msa_random_seed: Optional[int] = None,
+        is_rag_dataset: bool = False,
         **kwargs,
     ):
+        if is_rag_dataset:
+            rank = torch.distributed.get_rank() if torch.distributed.is_initialized() else 0
+            msa_seed_rng = random.Random(0) if msa_random_seed is None else random.Random(rank + msa_random_seed)
+            collate_fn = partial(rag_collate_fn, max_context_length=max_context_length, rng=msa_seed_rng)
+        else:
+            collate_fn = None
         super().__init__(
             path=path,
             pairwise=pairwise,
             x_col=x_col,
             y_col=y_col,
             batch_size=batch_size,
+            collate_fn=collate_fn,
             **kwargs,
         )
 
@@ -56,14 +65,24 @@ class SspQ3(TokenClassificationDataModule):
         x_col: str = "seq",
         y_col: str = "label",
         batch_size: int = 1,
+        max_context_length: int = 12800,
+        msa_random_seed: Optional[int] = None,
+        is_rag_dataset: bool = False,
         **kwargs,
     ):
+        if is_rag_dataset:
+            rank = torch.distributed.get_rank() if torch.distributed.is_initialized() else 0
+            msa_seed_rng = random.Random(0) if msa_random_seed is None else random.Random(rank + msa_random_seed)
+            collate_fn = partial(rag_collate_fn, max_context_length=max_context_length, rng=msa_seed_rng)
+        else:
+            collate_fn = None
         super().__init__(
             path=path,
             pairwise=pairwise,
             x_col=x_col,
             y_col=y_col,
             batch_size=batch_size,
+            collate_fn=collate_fn,
             **kwargs,
         )
 
@@ -74,9 +93,18 @@ class FoldPrediction(SequenceClassificationDataModule):
         path: str = "proteinglm/fold_prediction",
         x_col: str = "seq",
         y_col: str = "label",
+        max_context_length: int = 12800,
+        msa_random_seed: Optional[int] = None,
+        is_rag_dataset: bool = False,
         **kwargs,
     ):
-        super().__init__(path=path, x_col=x_col, y_col=y_col, **kwargs)
+        if is_rag_dataset:
+            rank = torch.distributed.get_rank() if torch.distributed.is_initialized() else 0
+            msa_seed_rng = random.Random(0) if msa_random_seed is None else random.Random(rank + msa_random_seed)
+            collate_fn = partial(rag_collate_fn, max_context_length=max_context_length, rng=msa_seed_rng)
+        else:
+            collate_fn = None
+        super().__init__(path=path, x_col=x_col, y_col=y_col, collate_fn=collate_fn, **kwargs)
 
 
 class LocalizationPrediction(SequenceClassificationDataModule):
@@ -509,10 +537,19 @@ class FluorescencePrediction(SequenceRegressionDataModule):
         x_col: str = "seq",
         y_col: str = "label",
         normalize: bool = True,
+        max_context_length: int = 12800,
+        msa_random_seed: Optional[int] = None,
+        is_rag_dataset: bool = False,
         **kwargs,
     ):
+        if is_rag_dataset:
+            rank = torch.distributed.get_rank() if torch.distributed.is_initialized() else 0
+            msa_seed_rng = random.Random(0) if msa_random_seed is None else random.Random(rank + msa_random_seed)
+            collate_fn = partial(rag_collate_fn, max_context_length=max_context_length, rng=msa_seed_rng)
+        else:
+            collate_fn = None
         super().__init__(
-            path=path, normalize=normalize, x_col=x_col, y_col=y_col, **kwargs
+            path=path, normalize=normalize, x_col=x_col, y_col=y_col, collate_fn=collate_fn, **kwargs
         )
 
 
@@ -604,14 +641,26 @@ class DMSFitnessPrediction(SequenceRegressionDataModule):
         cv_num_folds: int = 5,
         cv_test_fold_id: int = 0,
         cv_enable_val_fold: bool = True,
+        cv_replace_val_fold_as_test_fold: bool = False,
         cv_fold_id_col: str = "fold_id",
         cv_val_offset: int = -1,
         valid_split_name: str = None,
         valid_split_size: float = 0,
         test_split_name: str = None,
         test_split_size: float = 0,
+        max_context_length: int = 12800,
+        msa_random_seed: Optional[int] = None,
+        is_rag_dataset: bool = False,
         **kwargs,
     ):
+
+        if is_rag_dataset:
+            rank = torch.distributed.get_rank() if torch.distributed.is_initialized() else 0
+            msa_seed_rng = random.Random(0) if msa_random_seed is None else random.Random(rank + msa_random_seed)
+            collate_fn = partial(rag_collate_fn, max_context_length=max_context_length, rng=msa_seed_rng)
+        else:
+            collate_fn = None
+
         super().__init__(
             path=path,
             train_split_files=train_split_files,
@@ -620,12 +669,14 @@ class DMSFitnessPrediction(SequenceRegressionDataModule):
             cv_num_folds=cv_num_folds,
             cv_test_fold_id=cv_test_fold_id,
             cv_enable_val_fold=cv_enable_val_fold,
+            cv_replace_val_fold_as_test_fold=cv_replace_val_fold_as_test_fold,
             cv_fold_id_col=cv_fold_id_col,
             cv_val_offset=cv_val_offset,
             valid_split_name=valid_split_name,
             valid_split_size=valid_split_size,
             test_split_name=test_split_name,
             test_split_size=test_split_size,
+            collate_fn=collate_fn,
             **kwargs,
         )
 

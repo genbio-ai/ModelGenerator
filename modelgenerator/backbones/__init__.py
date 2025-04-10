@@ -89,6 +89,22 @@ aido_protein_16b_v1 = type(
     },
 )
 
+aido_protein_rag_16b = type(
+    "aido_protein_rag_16b",
+    (GenBioFM,),
+    {
+        "model_path": "genbio-ai/AIDO.Protein-RAG-16B",
+    },
+)
+
+aido_protein_rag_3b = type(
+    "aido_protein_rag_3b",
+    (GenBioFM,),
+    {
+        "model_path": "genbio-ai/AIDO.Protein-RAG-3B",
+    },
+)
+
 aido_protein2structoken_16b = type(
     "aido_protein2structoken_16b",
     (GenBioFM,),
@@ -96,7 +112,6 @@ aido_protein2structoken_16b = type(
         "model_path": "genbio-ai/AIDO.Protein2StructureToken-16B",
     },
 )
-
 
 class aido_protein_debug(GenBioFM):
     """

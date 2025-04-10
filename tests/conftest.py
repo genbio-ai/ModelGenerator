@@ -14,6 +14,12 @@ from modelgenerator.backbones.backbones import (
 )
 
 
+if torch.cuda.is_available():
+    # Multi GPUs are causing tests to hang
+    import os
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
+
 @pytest.fixture()
 def flash_attn_available():
     """

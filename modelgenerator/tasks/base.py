@@ -293,3 +293,4 @@ class TaskInterface(pl.LightningModule):
         init = parser.instantiate_classes(parser.parse_object(config))
         init.model.configure_model()
         return init.model
+

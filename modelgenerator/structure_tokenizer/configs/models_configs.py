@@ -28,8 +28,8 @@ class BesselsConfig:
 class EdgeEmbeddingConfig:
     d: int = 128
     k_for_knn: int | None = 30
-    edge_type_emb: EdgeTypeEmbeddingConfig = EdgeTypeEmbeddingConfig()
-    bessels: BesselsConfig = BesselsConfig()
+    edge_type_emb: EdgeTypeEmbeddingConfig = field(default_factory=EdgeTypeEmbeddingConfig)
+    bessels: BesselsConfig = field(default_factory=BesselsConfig)
 
 
 @dataclass
@@ -55,10 +55,10 @@ class QuantizeConfig:
 @dataclass
 class EquiformerEncoderConfig:
     n_eqnet: int = 12
-    node_emb: NodeEmbeddingConfig = NodeEmbeddingConfig()
-    edge_emb: EdgeEmbeddingConfig = EdgeEmbeddingConfig()
-    eqnet: EquiformerConfig = EquiformerConfig()
-    quantize: QuantizeConfig = QuantizeConfig()
+    node_emb: NodeEmbeddingConfig = field(default_factory=NodeEmbeddingConfig)
+    edge_emb: EdgeEmbeddingConfig = field(default_factory=EdgeEmbeddingConfig)
+    eqnet: EquiformerConfig = field(default_factory=EquiformerConfig)
+    quantize: QuantizeConfig = field(default_factory=QuantizeConfig)
 
 
 @dataclass
@@ -95,14 +95,14 @@ class FoldingTrunkConfig:
     max_recycles: int = 1
     chunk_size: int | None = None
 
-    structure_module: StructureModuleConfig = StructureModuleConfig()
+    structure_module: StructureModuleConfig = field(default_factory=StructureModuleConfig)
 
 
 @dataclass
 class ESMFoldDecoderConfig:
     quantize_dim: int = 384
     lddt_head_hidden_dim: int = 128
-    folding_trunk: FoldingTrunkConfig = FoldingTrunkConfig()
+    folding_trunk: FoldingTrunkConfig = field(default_factory=FoldingTrunkConfig)
 
 
 @dataclass
