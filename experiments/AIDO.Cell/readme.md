@@ -1,61 +1,8 @@
-# Data setup
+# AIDO.Cell
 
-Data for cell classification tasks can be found in [cell-downstream-tasks](https://huggingface.co/datasets/genbio-ai/cell-downstream-tasks) on Hugging Face.
+AIDO.Cell-100M is GenBio AI’s SOTA cellular foundation model trained on 50 million cells over a diverse set of human tissues and organs. The AIDO.Cell models are capable of handling the entire human transcriptome as input, thus learning accurate and general representations of the human cell's entire transcriptional context. AIDO.Cell achieves state-of-the-art results in tasks such as zero-shot clustering, cell-type classification, and perturbation modeling.
 
-To download all cell downstream tasks:
-```
-cd /path/to/ModelGenerator/modelgenerator
-git clone git@hf.co:datasets/genbio-ai/cell-downstream-tasks
-```
-
-You should only need to do this once.
-
-# Building the Docker image
-
-```bash
-cd /path/to/ModelGenerator
-docker build -t finetune -f Dockerfile .
-```
-
-You should only need to do this once. 
-
-# Hugging Face authentication
-
-If you need to access private or gated models/data:
-
-```bash
-huggingface-cli login
-```
-
-# Fine-tuning a model
-
-```bash
-cd /path/to/ModelGenerator
-docker run --rm --runtime=nvidia \
--v /home/user/ModelGenerator/configs:/workspace/configs \
--v /home/user/ModelGenerator/modelgenerator:/workspace/modelgenerator \
--v /home/user/ModelGenerator/experiments:/workspace/experiments \
--v /home/user/.cache/huggingface:/root/.cache/huggingface \
--v "/home/user/ModelGenerator/logs:/workspace/logs" \
-finetune bash -c "mgen fit --config experiments/AIDO.Cell/cell_type_classification.yaml"
-```
-
-# Evaluating a checkpoint
-
-```bash
-cd /path/to/ModelGenerator
-docker run --rm --runtime=nvidia \
--v /home/user/ModelGenerator/configs:/workspace/configs \
--v /home/user/ModelGenerator/modelgenerator:/workspace/modelgenerator \
--v /home/user/ModelGenerator/experiments:/workspace/experiments \
--v /home/user/.cache/huggingface:/root/.cache/huggingface \
--v "/home/user/ModelGenerator/logs:/workspace/logs" \
-finetune bash -c "mgen test --config experiments/AIDO.Cell/cell_type_classification.yaml --ckpt_path /workspace/lightning_logs/version_X/checkpoints/my.ckpt"
-```
-
-# Other usage examples
-
-The example above fine-tunes and evaluates a model for cell type classification. Other usage examples are described below. 
-
-## Transcriptomic Clock Task
-Simply replace the `config` argument of `mgen fit` with  `experiments/AIDO.Cell/transcriptomic_clock.yaml`.
+## Resources
+- [Quick Start](./quickstart.ipynb)
+- [Cell Classification Tutorial](./tutorial_cell_classification.ipynb)
+- [AIDO.Cell HuggingFace Collection](https://huggingface.co/collections/genbio-ai/aidocell-6750f409bb20d8cd2cf14a25)

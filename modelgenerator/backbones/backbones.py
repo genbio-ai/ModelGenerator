@@ -790,7 +790,7 @@ class GenBioCellSpatialFoundation(HFSequenceBackbone):
     Note:
         Models using this interface include `aido_tissue_60m` and `aido_tissue_3m`.
 
-        FSDP auto_wrap_policy is `[modelgenerator.huggingface_models.cellspatialfoundation.modeling_cellspatialfoundation.SpaCellFoundationLayer]`
+        FSDP auto_wrap_policy is `modelgenerator.distributed.fsdp.wrap.AutoWrapPolicy`
 
     Args:
         config_overwrites (dict, optional): Optional model arguments for PretrainedConfig. Defaults to None.
@@ -807,6 +807,10 @@ class GenBioCellSpatialFoundation(HFSequenceBackbone):
         lora_modules_to_save (Optional[List[str]], optional): LoRA modules to save. Defaults to None.
         lora_use_rslora (bool, optional): Whether to use RSLora. Defaults to False.
     """
+
+    fsdp_wrap_modules = [
+        "modelgenerator.huggingface_models.cellspatialfoundation.modeling_cellspatialfoundation.CellSpatialFoundationLayer"
+    ]
 
     def __init__(
         self,

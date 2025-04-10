@@ -1947,7 +1947,7 @@ class ZeroshotPredictionDistance(TaskInterface):
                 ref_encoder_hidden = ref_encoder_hidden.mean(dim=-2)
             self.ref_hidden_mean = ref_encoder_hidden[:,0,:]
         else:
-            ref_encoder_hidden = self.ref_hidden_mean.unsqueeze(1).repeat(b)
+            ref_encoder_hidden = self.ref_hidden_mean.unsqueeze(1).repeat(1, b, 1)
 
         # remove special token before computing zeroshot score
         if collated_batch.get('special_tokens_mask') is not None:

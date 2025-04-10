@@ -24,6 +24,7 @@ keywords = [
 ]
 dependencies = [
     "torch",
+    "torchvision",
     "transformers==4.38.0",
     "datasets",
     "numpy<2",
