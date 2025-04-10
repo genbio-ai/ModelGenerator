@@ -38,7 +38,7 @@ trainer:
       monitor: val_spearman
       mode: max
       patience: <you choose>
-  - class_path: genbio_finetune.callbacks.PredictionWriter
+  - class_path: modelgenerator.callbacks.PredictionWriter
     dict_kwargs:
       output_dir: dms_prediction
       filetype: tsv
