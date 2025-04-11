@@ -1,6 +1,10 @@
+import os
+import subprocess
+import warnings
+from typing import Union, List
 from modelgenerator.data.base import *
 from modelgenerator.data.data import *
-
+from functools import partial
 
 class NTClassification(SequenceClassificationDataModule):
     """Handle for the default Nucleotide Transformer benchmarks https://www.biorxiv.org/content/10.1101/2023.01.11.523679v3"""
@@ -31,14 +35,24 @@ class ContactPredictionBinary(TokenClassificationDataModule):
         x_col: str = "seq",
         y_col: str = "label",
         batch_size: int = 1,
+        max_context_length: int = 12800,
+        msa_random_seed: Optional[int] = None,
+        is_rag_dataset: bool = False,
         **kwargs,
     ):
+        if is_rag_dataset:
+            rank = torch.distributed.get_rank() if torch.distributed.is_initialized() else 0
+            msa_seed_rng = random.Random(0) if msa_random_seed is None else random.Random(rank + msa_random_seed)
+            collate_fn = partial(rag_collate_fn, max_context_length=max_context_length, rng=msa_seed_rng)
+        else:
+            collate_fn = None
         super().__init__(
             path=path,
             pairwise=pairwise,
             x_col=x_col,
             y_col=y_col,
             batch_size=batch_size,
+            collate_fn=collate_fn,
             **kwargs,
         )
 
@@ -51,14 +65,24 @@ class SspQ3(TokenClassificationDataModule):
         x_col: str = "seq",
         y_col: str = "label",
         batch_size: int = 1,
+        max_context_length: int = 12800,
+        msa_random_seed: Optional[int] = None,
+        is_rag_dataset: bool = False,
         **kwargs,
     ):
+        if is_rag_dataset:
+            rank = torch.distributed.get_rank() if torch.distributed.is_initialized() else 0
+            msa_seed_rng = random.Random(0) if msa_random_seed is None else random.Random(rank + msa_random_seed)
+            collate_fn = partial(rag_collate_fn, max_context_length=max_context_length, rng=msa_seed_rng)
+        else:
+            collate_fn = None
         super().__init__(
             path=path,
             pairwise=pairwise,
             x_col=x_col,
             y_col=y_col,
             batch_size=batch_size,
+            collate_fn=collate_fn,
             **kwargs,
         )
 
@@ -69,9 +93,18 @@ class FoldPrediction(SequenceClassificationDataModule):
         path: str = "proteinglm/fold_prediction",
         x_col: str = "seq",
         y_col: str = "label",
+        max_context_length: int = 12800,
+        msa_random_seed: Optional[int] = None,
+        is_rag_dataset: bool = False,
         **kwargs,
     ):
-        super().__init__(path=path, x_col=x_col, y_col=y_col, **kwargs)
+        if is_rag_dataset:
+            rank = torch.distributed.get_rank() if torch.distributed.is_initialized() else 0
+            msa_seed_rng = random.Random(0) if msa_random_seed is None else random.Random(rank + msa_random_seed)
+            collate_fn = partial(rag_collate_fn, max_context_length=max_context_length, rng=msa_seed_rng)
+        else:
+            collate_fn = None
+        super().__init__(path=path, x_col=x_col, y_col=y_col, collate_fn=collate_fn, **kwargs)
 
 
 class LocalizationPrediction(SequenceClassificationDataModule):
@@ -176,13 +209,27 @@ class TemperatureStability(SequenceClassificationDataModule):
 class ClinvarRetrieve(ZeroshotClassificationRetrieveDataModule):
     def __init__(
         self,
-        path: str,
+        path: str = None,
         test_split_files: List[str] = ["ClinVar_Processed.tsv"],
         reference_file: str = "hg38.ml.fa",
         method: str = "Distance",
         window: int = 512,
         **kwargs,
     ):
+        # Check and initialize GENBIO_DATA_DIR
+        if "GENBIO_DATA_DIR" not in os.environ:
+            default_dir = os.path.abspath("./genbio_data")
+            warnings.warn(f"'GENBIO_DATA_DIR' not found in environment. Using default: {default_dir}")
+            os.environ["GENBIO_DATA_DIR"] = default_dir
+
+        # Default path if not explicitly passed
+        if path is None:
+            path = os.path.join(os.environ["GENBIO_DATA_DIR"], 'genbio_finetune', 'dna_datasets')
+
+        # Check and download the files if they don't exist
+        self.download_files(path)
+
+        # Initialize the parent class
         super().__init__(
             path=path,
             test_split_files=test_split_files,
@@ -192,6 +239,21 @@ class ClinvarRetrieve(ZeroshotClassificationRetrieveDataModule):
             y_col="effect",
             **kwargs,
         )
+
+    def download_files(self, save_dir):
+        files_to_download = ["ClinVar_Processed.tsv", "ClinVar_demo.tsv", "hg38.ml.fa"]
+
+        # Ensure the save directory exists
+        os.makedirs(save_dir, exist_ok=True)
+        for file in files_to_download:
+            file_path = os.path.join(save_dir, file)
+            if not os.path.exists(file_path):
+                subprocess.run(
+                    ["wget", "-O", file_path, os.path.join("https://huggingface.co/datasets/genbio-ai/Clinvar/resolve/main", file)]
+                )
+                print(f"Downloaded {file} to {file_path}")
+            else:
+                print(f"{file} already exists, skipping download.")
 
 
 class TranslationEfficiency(SequenceRegressionDataModule):
@@ -475,10 +537,19 @@ class FluorescencePrediction(SequenceRegressionDataModule):
         x_col: str = "seq",
         y_col: str = "label",
         normalize: bool = True,
+        max_context_length: int = 12800,
+        msa_random_seed: Optional[int] = None,
+        is_rag_dataset: bool = False,
         **kwargs,
     ):
+        if is_rag_dataset:
+            rank = torch.distributed.get_rank() if torch.distributed.is_initialized() else 0
+            msa_seed_rng = random.Random(0) if msa_random_seed is None else random.Random(rank + msa_random_seed)
+            collate_fn = partial(rag_collate_fn, max_context_length=max_context_length, rng=msa_seed_rng)
+        else:
+            collate_fn = None
         super().__init__(
-            path=path, normalize=normalize, x_col=x_col, y_col=y_col, **kwargs
+            path=path, normalize=normalize, x_col=x_col, y_col=y_col, collate_fn=collate_fn, **kwargs
         )
 
 
@@ -570,14 +641,26 @@ class DMSFitnessPrediction(SequenceRegressionDataModule):
         cv_num_folds: int = 5,
         cv_test_fold_id: int = 0,
         cv_enable_val_fold: bool = True,
+        cv_replace_val_fold_as_test_fold: bool = False,
         cv_fold_id_col: str = "fold_id",
         cv_val_offset: int = -1,
         valid_split_name: str = None,
         valid_split_size: float = 0,
         test_split_name: str = None,
         test_split_size: float = 0,
+        max_context_length: int = 12800,
+        msa_random_seed: Optional[int] = None,
+        is_rag_dataset: bool = False,
         **kwargs,
     ):
+
+        if is_rag_dataset:
+            rank = torch.distributed.get_rank() if torch.distributed.is_initialized() else 0
+            msa_seed_rng = random.Random(0) if msa_random_seed is None else random.Random(rank + msa_random_seed)
+            collate_fn = partial(rag_collate_fn, max_context_length=max_context_length, rng=msa_seed_rng)
+        else:
+            collate_fn = None
+
         super().__init__(
             path=path,
             train_split_files=train_split_files,
@@ -586,11 +669,45 @@ class DMSFitnessPrediction(SequenceRegressionDataModule):
             cv_num_folds=cv_num_folds,
             cv_test_fold_id=cv_test_fold_id,
             cv_enable_val_fold=cv_enable_val_fold,
+            cv_replace_val_fold_as_test_fold=cv_replace_val_fold_as_test_fold,
             cv_fold_id_col=cv_fold_id_col,
             cv_val_offset=cv_val_offset,
             valid_split_name=valid_split_name,
             valid_split_size=valid_split_size,
             test_split_name=test_split_name,
             test_split_size=test_split_size,
+            collate_fn=collate_fn,
+            **kwargs,
+        )
+
+
+class IsoformExpression(SequenceRegressionDataModule):
+    """
+    Data class for single/multimodal isoform expression prediction tasks
+    """
+
+    def __init__(
+        self,
+        path: str = "genbio-ai/transcript_isoform_expression_prediction",
+        config_name: str = None,
+        x_col: Union[str, list] = ["dna_seq", "rna_seq", "protein_seq"],
+        valid_split_name="valid",
+        train_split_files: Optional[Union[str, list[str]]] = "train_*.tsv",
+        test_split_files: Optional[Union[str, list[str]]] = "test.tsv",
+        valid_split_files: Optional[Union[str, list[str]]] = "validation.tsv",
+        normalize: bool = True,
+        **kwargs,
+    ):
+        super().__init__(
+            path=path,
+            config_name=config_name,
+            x_col=x_col,
+            y_col=[f"labels_{i}" for i in range(30)],
+            valid_split_name=valid_split_name,
+            train_split_files=train_split_files,
+            test_split_files=test_split_files,
+            valid_split_files=valid_split_files,
+            normalize=normalize,
+            extra_reader_kwargs={"keep_default_na": False},
             **kwargs,
         )

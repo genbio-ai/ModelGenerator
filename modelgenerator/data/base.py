@@ -1,6 +1,6 @@
 import os
 import datasets
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
@@ -36,6 +36,8 @@ class KFoldMixin:
             if self.cv_enable_val_fold
             else []
         )
+        if not self.cv_enable_val_fold and self.cv_replace_val_fold_as_test_fold:
+            val_idx = test_idx
         train_idx = list(set(range(len(train_dataset))) - set(test_idx) - set(val_idx))
         return (
             train_dataset.select(train_idx),
@@ -91,7 +93,7 @@ class KFoldMixin:
 class HFDatasetLoaderMixin:
     """Provides methods for loading datasets using the Huggingface datasets library."""
 
-    def load_dataset(self) -> Tuple[datasets.Dataset]:
+    def load_dataset(self, **kwargs) -> Tuple[datasets.Dataset]:
         split_names = [
             self.train_split_name,
             self.valid_split_name,
@@ -109,37 +111,44 @@ class HFDatasetLoaderMixin:
             if split_name is None:
                 splits += (None,)
             else:
-                splits += (
-                    load_dataset(
+                try:
+                    ds = load_dataset(
                         self.path,
                         data_files=None if not data_files else data_files,
                         name=self.config_name,
                         streaming=False,
                         split=split_name,
-                    ),
-                )
+                        **kwargs,
+                    )
+                except ValueError as e:
+                    rank_zero_warn(
+                        f"Could not load split='{split_name}': {e}. Setting to None. You may ignore if you are not using split '{split_name}'."
+                    )
+                    ds = None
+                splits += (ds,)
         return splits
 
-    def load_and_split_dataset(self) -> Tuple[datasets.Dataset]:
-        train_dataset, valid_dataset, test_dataset = self.load_dataset()
-        if test_dataset is None and self.test_split_size > 0:
-            rank_zero_info(
-                f"> Randomly split {self.test_split_size} of train for testing, Random seed: {self.random_seed}"
-            )
-            train_test_split = train_dataset.train_test_split(
-                test_size=self.test_split_size, seed=self.random_seed
-            )
-            train_dataset = train_test_split["train"]
-            test_dataset = train_test_split["test"]
-        if valid_dataset is None and self.valid_split_size > 0:
-            rank_zero_info(
-                f"> Randomly split {self.valid_split_size} of train for validation. Random seed: {self.random_seed}"
-            )
-            train_test_split = train_dataset.train_test_split(
-                test_size=self.valid_split_size, seed=self.random_seed
-            )
-            train_dataset = train_test_split["train"]
-            valid_dataset = train_test_split["test"]
+    def load_and_split_dataset(self, **kwargs) -> Tuple[datasets.Dataset]:
+        train_dataset, valid_dataset, test_dataset = self.load_dataset(**kwargs)
+        if train_dataset is not None:
+            if test_dataset is None and self.test_split_size > 0:
+                rank_zero_info(
+                    f"> Randomly split {self.test_split_size} of train for testing, Random seed: {self.random_seed}"
+                )
+                train_test_split = train_dataset.train_test_split(
+                    test_size=self.test_split_size, seed=self.random_seed
+                )
+                train_dataset = train_test_split["train"]
+                test_dataset = train_test_split["test"]
+            if valid_dataset is None and self.valid_split_size > 0:
+                rank_zero_info(
+                    f"> Randomly split {self.valid_split_size} of train for validation. Random seed: {self.random_seed}"
+                )
+                train_test_split = train_dataset.train_test_split(
+                    test_size=self.valid_split_size, seed=self.random_seed
+                )
+                train_dataset = train_test_split["train"]
+                valid_dataset = train_test_split["test"]
         first_non_empty = train_dataset or valid_dataset or test_dataset
         if first_non_empty is None:
             raise ValueError("All splits are empty")
@@ -178,17 +187,18 @@ class DataInterface(pl.LightningDataModule, KFoldMixin):
         train_split_name (str, optional): The name of the training split. Defaults to "train".
         test_split_name (str, optional): The name of the test split. Defaults to "test".
         valid_split_name (str, optional): The name of the validation split. Defaults to None.
-        train_split_files (List[str], optional): Create a split called "train" from these files.
+        train_split_files (Union[str, List[str]], optional): Create a split called "train" from these files.
             not used unless referenced by the name "train" in one of the split_name arguments.
-        test_split_files (List[str], optional): Create a split called "test" from these files.
+        test_split_files (Union[str, List[str]], optional): Create a split called "test" from these files.
             not used unless referenced by the name "test" in one of the split_name arguments.
-        valid_split_files (List[str], optional): Create a split called "valid" from these files.
+        valid_split_files (Union[str, List[str]], optional): Create a split called "valid" from these files.
             not used unless referenced by the name "valid" in one of the split_name arguments.
         test_split_size (float, optional): The size of the test split.
            If test_split_name is None, creates a test split of this size from the training split.
         valid_split_size (float, optional): The size of the validation split.
            If valid_split_name is None, creates a validation split of this size from the training split.
         random_seed (int, optional): The random seed to use for splitting the data. Defaults to 42.
+        extra_reader_kwargs: (dict, optional): Extra kwargs for dataset readers. Defaults to None.
         batch_size (int, optional): The batch size. Defaults to 128.
         shuffle (bool, optional): Whether to shuffle the data. Defaults to True.
         sampler (Optional[torch.utils.data.Sampler], optional): The sampler to use. Defaults to None.
@@ -199,6 +209,7 @@ class DataInterface(pl.LightningDataModule, KFoldMixin):
         cv_num_folds (int, optional): The number of cross-validation folds, disables cv when <= 1. Defaults to 1.
         cv_test_fold_id (int, optional): The fold id to use for cross-validation evaluation. Defaults to 0.
         cv_enable_val_fold (bool, optional): Whether to enable a validation fold. Defaults to True.
+        cv_replace_val_fold_as_test_fold (bool, optional): Replace validation fold with test fold. Only useful when cv_enable_val_fold is False. Defaults to False
         cv_fold_id_col (Optional[str], optional): The column name containing the fold id from a pre-split dataset. Set to None to enable automatic splitting. Defaults to None.
         cv_val_offset (int, optional): the offset applied to cv_test_fold_id to determin val_fold_id
     """
@@ -210,12 +221,13 @@ class DataInterface(pl.LightningDataModule, KFoldMixin):
         train_split_name: Optional[str] = "train",
         test_split_name: Optional[str] = "test",
         valid_split_name: Optional[str] = None,
-        train_split_files: Optional[List[str]] = None,
-        test_split_files: Optional[List[str]] = None,
-        valid_split_files: Optional[List[str]] = None,
+        train_split_files: Optional[Union[str, List[str]]] = None,
+        test_split_files: Optional[Union[str, List[str]]] = None,
+        valid_split_files: Optional[Union[str, List[str]]] = None,
         test_split_size: float = 0.2,
         valid_split_size: float = 0.1,
         random_seed: int = 42,
+        extra_reader_kwargs: Optional[dict] = None,
         batch_size: int = 128,
         shuffle: bool = True,
         sampler: Optional[torch.utils.data.Sampler] = None,
@@ -227,6 +239,7 @@ class DataInterface(pl.LightningDataModule, KFoldMixin):
         cv_num_folds: int = 1,
         cv_test_fold_id: int = 0,
         cv_enable_val_fold: bool = True,
+        cv_replace_val_fold_as_test_fold: bool = False,
         cv_fold_id_col: Optional[str] = None,
         cv_val_offset: int = 1,
     ):
@@ -248,6 +261,7 @@ class DataInterface(pl.LightningDataModule, KFoldMixin):
         self.test_split_size = test_split_size
         self.valid_split_size = valid_split_size
         self.random_seed = random_seed
+        self.extra_reader_kwargs = extra_reader_kwargs or {}
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.sampler = sampler
@@ -258,6 +272,7 @@ class DataInterface(pl.LightningDataModule, KFoldMixin):
         self.cv_num_folds = cv_num_folds
         self.cv_test_fold_id = cv_test_fold_id
         self.cv_enable_val_fold = cv_enable_val_fold
+        self.cv_replace_val_fold_as_test_fold = cv_replace_val_fold_as_test_fold
         self.cv_fold_id_col = cv_fold_id_col
         self.cv_val_offset = cv_val_offset
 

@@ -38,6 +38,10 @@ class DefaultConfig:
 class SequenceBackboneInterface(nn.Module):
     """Interface class to ensure consistent implementation of essential methods for all backbones."""
 
+    # import paths of modules to wrap when using FSDP
+    fsdp_wrap_modules: List[str] = []
+    model_path: str = ""
+
     def forward(
         self, input_ids: Tensor, attention_mask: Tensor, all_hidden_states: bool = False
     ) -> Union[Tensor, List[Tensor]]:
@@ -66,6 +70,7 @@ class SequenceBackboneInterface(nn.Module):
         sequences: List[str],
         padding: bool = True,
         add_special_tokens: bool = True,
+        **kwargs,
     ) -> Tuple[Tensor, Tensor, Tensor]:
         """Tokenizes input sequences into input IDs and attention masks.
 
@@ -75,7 +80,7 @@ class SequenceBackboneInterface(nn.Module):
             add_special_tokens (bool, optional): Whether to add special tokens. Defaults to True.
 
         Returns:
-            Tuple[Tensor, Tensor, Tensor]: Token IDs, attention masks, and special tokens mask.
+            dict: A dictionary containing input_ids.
         """
         raise NotImplementedError
 
@@ -155,8 +160,6 @@ class HFSequenceBackbone(SequenceBackboneInterface):
         config_overwrites (dict, optional): Optional model arguments for PretrainedConfig. Defaults to None.
         model_init_args (dict, optional): Optional model arguments passed to its init method. Defaults to None.
     """
-
-    model_path: str = ""
 
     def __init__(
         self,

@@ -23,11 +23,11 @@ For each data modality, we suggest using
 
 To get embeddings, use `mgen predict` with the `Embed` task.
 
-> Note: Predictions will always be taken from the test set. 
+> Note: Predictions will always be taken from the test set.
 > To get predictions from another dataset, set it as the test set using the `--data.test_split_files`
 
 > Note: Distributed inference with DDP is enabled by default.
-> Predictions need post-processing to be compiled into a single output. 
+> Predictions need post-processing to be compiled into a single output.
 > See below for details on distributed inference.
 
 For example, to get embeddings from the `dummy` model on a small number of sequences in the `genbio-ai/100m-random-promoters` dataset and save to a `predictions` directory, use the following command:
@@ -105,11 +105,10 @@ trainer:
     class_path: lightning.pytorch.strategies.FSDPStrategy
     init_args:
       sharding_strategy: FULL_SHARD
-      auto_wrap_policy: [modelgenerator.huggingface_models.fm4bio.modeling_fm4bio.FM4BioLayer]
+      auto_wrap_policy: modelgenerator.distributed.fsdp.wrap.AutoWrapPolicy
 ```
 
 The `auto_wrap_policy` is necessary to shard the model in FSDP.
-To find the correct policy for your model, see the [Backbone API reference](../api_reference/backbones.md).
 
 
 By default, PredictionWriter will save separate files for each batch and each device.

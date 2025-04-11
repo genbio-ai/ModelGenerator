@@ -1,36 +1,40 @@
 # tasks.py
-from typing import Callable, Literal, Optional, Set, Union
+from typing import Callable, Literal, Optional, Union
 import numpy as np
 
 import torch
 from torch import Tensor
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.linalg import vector_norm
 
-import lightning.pytorch as pl
 from lightning.pytorch.utilities import grad_norm
 
 import torchmetrics as tm
 
-from modelgenerator.lr_schedulers import LazyLRScheduler
 from modelgenerator.backbones import (
-    HFSequenceBackbone,
-    HFSequenceBackbone,
     DefaultConfig,
     LegacyAdapterType,
-    aido_dna_dummy,
 )
 from modelgenerator.adapters import (
     SequenceAdapter,
     TokenAdapter,
     ConditionalGenerationAdapter,
+    FusionAdapter,
     LinearAdapter,
     LinearCLSAdapter,
-    LinearTransformerAdapter,
     ConditionalLMAdapter,
-    MLPPoolAdapter,
+    MMFusionTokenAdapter,
 )
-from modelgenerator.metrics import TopLAcc, AUROC, AUPRC
+from modelgenerator.metrics import (
+    TopLAcc,
+    AUROC,
+    AUPRC,
+    SpearmanCorrCoef,
+    PearsonCorrCoef,
+    MeanSquaredError,
+    MeanAbsoluteError,
+)
 from modelgenerator.tasks.base import *
 
 
@@ -38,7 +42,7 @@ class MLM(TaskInterface):
     """Task for continuing pretraining on a masked language model. This task is used to fine-tune a model on a downstream task by continuing pretraining on a dataset with masked sequences.
 
     Args:
-        backbone (BackboneCallable, optional): The callable that returns a backbone. Defaults to aido_dna_dummy.
+        backbone (BackboneCallable): The callable that returns a backbone.
         optimizer (OptimizerCallable, optional): The optimizer to use for training. Defaults to torch.optim.AdamW.
         lr_scheduler (LRSchedulerCallable, optional): The learning rate scheduler to use for training. Defaults to None.
         batch_size (int, optional): The batch size to use for training. Defaults to None.
@@ -53,7 +57,7 @@ class MLM(TaskInterface):
 
     def __init__(
         self,
-        backbone: BackboneCallable = aido_dna_dummy,
+        backbone: BackboneCallable,
         use_legacy_adapter: bool = True,
         **kwargs,
     ):
@@ -92,12 +96,13 @@ class MLM(TaskInterface):
         Returns:
             dict[str, Union[list, Tensor]]: The collated batch with input_ids, attention_mask, and target_ids
         """
-        input_ids, attention_mask, special_tokens_mask = self.backbone.tokenize(
-            batch["sequences"]
-        )
+        tokenized_result = self.backbone.tokenize(batch["sequences"])
+        input_ids = tokenized_result.pop("input_ids", None)
+        attention_mask = tokenized_result.pop("attention_mask", None)
+        special_tokens_mask = tokenized_result.pop("special_tokens_mask", None)
         target_ids = None
         if batch.get("target_sequences", None) is not None:
-            target_ids, _, _ = self.backbone.tokenize(batch["target_sequences"])
+            target_ids = self.backbone.tokenize(batch["target_sequences"])["input_ids"]
             target_ids = torch.tensor(target_ids, dtype=torch.long).to(self.device)
         input_ids = torch.tensor(input_ids, dtype=torch.long).to(self.device)
         attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(self.device)
@@ -106,6 +111,7 @@ class MLM(TaskInterface):
             "attention_mask": attention_mask,
             "target_ids": target_ids,
             "special_tokens_mask": special_tokens_mask,
+            **tokenized_result,
         }
 
     def forward(self, collated_batch: dict[str, Union[list, Tensor]]) -> Tensor:
@@ -117,9 +123,7 @@ class MLM(TaskInterface):
         Returns:
             Tensor: The decoder logits
         """
-        encoder_hidden = self.backbone(
-            collated_batch["input_ids"], collated_batch["attention_mask"]
-        )
+        encoder_hidden = self.backbone(**collated_batch)
         decoder_logits = self.adapter(encoder_hidden)
         return decoder_logits
 
@@ -157,7 +161,7 @@ class Inference(MLM):
     """Task for performing inference of token probabilities with a pre-trained backbone
 
     Args:
-        backbone (BackboneCallable, optional): The callable that returns a backbone. Defaults to aido_dna_dummy.
+        backbone (BackboneCallable): The callable that returns a backbone.
         optimizer (OptimizerCallable, optional): The optimizer to use for training. Defaults to torch.optim.AdamW.
         lr_scheduler (LRSchedulerCallable, optional): The learning rate scheduler to use for training. Defaults to None.
         batch_size (int, optional): The batch size to use for training. Defaults to None.
@@ -182,16 +186,21 @@ class Inference(MLM):
         Returns:
             dict[str, Union[list, Tensor]]: The collated batch with input_ids, attention_mask, and target_ids
         """
-        input_ids, attention_mask, special_tokens_mask = self.backbone.tokenize(
-            batch["sequences"]
-        )
+        sequences = batch.pop("sequences")
+        tokenized_result = self.backbone.tokenize(sequences, **batch)
+        input_ids = tokenized_result.pop("input_ids", None)
+        attention_mask = tokenized_result.pop("attention_mask", None)
+        special_tokens_mask = tokenized_result.pop("special_tokens_mask", None)
         input_ids = torch.tensor(input_ids, dtype=torch.long).to(self.device)
-        attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(self.device)
+        if attention_mask is not None:
+            attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(self.device)
         batch.update(
             {
+                "sequences": sequences,
                 "input_ids": input_ids,
                 "attention_mask": attention_mask,
                 "special_tokens_mask": special_tokens_mask,
+                **tokenized_result,
             }
         )
         return batch
@@ -204,7 +213,7 @@ class SequenceClassification(TaskInterface):
         Supports binary, multiclass, and multi-label classification tasks.
 
     Args:
-        backbone (BackboneCallable, optional): The callable that returns a backbone. Defaults to aido_dna_dummy.
+        backbone (BackboneCallable): The callable that returns a backbone.
         adapter (Callable[[int, int], SequenceAdapter], optional): The callable that returns an adapter. Defaults to LinearCLSAdapter.
         n_classes (int, optional): The number of classes in the classification task. Defaults to 2.
         multilabel (bool, optional): Indicate whether it is a multilabel classification task. If True, the n_classes should be set to the number of targets. Defaults to False.
@@ -224,7 +233,7 @@ class SequenceClassification(TaskInterface):
 
     def __init__(
         self,
-        backbone: BackboneCallable = aido_dna_dummy,
+        backbone: BackboneCallable,
         adapter: Optional[Callable[[int, int], SequenceAdapter]] = LinearCLSAdapter,
         n_classes: int = 2,
         multilabel: bool = False,
@@ -256,7 +265,7 @@ class SequenceClassification(TaskInterface):
                 task = "binary" if n_classes == 2 else "multiclass"
                 self.metrics[f"{stage}_metrics"] = nn.ModuleDict(
                     {
-                        # Note: `average` need to be set explicity for accuracy and f1
+                        # Note: `average` need to be set explicitly for accuracy and f1
                         # see https://github.com/Lightning-AI/torchmetrics/issues/2280
                         "accuracy": tm.Accuracy(
                             task, num_classes=n_classes, average="micro"
@@ -338,24 +347,30 @@ class SequenceClassification(TaskInterface):
         Returns:
             dict[str, Union[list, Tensor]]: The collated batch containing input_ids, attention_mask, and labels
         """
-        input_ids, attention_mask, special_tokens_mask = self.backbone.tokenize(
-            batch["sequences"]
-        )
+
+        sequences = batch.pop("sequences")
+        tokenized_result = self.backbone.tokenize(sequences, **batch)
+        input_ids = tokenized_result.pop("input_ids", None)
+        attention_mask = tokenized_result.pop("attention_mask", None)
+        special_tokens_mask = tokenized_result.pop("special_tokens_mask", None)
         input_ids = torch.tensor(input_ids, dtype=torch.long).to(self.device)
-        attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(self.device)
-        if batch.get("labels", None) is not None:
-            if isinstance(batch["labels"], torch.Tensor):
+        if attention_mask is not None:
+            attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(self.device)
+
+        if batch.get("labels") is not None:
+            if torch.is_tensor(batch["labels"]):
                 labels = batch["labels"].to(self.device, dtype=torch.long)
             else:
-                labels = torch.tensor(batch["labels"], dtype=torch.long).to(self.device)
+                labels = torch.as_tensor(batch["labels"]).to(self.device, dtype=torch.long)
         else:
             labels = None
         return {
-            "sequences": batch["sequences"],
+            "sequences": sequences,
             "input_ids": input_ids,
             "attention_mask": attention_mask,
             "special_tokens_mask": special_tokens_mask,
             "labels": labels,
+            **tokenized_result,
         }
 
     def forward(self, collated_batch: dict[str, Union[list, Tensor]]) -> Tensor:
@@ -367,9 +382,8 @@ class SequenceClassification(TaskInterface):
         Returns:
             Tensor: The classifier logits
         """
-        hidden_states = self.backbone(
-            collated_batch["input_ids"], collated_batch["attention_mask"]
-        )
+
+        hidden_states = self.backbone(**collated_batch)
         logits = self.adapter(hidden_states, collated_batch["attention_mask"])
         return logits
 
@@ -391,6 +405,7 @@ class SequenceClassification(TaskInterface):
         Returns:
             Tensor: The loss.
         """
+
         labels = collated_batch["labels"]
         if not self.multilabel:
             labels = labels.view(-1)  # (bs,)
@@ -409,18 +424,16 @@ class SequenceClassification(TaskInterface):
         else:
             preds = torch.sigmoid(logits)  # probs of shape (bs, C)
         if self.multilabel and stage == "test":
-            binary_metrics = []
             for name, metric in metrics.items():
                 if len(name.split("_")) == 1:
                     self.call_or_update_metric(stage, metric, preds, labels)
                 else:
-                    binary_metrics.append(metric)
-            for i, metric in enumerate(binary_metrics):
-                j = i % self.n_classes
-                self.call_or_update_metric(stage, metric, preds[:, j], labels[:, j])
+                    i = int(name.split("_")[-1])
+                    self.call_or_update_metric(stage, metric, preds[:, i], labels[:, i])
         else:
             for metric in metrics.values():
                 self.call_or_update_metric(stage, metric, preds, labels)
+
         return {"loss": loss}
 
 
@@ -428,7 +441,7 @@ class TokenClassification(SequenceClassification):
     """Task for fine-tuning a model on a token classification task.
 
     Args:
-        backbone (BackboneCallable, optional): The callable that returns a backbone. Defaults to aido_dna_dummy.
+        backbone (BackboneCallable): The callable that returns a backbone.
         adapter (Callable[[int, int], TokenAdapter], optional): The callable that returns an adapter. Defaults to LinearAdapter.
         n_classes (int, optional): The number of classes in the classification task. Defaults to 2.
         optimizer (OptimizerCallable, optional): The optimizer to use for training. Defaults to torch.optim.AdamW.
@@ -447,12 +460,13 @@ class TokenClassification(SequenceClassification):
 
     def __init__(
         self,
+        *args,
         adapter: Optional[Callable[[int, int], TokenAdapter]] = LinearAdapter,
         **kwargs,
     ):
         # TODO: multi-label can be supported once token classification dataset
         # supports it and padding values are handled correctly
-        super().__init__(adapter=adapter, multilabel=False, **kwargs)
+        super().__init__(*args, adapter=adapter, multilabel=False, **kwargs)
         if self.__class__ is TokenClassification:
             self.save_hyperparameters()
 
@@ -465,9 +479,7 @@ class TokenClassification(SequenceClassification):
         Returns:
             Tensor: The classifier logits
         """
-        hidden_states = self.backbone(
-            collated_batch["input_ids"], collated_batch["attention_mask"]
-        )  # (bs, seq_len, hidden_size)
+        hidden_states = self.backbone(**collated_batch)
         logits = self.adapter(hidden_states)
         return logits
 
@@ -491,8 +503,11 @@ class TokenClassification(SequenceClassification):
         """
         padded_labels = collated_batch["labels"]
         collated_batch["labels"] = padded_labels[padded_labels != -100].view(-1)
-        special_tokens_mask = torch.logical_not(collated_batch["special_tokens_mask"])
-        logits = logits[special_tokens_mask].view(-1, self.n_classes)
+        if collated_batch["special_tokens_mask"] is not None:
+            special_tokens_mask = torch.logical_not(torch.tensor(collated_batch["special_tokens_mask"]))
+            logits = logits[special_tokens_mask].view(-1, self.n_classes)
+        else:
+            logits = logits.view(-1, self.n_classes)
         return super().evaluate(logits, collated_batch, stage, loss_only)
 
 
@@ -500,7 +515,7 @@ class PairwiseTokenClassification(SequenceClassification):
     """Task for fine-tuning a model on a pairwise token classification task.
 
     Args:
-        backbone (BackboneCallable, optional): The callable that returns a backbone. Defaults to aido_dna_dummy.
+        backbone (BackboneCallable): The callable that returns a backbone.
         adapter (Callable[[int, int], TokenAdapter], optional): The callable that returns an adapter. Defaults to LinearAdapter.
         n_classes (int, optional): The number of classes in the classification task. Defaults to 2.
         optimizer (OptimizerCallable, optional): The optimizer to use for training. Defaults to torch.optim.AdamW.
@@ -519,17 +534,25 @@ class PairwiseTokenClassification(SequenceClassification):
 
     def __init__(
         self,
+        *args,
         adapter: Optional[Callable[[int, int], TokenAdapter]] = LinearAdapter,
+        adapter_dim_multiplier: int = 2,
         n_classes: int = 2,
         **kwargs,
     ):
+        """
+        If the we use MLPAdapter and outer_concat, then adapter_dim_multiplier should be 2;
+        if we use MLPAdapterWithoutOutConcat, then adapter_dim_multiplier should be 1.
+        The outer_concat operation is very memory intensive.
+        """
         # TODO: multi-class support in evaluate
         if n_classes != 2:
             raise ValueError(
                 "PairwiseTokenClassification currenlty only supports binary classification"
             )
+        self.adapter_dim_multiplier = adapter_dim_multiplier
         super().__init__(
-            adapter=adapter, n_classes=n_classes, multilabel=False, **kwargs
+            *args, adapter=adapter, n_classes=n_classes, multilabel=False, **kwargs
         )
         if self.__class__ is PairwiseTokenClassification:
             self.save_hyperparameters()
@@ -554,7 +577,7 @@ class PairwiseTokenClassification(SequenceClassification):
         else:
             self.backbone = self.backbone_fn(None, None)
             self.adapter = self.adapter_fn(
-                self.backbone.get_embedding_size() * 2,
+                self.backbone.get_embedding_size() * self.adapter_dim_multiplier,
                 self.n_classes,
             )
 
@@ -567,14 +590,15 @@ class PairwiseTokenClassification(SequenceClassification):
         Returns:
             Tensor: The classifier logits
         """
-        hidden_states = self.backbone(
-            collated_batch["input_ids"], collated_batch["attention_mask"]
-        )
+        hidden_states = self.backbone(**collated_batch)
+
         if self.use_legacy_adapter:
             logits = self.adapter(hidden_states)
-        else:
+        elif self.adapter_dim_multiplier > 1:
             x = self.outer_concat(hidden_states)
             logits = self.adapter(x)
+        else:
+            logits = self.adapter(hidden_states)
         return logits
 
     def outer_concat(self, x):
@@ -639,12 +663,14 @@ class PairwiseTokenClassification(SequenceClassification):
         labels = padded_labels[
             padded_labels != -100
         ]  # vector: (seq_len-1) * (seq_len-1)
-        special_tokens_mask = torch.logical_not(collated_batch["special_tokens_mask"])
-        # (bs, seq_len) -> (bs, seq_len, seq_len) by batch wise outer product
-        special_tokens_mask_expanded = torch.einsum(
-            "bp, bq -> bpq", special_tokens_mask, special_tokens_mask
-        )
-        logits = logits[special_tokens_mask_expanded]  # (labels.shape[0], n_classes)
+        if collated_batch["special_tokens_mask"] is not None:
+            special_tokens_mask = torch.logical_not(torch.tensor(collated_batch["special_tokens_mask"]).to(logits.device))
+            # (bs, seq_len) -> (bs, seq_len, seq_len) by batch wise outer product
+            special_tokens_mask_expanded = torch.einsum(
+                "bp, bq -> bpq", special_tokens_mask, special_tokens_mask
+            )
+            logits = logits[special_tokens_mask_expanded]  # (labels.shape[0], n_classes)
+
         loss = self.loss(logits, labels)
         if loss_only:
             return {"loss": loss}
@@ -661,7 +687,7 @@ class Diffusion(TaskInterface):
     """Task Masked Diffusion Language Modeling training and denoising on sequences (https://arxiv.org/abs/2406.07524). Inherits from TaskInterface.
 
     Args:
-        backbone (BackboneCallable, optional): The callable that returns a backbone. Defaults to aido_dna_dummy.
+        backbone (BackboneCallable): The callable that returns a backbone.
         adapter (Callable[[int, int], TokenAdapter], optional): The callable that returns an adapter. Defaults to None.
         use_legacy_adapter (bool, optional):
             Whether to use the legacy adapter. Defaults to True.
@@ -684,7 +710,7 @@ class Diffusion(TaskInterface):
 
     def __init__(
         self,
-        backbone: BackboneCallable = aido_dna_dummy,
+        backbone: BackboneCallable,
         adapter: Optional[Callable[[int, int], TokenAdapter]] = None,
         use_legacy_adapter: bool = True,
         sample_seq: bool = False,
@@ -746,19 +772,21 @@ class Diffusion(TaskInterface):
         """
         # Each sample in a batch is a list of noised sequences at various noise levels. Stack them for easy training.
         input_seqs = [seq for seqs in batch["sequences"] for seq in seqs]
-        input_ids, attention_mask, special_tokens_mask = self.backbone.tokenize(
-            input_seqs
-        )
+        tokenized_result = self.backbone.tokenize(input_seqs)
+        input_ids = tokenized_result.pop("input_ids", None)
+        attention_mask = tokenized_result.pop("attention_mask", None)
+        special_tokens_mask = tokenized_result.pop("special_tokens_mask", None)
         input_ids = torch.tensor(input_ids, dtype=torch.long).to(self.device)
         input_mask = torch.where(input_ids == self.mask_id, 1, 0)
-        attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(self.device)
+        if attention_mask is not None:
+            attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(self.device)
         target_seqs = None
         target_ids = None
         target_mask = None
         posterior_weights = None
         if batch.get("target_sequences", None) is not None:
             target_seqs = [seq for seqs in batch["target_sequences"] for seq in seqs]
-            target_ids, _, _ = self.backbone.tokenize(target_seqs)
+            target_ids = self.backbone.tokenize(target_seqs)["input_ids"]
             target_ids = torch.tensor(target_ids, dtype=torch.long).to(self.device)
             target_mask = torch.where(target_ids == self.mask_id, 1, 0)
         if batch.get("posterior_weights", None) is not None:
@@ -779,6 +807,7 @@ class Diffusion(TaskInterface):
             "target_masks": target_mask,
             "target_seqs": target_seqs,
             "posterior_weights": posterior_weights,
+            **tokenized_result,
         }
 
     def forward(self, collated_batch: dict[str, Union[list, Tensor]]) -> Tensor:
@@ -790,9 +819,7 @@ class Diffusion(TaskInterface):
         Returns:
             Tensor: The decoder logits
         """
-        encoder_hidden = self.backbone(
-            collated_batch["input_ids"], collated_batch["attention_mask"]
-        )
+        encoder_hidden = self.backbone(**collated_batch)
         decoder_logits = self.adapter(encoder_hidden)
         return decoder_logits
 
@@ -1041,7 +1068,7 @@ class ConditionalMLM(TaskInterface):
     """Task for Conditional Masked Language Modeling training and denoising on sequences. Inherits from TaskInterface.
 
     Args:
-        backbone (BackboneCallable, optional): The callable that returns a backbone. Defaults to aido_dna_dummy.
+        backbone (BackboneCallable): The callable that returns a backbone.
         adapter (Callable[[int, int, int, nn.Module], ConditionalGenerationAdapter], optional): The callable that returns an adapter. Defaults to ConditionalLMAdapter.
         use_legacy_adapter (bool, optional):
             Whether to use the pre-trained legacy adapter within the conditional decoder. Defaults to True.
@@ -1061,7 +1088,7 @@ class ConditionalMLM(TaskInterface):
 
     def __init__(
         self,
-        backbone: BackboneCallable = aido_dna_dummy,
+        backbone: BackboneCallable,
         adapter: Optional[
             Callable[[int, int, int, nn.Module], ConditionalGenerationAdapter]
         ] = ConditionalLMAdapter,
@@ -1113,14 +1140,16 @@ class ConditionalMLM(TaskInterface):
         Returns:
             dict[str, Union[list, Tensor]]: The collated batch with input_ids, attention_mask, target_ids, and labels
         """
-        input_ids, attention_mask, special_tokens_mask = self.backbone.tokenize(
-            batch["sequences"]
-        )
+        tokenized_result = self.backbone.tokenize(batch["sequences"])
+        input_ids = tokenized_result.pop("input_ids", None)
+        attention_mask = tokenized_result.pop("attention_mask", None)
+        special_tokens_mask = tokenized_result.pop("special_tokens_mask", None)
         input_ids = torch.tensor(input_ids, dtype=torch.long).to(self.device)
-        attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(self.device)
+        if attention_mask is not None:
+            attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(self.device)
         target_ids = None
         if batch.get("target_sequences", None) is not None:
-            target_ids, _, _ = self.backbone.tokenize(batch["target_sequences"])
+            target_ids = self.backbone.tokenize(batch["target_sequences"])["input_ids"]
             target_ids = torch.tensor(target_ids, dtype=torch.long).to(self.device)
         labels = batch["labels"].type(self.dtype)
         if len(batch["labels"].shape) == 1:
@@ -1131,6 +1160,7 @@ class ConditionalMLM(TaskInterface):
             "special_tokens_mask": special_tokens_mask,
             "target_ids": target_ids,
             "labels": labels,
+            **tokenized_result,
         }
 
     def forward(self, collated_batch: dict[str, Union[list, Tensor]]) -> Tensor:
@@ -1142,9 +1172,7 @@ class ConditionalMLM(TaskInterface):
         Returns:
             Tensor: The decoder logits
         """
-        encoder_hidden = self.backbone(
-            collated_batch["input_ids"], collated_batch["attention_mask"]
-        )
+        encoder_hidden = self.backbone(**collated_batch)
         logits = self.adapter(encoder_hidden, collated_batch["labels"])
         return logits
 
@@ -1205,6 +1233,7 @@ class ConditionalDiffusion(Diffusion):
 
     def __init__(
         self,
+        *args,
         adapter: Optional[
             Callable[[int, int, int, nn.Module], ConditionalGenerationAdapter]
         ] = ConditionalLMAdapter,
@@ -1212,7 +1241,7 @@ class ConditionalDiffusion(Diffusion):
         condition_dim: int = 1,
         **kwargs,
     ):
-        super().__init__(use_legacy_adapter=use_legacy_adapter, **kwargs)
+        super().__init__(*args, use_legacy_adapter=use_legacy_adapter, **kwargs)
         if self.__class__ is ConditionalDiffusion:
             self.save_hyperparameters()
         self.adapter = None
@@ -1262,20 +1291,19 @@ class ConditionalDiffusion(Diffusion):
         Returns:
             Tensor: The decoder logits
         """
-        encoder_hidden = self.backbone(
-            collated_batch["input_ids"], collated_batch["attention_mask"]
-        )
+        encoder_hidden = self.backbone(**collated_batch)
         logits = self.adapter(encoder_hidden, collated_batch["labels"])
         return logits
 
 
 class SequenceRegression(TaskInterface):
-    """Task for fine-tuning a model on a regression task.
+    """Task for fine-tuning a model on single-/multi-task regression.
 
     Args:
-        backbone (BackboneCallable, optional): The callable that returns a backbone. Defaults to aido_dna_dummy.
+        backbone (BackboneCallable): The callable that returns a backbone.
         adapter (Callable[[int, int], SequenceAdapter], optional): The callable that returns an adapter. Defaults to LinearCLSAdapter.
         num_outputs (int, optional): The number of outputs in the regression task. Defaults to 1.
+        loss_func (Callable, optional): Loss function for regression tasks. Defaults to nn.MSELoss.
         optimizer (OptimizerCallable, optional): The optimizer to use for training. Defaults to torch.optim.AdamW.
         lr_scheduler (LRSchedulerCallable, optional): The learning rate scheduler to use for training. Defaults to None.
         batch_size (int, optional): The batch size to use for training. Defaults to None.
@@ -1287,9 +1315,11 @@ class SequenceRegression(TaskInterface):
 
     def __init__(
         self,
-        backbone: BackboneCallable = aido_dna_dummy,
+        backbone: BackboneCallable,
         adapter: Optional[Callable[[int, int], SequenceAdapter]] = LinearCLSAdapter,
         num_outputs: int = 1,
+        loss_func: Callable[..., torch.nn.Module] = torch.nn.MSELoss,
+        log_grad_norm_step: int = 0,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -1300,17 +1330,63 @@ class SequenceRegression(TaskInterface):
         self.num_outputs = num_outputs
         self.backbone = None
         self.adapter = None
-        self.loss = nn.MSELoss()
+        self.loss = loss_func()
+        self.log_grad_norm_step = log_grad_norm_step
         for stage in ["train", "val", "test"]:
             self.metrics[f"{stage}_metrics"] = nn.ModuleDict(
                 {
-                    "pearson": tm.PearsonCorrCoef(num_outputs=num_outputs),
-                    "spearman": tm.SpearmanCorrCoef(num_outputs=num_outputs),
-                    "mae": tm.MeanAbsoluteError(num_outputs=num_outputs),
-                    "r2": tm.R2Score(),
-                    "mse": tm.MeanSquaredError(num_outputs=num_outputs),
+                    "pearson": PearsonCorrCoef(
+                        num_outputs=num_outputs, multioutput="uniform_average"
+                    ),
+                    "spearman": SpearmanCorrCoef(
+                        num_outputs=num_outputs, multioutput="uniform_average"
+                    ),
+                    "mae": MeanAbsoluteError(
+                        num_outputs=num_outputs, multioutput="uniform_average"
+                    ),
+                    "r2": tm.R2Score(multioutput="uniform_average"),
+                    "mse": MeanSquaredError(
+                        num_outputs=num_outputs, multioutput="uniform_average"
+                    ),
                 }
             )
+            if stage == "test" and self.num_outputs > 1:
+                # calculate scores for each task
+                label_wise_spearman = nn.ModuleDict(
+                        {
+                            "spearman_" + str(i): SpearmanCorrCoef(num_outputs=1)
+                            for i in range(self.num_outputs)
+                        }
+                    )
+                label_wise_pearson = nn.ModuleDict(
+                        {
+                            "pearson_" + str(i): PearsonCorrCoef(num_outputs=1)
+                            for i in range(self.num_outputs)
+                        }
+                    )
+                label_wise_r2 = nn.ModuleDict(
+                        {
+                            "r2_" + str(i): tm.R2Score()
+                            for i in range(self.num_outputs)
+                        }
+                    )
+                label_wise_mse = nn.ModuleDict(
+                        {
+                            "mse_" + str(i): MeanSquaredError(num_outputs=1)
+                            for i in range(self.num_outputs)
+                        }
+                    )
+                label_wise_mae = nn.ModuleDict(
+                        {
+                            "mae_" + str(i): MeanAbsoluteError(num_outputs=1)
+                            for i in range(self.num_outputs)
+                        }
+                    )
+                self.metrics[f"{stage}_metrics"].update(label_wise_spearman)
+                self.metrics[f"{stage}_metrics"].update(label_wise_pearson)
+                self.metrics[f"{stage}_metrics"].update(label_wise_r2)
+                self.metrics[f"{stage}_metrics"].update(label_wise_mse)
+                self.metrics[f"{stage}_metrics"].update(label_wise_mae)
         self.metrics_to_pbar = set(self.metrics["train_metrics"].keys())
 
     def configure_model(self) -> None:
@@ -1345,20 +1421,26 @@ class SequenceRegression(TaskInterface):
         Returns:
             dict[str, Union[list, Tensor]]: The collated batch containing sequences, input_ids, attention_mask, and labels
         """
-        input_ids, attention_mask, special_tokens_mask = self.backbone.tokenize(
-            batch["sequences"]
-        )
+
+        sequences = batch.pop("sequences")
+        tokenized_result = self.backbone.tokenize(sequences, **batch)
+        input_ids = tokenized_result.pop("input_ids", None)
+        attention_mask = tokenized_result.pop("attention_mask", None)
+        special_tokens_mask = tokenized_result.pop("special_tokens_mask", None)
+
         input_ids = torch.tensor(input_ids, dtype=torch.long).to(self.device)
-        attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(self.device)
+        if attention_mask is not None:
+            attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(self.device)
         labels = None
         if batch.get("labels") is not None:
             labels = batch["labels"].to(self.device, dtype=self.dtype)
         return {
-            "sequences": batch["sequences"],
+            "sequences": sequences,
             "input_ids": input_ids,
             "attention_mask": attention_mask,
             "special_tokens_mask": special_tokens_mask,
             "labels": labels,
+            **tokenized_result,
         }
 
     def forward(self, collated_batch: dict[str, Union[list, Tensor]]) -> Tensor:
@@ -1370,9 +1452,8 @@ class SequenceRegression(TaskInterface):
         Returns:
             Tensor: The regression predictions
         """
-        hidden_states = self.backbone(
-            collated_batch["input_ids"], collated_batch["attention_mask"]
-        )  # (bs, seq_len, dim)
+
+        hidden_states = self.backbone(**collated_batch)  # (bs, seq_len, dim)
         preds = self.adapter(hidden_states, collated_batch["attention_mask"])
         return preds
 
@@ -1393,14 +1474,69 @@ class SequenceRegression(TaskInterface):
         Returns:
             dict[str, Union[Tensor, float]]: A dictionary of metrics containing loss and mse
         """
+
         labels = collated_batch["labels"]
         loss = self.loss(preds, labels)
         if loss_only:
             return {"loss": loss}
         metrics = self.get_metrics_by_stage(stage)
-        for metric in metrics.values():
-            self.call_or_update_metric(stage, metric, preds, labels)
+
+        if self.num_outputs > 1 and stage == "test":
+            for name, metric in metrics.items():
+                if len(name.split("_")) == 1:
+                    self.call_or_update_metric(stage, metric, preds, labels)
+                else:
+                    i = int(name.split("_")[-1])
+                    self.call_or_update_metric(stage, metric, preds[:, i], labels[:, i])
+        else:
+            for metric in metrics.values():
+                self.call_or_update_metric(stage, metric, preds, labels)
+
         return {"loss": loss}
+
+    def log_grad_norm(self, optimizer):
+        """
+        Log the total total_norm, adaptor_param_norm and adaptor_grad_norm.
+
+        Refer to
+        https://github.com/Lightning-AI/pytorch-lightning/blob/master/src/lightning/pytorch/plugins/precision/precision.py
+        https://github.com/Lightning-AI/pytorch-lightning/blob/master/src/lightning/pytorch/core/module.py
+        for the calculation of the gradient norm
+        """
+        parameters = self.trainer.precision_plugin.main_params(optimizer)
+        parameters = list(parameters)
+        if len(parameters) > 0:
+            assert all([p.requires_grad for p in parameters])
+            if all([p.grad is not None for p in parameters]):
+                total_norm = vector_norm(
+                    torch.stack([vector_norm(p.grad, ord=2) for p in parameters]), ord=2
+                )
+                adaptor_param_norm = vector_norm(
+                    torch.stack(
+                        [vector_norm(p, ord=2) for p in self.adapter.parameters()]
+                    ),
+                    ord=2,
+                )
+                adaptor_grad_norm = vector_norm(
+                    torch.stack(
+                        [vector_norm(p.grad, ord=2) for p in self.adapter.parameters()]
+                    ),
+                    ord=2,
+                )
+
+                self.log("total_norm", total_norm, rank_zero_only=True)
+                self.log("adaptor_param_norm", adaptor_param_norm, rank_zero_only=True)
+                self.log("adaptor_grad_norm", adaptor_grad_norm, rank_zero_only=True)
+
+    def on_before_optimizer_step(self, optimizer):
+        """
+        Log gradient norm of adaptor's parameters
+        """
+        if (
+            self.log_grad_norm_step > 0
+            and self.trainer.global_step % self.log_grad_norm_step == 0
+        ):
+            self.log_grad_norm(optimizer)
 
 
 class SequenceRegressionWithScaling(SequenceRegression):
@@ -1410,7 +1546,7 @@ class SequenceRegressionWithScaling(SequenceRegression):
         Does not tolerate legacy adapters.
 
     Args:
-        backbone (BackboneCallable, optional): The callable that returns a backbone. Defaults to aido_dna_dummy.
+        backbone (BackboneCallable): The callable that returns a backbone.
         adapter (Callable[[int, int], SequenceAdapter], optional): The callable that returns an adapter. Defaults to LinearCLSAdapter.
         num_outputs (int, optional): The number of outputs in the regression task. Defaults to 1.
         optimizer (OptimizerCallable, optional): The optimizer to use for training. Defaults to torch.optim.AdamW.
@@ -1424,15 +1560,14 @@ class SequenceRegressionWithScaling(SequenceRegression):
 
     def __init__(
         self,
-        backbone: BackboneCallable = aido_dna_dummy,
+        *args,
         adapter: Optional[Callable[[int, int], SequenceAdapter]] = LinearCLSAdapter,
         num_outputs: int = 1,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(*args, **kwargs)
         if self.__class__ is SequenceRegressionWithScaling:
             self.save_hyperparameters()
-        self.backbone_fn = backbone
         self.adapter_fn = adapter
         self.num_outputs = num_outputs
         self.backbone = None
@@ -1464,16 +1599,17 @@ class SequenceRegressionWithScaling(SequenceRegression):
         """
         ## Adapted from https://github.com/lbcb-sci/RiNALMo/blob/main/train_ribosome_loading.py
 
-        hidden_states = self.backbone(
-            collated_batch["input_ids"], collated_batch["attention_mask"]
-        )  # (bs, seq_len, dim)
-
-        tokens = collated_batch["input_ids"]
+        hidden_states = self.backbone(**collated_batch)  # (bs, seq_len, dim)
 
         # Nullify padding token representations
-        padding_mask = ~collated_batch[
-            "attention_mask"
-        ]  # padding_mask = tokens.eq(self.pad_idx)
+        if collated_batch["attention_mask"] is not None:
+            padding_mask = ~collated_batch[
+                "attention_mask"
+            ]  # padding_mask = tokens.eq(self.pad_idx)
+        else:
+            padding_mask = torch.zeros(
+                hidden_states.shape[:-1], dtype=torch.bool, device=hidden_states.device
+            )
         hidden_states[padding_mask, :] = 0.0
         hidden_states = hidden_states[:, 1:-1, :]
         padding_mask = padding_mask[:, 1:-1]
@@ -1561,13 +1697,13 @@ class Embed(TaskInterface):
         Must be used with modelgenerator.callbacks.PredictionWriter. Embeddings are stored under "predictions".
 
     Args:
-        backbone (BackboneCallable, optional): The callable that returns a backbone. Defaults to aido_dna_dummy.
+        backbone (BackboneCallable): The callable that returns a backbone.
         batch_size (int, optional): The batch size to use for training. Defaults to None.
         strict_loading (bool, optional): Whether to strictly load the model. Defaults to True.
             Set it to False if you want to replace the adapter (e.g. for continue pretraining)
     """
 
-    def __init__(self, backbone: BackboneCallable = aido_dna_dummy, **kwargs):
+    def __init__(self, backbone: BackboneCallable, **kwargs):
         super().__init__(use_legacy_adapter=False, **kwargs)
         if self.__class__ is Embed:
             self.save_hyperparameters()
@@ -1592,16 +1728,20 @@ class Embed(TaskInterface):
         Returns:
             dict[str, Union[list, Tensor]]: The collated batch with sequences, input_ids, and attention_mask
         """
-        input_ids, attention_mask, special_tokens_mask = self.backbone.tokenize(
-            batch["sequences"]
-        )
+        sequences = batch.pop("sequences")
+        tokenized_result = self.backbone.tokenize(sequences, **batch)
+        input_ids = tokenized_result.pop("input_ids", None)
+        attention_mask = tokenized_result.pop("attention_mask", None)
+        special_tokens_mask = tokenized_result.pop("special_tokens_mask", None)
         input_ids = torch.tensor(input_ids, dtype=torch.long).to(self.device)
-        attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(self.device)
+        if attention_mask is not None:
+            attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(self.device)
         return {
-            "sequences": batch["sequences"],
+            "sequences": sequences,
             "input_ids": input_ids,
             "attention_mask": attention_mask,
             "special_tokens_mask": special_tokens_mask,
+            **tokenized_result,
         }
 
     def forward(self, collated_batch: dict[str, Union[list, Tensor]]) -> Tensor:
@@ -1613,9 +1753,7 @@ class Embed(TaskInterface):
         Returns:
             Tensor: The decoder logits
         """
-        encoder_hidden = self.backbone(
-            collated_batch["input_ids"], collated_batch["attention_mask"]
-        )
+        encoder_hidden = self.backbone(**collated_batch)  # (bs, seq_len, dim)
         return encoder_hidden
 
 
@@ -1623,12 +1761,12 @@ class ZeroshotPredictionDiff(TaskInterface):
     """Task for zero-shot prediction on masked languange model. This task is used to evaluate the embeddings of pretrained model
        The evaluation metrics are AUROC and AUPRC, which compute the log-likelihood difference between probability of ref and alt at the mutated position
     Args:
-        backbone (BackboneCallable, optional): The callable that returns a backbone. Defaults to aido_dna_dummy.
+        backbone (BackboneCallable): The callable that returns a backbone.
     """
 
     def __init__(
         self,
-        backbone: BackboneCallable = aido_dna_dummy,
+        backbone: BackboneCallable,
         use_legacy_adapter: bool = True,
         **kwargs,
     ):
@@ -1661,34 +1799,35 @@ class ZeroshotPredictionDiff(TaskInterface):
         Returns:
             dict[str, Union[list, Tensor]]: The collated batch with input_ids, attention_mask, and target_ids
         """
-        input_ids, attention_mask, special_tokens_mask = self.backbone.tokenize(
-            batch["sequences"]
-        )
+        tokenized_result = self.backbone.tokenize(batch["sequences"])
+        input_ids = tokenized_result.pop("input_ids", None)
+        tokenized_result.pop("attention_mask", None)
+        special_tokens_mask = tokenized_result.pop("special_tokens_mask", None)
         labels = None
         ref_ids = None
         mutation_ids = None
         if batch.get("labels") is not None:
             labels = batch["labels"]
         if batch.get("refs") is not None:
-            ref_ids, _, _ = self.backbone.tokenize(
+            ref_ids = self.backbone.tokenize(
                 batch["refs"], add_special_tokens=False
-            )
+            )["input_ids"]
             ref_ids = torch.tensor(ref_ids, dtype=torch.long, device=self.device)
         if batch.get("mutations") is not None:
-            mutation_ids, _, _ = self.backbone.tokenize(
+            mutation_ids = self.backbone.tokenize(
                 batch["mutations"], add_special_tokens=False
-            )
+            )["input_ids"]
             mutation_ids = torch.tensor(
                 mutation_ids, dtype=torch.long, device=self.device
             )
         input_ids = torch.tensor(input_ids, dtype=torch.long).to(self.device)
-        attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(self.device)
         return {
             "input_ids": input_ids,
             "ref_ids": ref_ids,
             "mutation_ids": mutation_ids,
             "labels": labels,
             "special_tokens_mask": special_tokens_mask,
+            **tokenized_result,
         }
 
     def forward(self, collated_batch: dict[str, Union[list, Tensor]]) -> Tensor:
@@ -1700,14 +1839,17 @@ class ZeroshotPredictionDiff(TaskInterface):
         Returns:
             Tensor: The decoder logits
         """
-        encoder_hidden = self.backbone(collated_batch["input_ids"], attention_mask=None)
+        encoder_hidden = self.backbone(**collated_batch, attention_mask=None)
         decoder_logits = self.adapter(encoder_hidden)
         b, l, d = decoder_logits.shape
-        # remove special token before computing zeroshot score
-        special_tokens_mask = collated_batch["special_tokens_mask"]
-        decoder_logits = decoder_logits[torch.logical_not(special_tokens_mask)].view(
-            b, -1, d
-        )
+        if collated_batch["special_tokens_mask"] is not None:
+            # remove special token before computing zeroshot score
+            special_tokens_mask = torch.tensor(collated_batch["special_tokens_mask"])
+            decoder_logits = decoder_logits[torch.logical_not(special_tokens_mask)].view(
+                b, -1, d
+            )
+        else:
+            decoder_logits = decoder_logits.view(b, -1, d)
         return decoder_logits
 
     def evaluate(
@@ -1749,17 +1891,21 @@ class ZeroshotPredictionDiff(TaskInterface):
 
 
 class ZeroshotPredictionDistance(TaskInterface):
-    """Task for zero-shot prediction on masked languange model. This task is used to evaluate the embeddings of pretrained model
-       The evaluation metric is L1, L2 distance between reference and alt sequence embeddings extracted from every layer
+    """Task for zero-shot prediction on an embedding model.
+    Calculates the L1 and L2 distance between a reference and alt embeddings.
+    Then evaluates the AUROC and AUPRC of this distance statistic against a given label.
+
     Args:
-        backbone (BackboneCallable, optional): The callable that returns a backbone. Defaults to aido_dna_dummy.
-        use_legacy_adapter (bool): Whether we use adapter in huggingface model
+        backbone (BackboneCallable): The callable that returns a backbone.
+        use_legacy_adapter (bool, optional): Whether we use the legacy adapter from the pretrained model. Defaults to True.
+        all_hidden_states (bool, optional): Whether to run the test on all available hidden layers. Defaults to False, only using the last layer.
     """
 
     def __init__(
         self,
-        backbone: BackboneCallable = aido_dna_dummy,
+        backbone: BackboneCallable,
         use_legacy_adapter: bool = True,
+        all_hidden_states: bool = False,
         **kwargs,
     ):
         if self.__class__ is ZeroshotPredictionDistance:
@@ -1768,13 +1914,15 @@ class ZeroshotPredictionDistance(TaskInterface):
         self.backbone = None
         self.adapter = None
         self.backbone_fn = backbone
+        self.ref_hidden_mean = None
+        self.all_hidden_states = all_hidden_states
 
     def configure_model(self) -> None:
         if self.backbone is not None:
             return
         self.backbone = self.backbone_fn(LegacyAdapterType.MASKED_LM, None)
         self.adapter = self.backbone.get_decoder()
-        self.n_layers = self.backbone.get_num_layer()
+        self.n_layers = self.backbone.get_num_layer() if self.all_hidden_states else 1
         metrics_dict = {}
         for i in range(self.n_layers):
             metrics_dict.update(
@@ -1813,15 +1961,18 @@ class ZeroshotPredictionDistance(TaskInterface):
         for key in batch.keys():
             if "sequences" in key:  # tokenize sequence
                 # Note: previous version, add_special_token = False
-                input_ids, attention_mask, special_tokens_mask = self.backbone.tokenize(
-                    batch[key]
-                )
+                tokenized_result = self.backbone.tokenize(batch[key])
+                input_ids = tokenized_result.pop("input_ids", None)
+                attention_mask = tokenized_result.pop("attention_mask", None)
+                special_tokens_mask = tokenized_result.pop("special_tokens_mask", None)
                 input_ids = torch.tensor(input_ids, dtype=torch.long).to(self.device)
-                attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(
-                    self.device
-                )
+                if attention_mask is not None:
+                    attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(
+                        self.device
+                    )
                 processed_batch[key.replace("sequences", "input_ids")] = input_ids
-                processed_batch["special_tokens_mask"] = special_tokens_mask
+                processed_batch[key.replace("sequences", "attention_mask")] = attention_mask
+                processed_batch[key.replace("sequences", "special_tokens_mask")] = special_tokens_mask
             else:
                 processed_batch[key] = batch[key]
         return processed_batch
@@ -1835,28 +1986,48 @@ class ZeroshotPredictionDistance(TaskInterface):
         Returns:
             Tensor: The decoder logits
         """
-        ref_encoder_hidden = torch.stack(
-            self.backbone(
+        output = self.backbone(
+            collated_batch["mutation_input_ids"],
+            attention_mask=None,
+            all_hidden_states=self.all_hidden_states,
+        )
+
+        if not self.all_hidden_states:
+            mutation_encoder_hidden = output.unsqueeze(0)
+        else:
+            mutation_encoder_hidden = torch.stack(output)
+        n, b, s, d = mutation_encoder_hidden.shape
+        if self.ref_hidden_mean is None:
+            ref_output = self.backbone(
                 collated_batch["ref_input_ids"],
                 attention_mask=None,
-                all_hidden_states=True,
-            )[1:]
-        )
-        mutation_encoder_hidden = torch.stack(
-            self.backbone(
-                collated_batch["mutation_input_ids"],
-                attention_mask=None,
-                all_hidden_states=True,
-            )[1:]
-        )
+                all_hidden_states=self.all_hidden_states
+            )
+            if not self.all_hidden_states:
+                ref_encoder_hidden = ref_output.unsqueeze(0)
+            else:
+                ref_encoder_hidden = torch.stack(ref_output)
+
+            if collated_batch.get('special_tokens_mask') is not None:
+                ref_encoder_hidden = ref_encoder_hidden[
+                    :, torch.logical_not(collated_batch["special_tokens_mask"])
+                ].view(n, b, -1, d).mean(dim=-2)
+            else:
+                ref_encoder_hidden = ref_encoder_hidden.mean(dim=-2)
+            self.ref_hidden_mean = ref_encoder_hidden[:,0,:]
+        else:
+            ref_encoder_hidden = self.ref_hidden_mean.unsqueeze(1).repeat(1, b, 1)
+
         # remove special token before computing zeroshot score
-        n, b, s, d = ref_encoder_hidden.shape
-        ref_encoder_hidden = ref_encoder_hidden[
-            :, torch.logical_not(collated_batch["special_tokens_mask"])
-        ].view(n, b, -1, d)
-        mutation_encoder_hidden = mutation_encoder_hidden[
-            :, torch.logical_not(collated_batch["special_tokens_mask"])
-        ].view(n, b, -1, d)
+        if collated_batch.get('special_tokens_mask') is not None:
+            masked_hidden_list = []
+            for i in range(b):
+                mask = torch.logical_not(collated_batch["special_tokens_mask"][i])
+                masked_hidden = mutation_encoder_hidden[:,i,mask,:].mean(dim=1)
+                masked_hidden_list.append(masked_hidden)
+            mutation_encoder_hidden = torch.stack(masked_hidden_list, dim=1)
+        else:
+            mutation_encoder_hidden = mutation_encoder_hidden.mean(dim=-2)
         return torch.stack([ref_encoder_hidden, mutation_encoder_hidden])
 
     def evaluate(
@@ -1878,7 +2049,7 @@ class ZeroshotPredictionDistance(TaskInterface):
         ref_hidden_states = logits[0]
         mutation_hidden_states = logits[1]
         prediction_dict = {
-            key: [] for key in collated_batch.keys() if "sequences" not in key
+            key: [] for key in collated_batch.keys() if ("mask" not in key) and ('input_id' not in key)
         }
         # add score related keys
         prediction_dict["norm_type"] = []
@@ -1897,8 +2068,8 @@ class ZeroshotPredictionDistance(TaskInterface):
                 stage, metrics[key], score, collated_batch["labels"]
             )
         # prepare prediction score to be saved to a tsv file
-        for i in range(self.n_layers):
-            for norm_type in ["L1", "L2"]:
+        for index in range(ref_hidden_states.shape[0]):
+            for norm_type in ["L1", "L2", "cosine"]:
                 score = self._compute_norm_score(
                     norm_type, ref_hidden_states[index], mutation_hidden_states[index]
                 )
@@ -1906,7 +2077,7 @@ class ZeroshotPredictionDistance(TaskInterface):
                 prediction_dict["norm_type"].extend([norm_type] * batch_size)
                 prediction_dict["num_layer"].extend([index] * batch_size)
                 for key in collated_batch.keys():
-                    if "sequences" not in key:
+                    if ("mask" not in key) and ('input_id' not in key):
                         try:
                             prediction_dict[key].extend(
                                 collated_batch[key].cpu().tolist()
@@ -1929,13 +2100,284 @@ class ZeroshotPredictionDistance(TaskInterface):
 
         """
         if norm_type == "L1":
-            score = torch.abs(
-                ref_hidden_state.mean(dim=-2) - mutation_hidden_state.mean(dim=-2)
-            ).sum(dim=1)
+            score = torch.abs(ref_hidden_state- mutation_hidden_state).sum(dim=1)
+        elif norm_type == 'L2':
+            score = torch.norm(ref_hidden_state - mutation_hidden_state, p=2, dim=1)
         else:
-            score = torch.norm(
-                ref_hidden_state.mean(dim=-2) - mutation_hidden_state.mean(dim=-2),
-                p=2,
-                dim=1,
-            )
+            score = 1 - F.cosine_similarity(ref_hidden_state,mutation_hidden_state,dim=1)
         return score
+
+
+class MMSequenceRegression(TaskInterface):
+    """Task for fine-tuning multiple models on single-/multi-task regression.
+
+    Note: Support any combination of DNA, RNA and protein backbones
+
+    Args:
+        backbone (BackboneCallable): The callable that returns a backbone.
+        backbone1 (BackboneCallable): The callable that returns a backbone.
+        backbone2 (BackboneCallable, optional): The callable that returns a backbone. Defaults to None.
+        backbone_order (list): Specify the order of modalities corresponding to the backbone, backbone1,and backbone2. Defaults to ["dna", "rna"].
+        adapter (Callable[[int, int, int, int], FusionAdapter], optional): The callable that returns an adapter. Defaults to MMFusionTokenAdapter.
+        num_outputs (int, optional): The number of outputs in the regression task. Defaults to 1.
+        loss_func (Callable, optional): Loss function for regression tasks. Defaults to nn.MSELoss.
+        optimizer (OptimizerCallable, optional): The optimizer to use for training. Defaults to torch.optim.AdamW.
+        lr_scheduler (LRSchedulerCallable, optional): The learning rate scheduler to use for training. Defaults to None.
+        batch_size (int, optional): The batch size to use for training. Defaults to None.
+        strict_loading (bool, optional): Whether to strictly load the model. Defaults to True.
+            Set it to False if you want to replace the adapter (e.g. for continue pretraining)
+        reset_optimizer_states (bool, optional): Whether to reset the optimizer states. Defaults to False.
+            Set it to True if you want to replace the adapter (e.g. for continue pretraining).
+    """
+
+    def __init__(
+        self,
+        backbone: BackboneCallable,
+        backbone1: BackboneCallable,
+        backbone2: Optional[BackboneCallable] = None,
+        backbone_order: list = ["dna_seq", "rna_seq"],
+        adapter: Optional[
+            Callable[[int, int, int, int], FusionAdapter]
+        ] = MMFusionTokenAdapter,
+        num_outputs: int = 1,
+        loss_func: Callable[..., torch.nn.Module] = torch.nn.MSELoss,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        if self.__class__ is MMSequenceRegression:
+            self.save_hyperparameters()
+        self.num_backbones = 2 + int(backbone2 is not None)
+        self.backbone_order = backbone_order
+        self.backbone_fn = backbone
+        self.backbone = None
+        self.backbone_fn1 = backbone1
+        self.backbone1 = None
+        self.backbone_fn2 = backbone2
+        self.backbone2 = None
+        self.adapter_fn = adapter
+        self.adapter = None
+        self.num_outputs = num_outputs
+        self.loss = loss_func()
+        for stage in ["train", "val", "test"]:
+            self.metrics[f"{stage}_metrics"] = nn.ModuleDict(
+                {
+                    "pearson": PearsonCorrCoef(
+                        num_outputs=num_outputs, multioutput="uniform_average"
+                    ),
+                    "spearman": SpearmanCorrCoef(
+                        num_outputs=num_outputs, multioutput="uniform_average"
+                    ),
+                    "mae": MeanAbsoluteError(
+                        num_outputs=num_outputs, multioutput="uniform_average"
+                    ),
+                    "r2": tm.R2Score(multioutput="uniform_average"),
+                    "mse": MeanSquaredError(
+                        num_outputs=num_outputs, multioutput="uniform_average"
+                    ),
+                }
+            )
+            if stage == "test" and self.num_outputs > 1:
+                # calculate scores for each task
+                label_wise_spearman = nn.ModuleDict(
+                        {
+                            "spearman_" + str(i): SpearmanCorrCoef(num_outputs=1)
+                            for i in range(self.num_outputs)
+                        }
+                    )
+                label_wise_pearson = nn.ModuleDict(
+                        {
+                            "pearson_" + str(i): PearsonCorrCoef(num_outputs=1)
+                            for i in range(self.num_outputs)
+                        }
+                    )
+                label_wise_r2 = nn.ModuleDict(
+                        {
+                            "r2_" + str(i): tm.R2Score()
+                            for i in range(self.num_outputs)
+                        }
+                    )
+                label_wise_mse = nn.ModuleDict(
+                        {
+                            "mse_" + str(i): MeanSquaredError(num_outputs=1)
+                            for i in range(self.num_outputs)
+                        }
+                    )
+                label_wise_mae = nn.ModuleDict(
+                        {
+                            "mae_" + str(i): MeanAbsoluteError(num_outputs=1)
+                            for i in range(self.num_outputs)
+                        }
+                    )
+                self.metrics[f"{stage}_metrics"].update(label_wise_spearman)
+                self.metrics[f"{stage}_metrics"].update(label_wise_pearson)
+                self.metrics[f"{stage}_metrics"].update(label_wise_r2)
+                self.metrics[f"{stage}_metrics"].update(label_wise_mse)
+                self.metrics[f"{stage}_metrics"].update(label_wise_mae)
+        self.metrics_to_pbar = set(self.metrics["train_metrics"].keys())
+
+    def configure_model(self) -> None:
+        # backbones
+        self.backbone = self.backbone_fn(None, None)
+        self.backbone1 = self.backbone_fn1(None, None)
+        if self.backbone_fn2 is not None:
+            self.backbone2 = self.backbone_fn2(None, None)
+
+        # fusion adapter
+        if self.backbone2 is not None:
+            context_input_size_2 = self.backbone2.get_embedding_size()
+        else:
+            context_input_size_2 = None
+        self.adapter = self.adapter_fn(
+            self.num_outputs,
+            self.backbone.get_embedding_size(),
+            self.backbone1.get_embedding_size(),
+            context_input_size_2,
+        )
+
+    def on_save_checkpoint(self, checkpoint: dict):
+        if hasattr(self.backbone, "on_save_checkpoint"):
+            self.backbone.on_save_checkpoint(checkpoint)
+        if hasattr(self.backbone1, "on_save_checkpoint"):
+            self.backbone1.on_save_checkpoint(checkpoint, prefix="backbone1")
+        if self.backbone2 is not None and hasattr(self.backbone2, "on_save_checkpoint"):
+            self.backbone2.on_save_checkpoint(checkpoint, prefix="backbone2")
+
+    def transform(
+        self, batch: dict[str, Union[list, Tensor]], batch_idx: Optional[int] = None
+    ) -> dict[str, Union[list, Tensor]]:
+        """Collates a batch of data into a format that can be passed to the forward and evaluate methods.
+        Note: for empty sequence, the input is "".
+
+        Args:
+            batch (dict[str, Union[list, Tensor]]): A batch of data containing sequences and labels
+            batch_idx (int, optional): The index of the current batch in the DataLoader
+
+        Returns:
+            dict[str, Union[list, Tensor]]: The collated batch containing sequences, input_ids, attention_mask, and labels
+        """
+        labels = None
+        if batch.get("labels") is not None:
+            labels = batch["labels"].to(self.device, dtype=self.dtype)
+
+        omic_name = self.backbone_order[0]
+        tokenized_result = self.backbone.tokenize(batch["sequences"][f"{omic_name}"])
+        input_ids = tokenized_result.pop("input_ids", None)
+        attention_mask = tokenized_result.pop("attention_mask", None)
+        special_tokens_mask = tokenized_result.pop("special_tokens_mask", None)
+        input_ids = torch.tensor(input_ids, dtype=torch.long).to(self.device)
+        if attention_mask is not None:
+            attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(self.device)
+
+        omic_name1 = self.backbone_order[1]
+        tokenized_result1 = self.backbone1.tokenize(batch["sequences"][f"{omic_name1}"])
+        input_ids1 = tokenized_result1.pop("input_ids", None)
+        attention_mask1 = tokenized_result1.pop("attention_mask", None)
+        special_tokens_mask1 = tokenized_result1.pop("special_tokens_mask", None)
+        input_ids1 = torch.tensor(input_ids1, dtype=torch.long).to(self.device)
+        if attention_mask1 is not None:
+            attention_mask1 = torch.tensor(attention_mask1, dtype=torch.long).to(
+                self.device
+            )
+
+        if self.num_backbones == 3:
+            omic_name2 = self.backbone_order[2]
+            tokenized_result2 = self.backbone2.tokenize(batch["sequences"][f"{omic_name2}"])
+            input_ids2 = tokenized_result2.pop("input_ids", None)
+            attention_mask2 = tokenized_result2.pop("attention_mask", None)
+            special_tokens_mask2 = tokenized_result2.pop("special_tokens_mask", None)
+            input_ids2 = torch.tensor(input_ids2, dtype=torch.long).to(self.device)
+            if attention_mask2 is not None:
+                attention_mask2 = torch.tensor(attention_mask2, dtype=torch.long).to(
+                    self.device
+                )
+            return {
+                "sequences": batch["sequences"][f"{omic_name}"],
+                "labels": labels,
+                "input_ids": input_ids,
+                "attention_mask": attention_mask,
+                "special_tokens_mask": special_tokens_mask,
+                "input_ids1": input_ids1,
+                "attention_mask1": attention_mask1,
+                "special_tokens_mask1": special_tokens_mask1,
+                "input_ids2": input_ids2,
+                "attention_mask2": attention_mask2,
+                "special_tokens_mask2": special_tokens_mask2,
+            }
+        else:
+            return {
+                "sequences": batch["sequences"][f"{omic_name}"],
+                "labels": labels,
+                "input_ids": input_ids,
+                "attention_mask": attention_mask,
+                "special_tokens_mask": special_tokens_mask,
+                "input_ids1": input_ids1,
+                "attention_mask1": attention_mask1,
+                "special_tokens_mask1": special_tokens_mask1,
+            }
+
+    def forward(self, collated_batch: dict[str, Union[list, Tensor]]) -> Tensor:
+        """Runs a forward pass of the model.
+
+        Args:
+            collated_batch (dict[str, Union[list, Tensor]]): A collated batch of data containing input_ids and attention_mask.
+
+        Returns:
+            Tensor: The regression predictions
+        """
+        hidden_states = self.backbone(
+            collated_batch["input_ids"], collated_batch["attention_mask"]
+        )  # (bs, seq_len, dim)
+        hidden_states1 = self.backbone1(
+            collated_batch["input_ids1"], collated_batch["attention_mask1"]
+        )
+        if self.backbone2 is not None:
+            hidden_states2 = self.backbone2(
+                collated_batch["input_ids2"], collated_batch["attention_mask2"]
+            )
+            attention_mask2 = collated_batch["attention_mask2"]
+        else:
+            hidden_states2 = None
+            attention_mask2 = None
+        preds = self.adapter(
+            hidden_states,
+            collated_batch["attention_mask"],
+            hidden_states1,
+            collated_batch["attention_mask1"],
+            hidden_states2,
+            attention_mask2,
+        )
+        return preds
+
+    def evaluate(
+        self,
+        preds: Tensor,
+        collated_batch: dict[str, Union[list, Tensor]],
+        stage: Optional[Literal["train", "val", "test"]] = None,
+        loss_only: bool = False,
+    ) -> dict[str, Union[Tensor, float]]:
+        """Evaluates the model predictions against the ground truth labels.
+
+        Args:
+            logits (Tensor): The model predictions
+            collated_batch (dict[str, Union[list, Tensor]]): The collated batch of data containing labels
+            loss_only (bool, optional): Whether to only return the loss. Defaults to False.
+
+        Returns:
+            dict[str, Union[Tensor, float]]: A dictionary of metrics containing loss and mse
+        """
+        labels = collated_batch["labels"]
+        loss = self.loss(preds, labels)
+        if loss_only:
+            return {"loss": loss}
+        metrics = self.get_metrics_by_stage(stage)
+        if self.num_outputs > 1 and stage == "test":
+            for name, metric in metrics.items():
+                if len(name.split("_")) == 1:
+                    self.call_or_update_metric(stage, metric, preds, labels)
+                else:
+                    i = int(name.split("_")[-1])
+                    self.call_or_update_metric(stage, metric, preds[:, i], labels[:, i])
+        else:
+            for metric in metrics.values():
+                self.call_or_update_metric(stage, metric, preds, labels)
+        return {"loss": loss}

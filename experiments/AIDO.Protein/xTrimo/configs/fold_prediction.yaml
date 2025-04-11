@@ -14,6 +14,11 @@ trainer:
       save_dir: logs
       project: xtrimo_benchmark
   callbacks:
+  - class_path: lightning.pytorch.callbacks.LearningRateMonitor
+    init_args:
+      logging_interval: step
+      log_momentum: false
+      log_weight_decay: true
   - class_path: lightning.pytorch.callbacks.ModelCheckpoint
     init_args:
       dirpath: logs/xtrimo_benchmark/fold_AIDO.Protein_16B

@@ -22,6 +22,7 @@ import warnings
 from dataclasses import dataclass
 from typing import Optional, Tuple, Union
 import sys
+from functools import partial
 
 import torch
 import torch.utils.checkpoint
@@ -74,6 +75,9 @@ if sys.platform != "darwin":
 logger = logging.get_logger(__name__)
 DeepNormCoefficients = namedtuple("DeepNormCoefficients", ["alpha", "beta"])
 
+def get_checkpoint_fn():
+    checkpoint = partial(torch.utils.checkpoint.checkpoint, use_reentrant=False)
+    return checkpoint
 
 class FM4BioEmbeddings(nn.Module):
     """Construct the embeddings from word, position and token_type embeddings."""
@@ -83,7 +87,7 @@ class FM4BioEmbeddings(nn.Module):
         self.word_embeddings = nn.Embedding(
             config.vocab_size, config.hidden_size, padding_idx=config.pad_token_id
         )
-        if config.position_embedding_type != "rope":
+        if config.position_embedding_type not in ("rope", "rope_2d"):
             self.position_embeddings = nn.Embedding(
                 config.max_position_embeddings, config.hidden_size
             )
@@ -91,6 +95,17 @@ class FM4BioEmbeddings(nn.Module):
 
         # self.LayerNorm is not snake-cased to stick with TensorFlow model variable name and be able to load
         # any TensorFlow checkpoint file
+        
+        if isinstance(config.str_embedding_in, str):
+            if config.str_embedding_in.isdigit():
+                self.str_embedding_in = int(config.str_embedding_in)
+            else:
+                self.str_embedding_in = None
+        else:
+            self.str_embedding_in = config.str_embedding_in
+        
+        if self.str_embedding_in is not None and self.str_embedding_in > 0:
+            self.str_embeddings = nn.Linear(self.str_embedding_in, config.hidden_size, bias=False)
 
         # In Megatron, layer-norm is applied after the 1st dropout.
         # self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
@@ -112,6 +127,7 @@ class FM4BioEmbeddings(nn.Module):
         token_type_ids: Optional[torch.LongTensor] = None,
         position_ids: Optional[torch.LongTensor] = None,
         inputs_embeds: Optional[torch.LongTensor] = None,
+        inputs_str_embeds: Optional[torch.LongTensor] = None,
         past_key_values_length: int = 0,
     ) -> torch.Tensor:
         if input_ids is not None:
@@ -134,6 +150,18 @@ class FM4BioEmbeddings(nn.Module):
         if inputs_embeds is None:
             inputs_embeds = self.word_embeddings(input_ids)
         # token_type_embeddings = self.token_type_embeddings(token_type_ids)
+
+        if self.str_embedding_in is not None and self.str_embedding_in > 0:
+            if inputs_str_embeds is None:
+                print(f"Warning: str_embedding_in={self.str_embedding_in}, but inputs_str_embeds is None")
+            else:
+                # inputs_str_embeds: [B, L, D1]
+                # inputs_embeds: [B, L, D]
+                shape = f"inputs_str_embeds.shape={inputs_str_embeds.shape}, inputs_embeds.shape={inputs_embeds.shape}"
+                assert inputs_str_embeds.ndim == 3, shape
+                assert inputs_str_embeds.shape[0] == inputs_embeds.shape[0], shape
+                assert inputs_str_embeds.shape[1] == inputs_embeds.shape[1], shape
+                inputs_embeds = inputs_embeds + self.str_embeddings(inputs_str_embeds)
 
         # embeddings = inputs_embeds + token_type_embeddings
         embeddings = inputs_embeds
@@ -245,12 +273,20 @@ class FM4BioSelfAttention(nn.Module):
             # [b, hn, sq, c] --> [sq, b, hn, c]
             query_layer = query_layer.permute(2, 0, 1, 3).contiguous()
             key_layer = key_layer.permute(2, 0, 1, 3).contiguous()
-
-            debug_tensor = query_layer[:3, 0]
-            query_layer = apply_rotary_pos_emb(
-                query_layer, q_pos_emb
-            )  # debug query_layer[:,0]
-            key_layer = apply_rotary_pos_emb(key_layer, k_pos_emb)
+            
+            if q_pos_emb.ndim == 5: ## 2d rope
+                dim          = query_layer.shape[-1]
+                query_layer1 = apply_rotary_pos_emb(query_layer[..., :dim//2], q_pos_emb[0])  
+                query_layer2 = apply_rotary_pos_emb(query_layer[..., dim//2:], q_pos_emb[1])
+                query_layer  = torch.cat([query_layer1, query_layer2], axis=-1)
+                
+                dim         = key_layer.shape[-1]
+                key_layer1  = apply_rotary_pos_emb(key_layer[..., :dim//2], k_pos_emb[0])
+                key_layer2  = apply_rotary_pos_emb(key_layer[..., dim//2:], k_pos_emb[1])
+                key_layer   = torch.cat([key_layer1, key_layer2], axis=-1)
+            else: ## 1d rope
+                query_layer = apply_rotary_pos_emb(query_layer, q_pos_emb)
+                key_layer   = apply_rotary_pos_emb(key_layer, k_pos_emb)
 
             # [sq, b, hn, c] --> [b, hn, sq, c]
             query_layer = query_layer.permute(1, 2, 0, 3).contiguous()
@@ -266,31 +302,46 @@ class FM4BioSelfAttention(nn.Module):
             # can concat previous decoder key/value_states to current projected key/value_states (third "elif" case)
             # if encoder bi-directional self-attention `past_key_value` is always `None`
             past_key_value = (key_layer, value_layer)
+        
+        if output_attentions or head_mask is not None:
+            # Don't use FA
+            
+            # Take the dot product between "query" and "key" to get the raw attention scores.
+            attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2))
 
-        # Take the dot product between "query" and "key" to get the raw attention scores.
-        attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2))
+            attention_scores = attention_scores / math.sqrt(self.attention_head_size)
+            if attention_mask is not None:
+                # Apply the attention mask is (precomputed for all layers in FM4BioModel forward() function)
+                attention_scores = attention_scores + attention_mask.to(attention_scores.dtype)
 
-        attention_scores = attention_scores / math.sqrt(self.attention_head_size)
-        if attention_mask is not None:
-            # Apply the attention mask is (precomputed for all layers in FM4BioModel forward() function)
-            attention_scores = attention_scores + attention_mask.to(
-                attention_scores.dtype
-            )
+            # Normalize the attention scores to probabilities.
+            attention_probs = nn.functional.softmax(attention_scores, dim=-1)
 
-        # Normalize the attention scores to probabilities.
-        attention_probs = nn.functional.softmax(attention_scores, dim=-1)
+            no_prob_mask = attention_mask < -1e-5
+            attention_probs = attention_probs.masked_fill(no_prob_mask, 0.0)
+            # This is actually dropping out entire tokens to attend to, which might
+            # seem a bit unusual, but is taken from the original Transformer paper.
+            attention_probs = self.dropout(attention_probs)
+            
+            # Mask heads if we want to
+            if head_mask is not None:
+                attention_probs = attention_probs * head_mask
+                
+            context_layer = torch.matmul(attention_probs, value_layer)
+            
+        else:
+            
+            if attention_mask is not None:
+                if attention_mask.shape[0] == 1: # Batch size = 1
+                    attention_mask = None
+                else:
+                    attention_mask = attention_mask.clone()
+                    if torch.is_floating_point(attention_mask):
+                        attention_mask[attention_mask < -1e-5] = torch.finfo(attention_mask.dtype).min
+                    if torch.allclose(attention_mask, torch.zeros_like(attention_mask)):
+                        attention_mask = None
 
-        no_prob_mask = attention_mask < -1e-5
-        attention_probs = attention_probs.masked_fill(no_prob_mask, 0.0)
-        # This is actually dropping out entire tokens to attend to, which might
-        # seem a bit unusual, but is taken from the original Transformer paper.
-        attention_probs = self.dropout(attention_probs)
-
-        # Mask heads if we want to
-        if head_mask is not None:
-            attention_probs = attention_probs * head_mask
-
-        context_layer = torch.matmul(attention_probs, value_layer)
+            context_layer = torch.nn.functional.scaled_dot_product_attention(query_layer, key_layer, value_layer, attn_mask=attention_mask, dropout_p=self.dropout.p, is_causal=False, scale=None, enable_gqa=False)
 
         context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
         new_context_layer_shape = context_layer.size()[:-2] + (self.all_head_size,)
@@ -365,6 +416,8 @@ class FM4BioAttention(nn.Module):
         past_key_value: Optional[Tuple[Tuple[torch.FloatTensor]]] = None,
         output_attentions: Optional[bool] = False,
         rotary_pos_emb=None,
+        apply_residual_connection_post_layernorm: bool = False, 
+        deepnorm_alpha: float = 1.0,
     ) -> Tuple[torch.Tensor]:
         # debug_point1 = hidden_states[0]
         ln_outputs = self.ln(hidden_states)
@@ -378,16 +431,24 @@ class FM4BioAttention(nn.Module):
             output_attentions,
             rotary_pos_emb,
         )
-        attention_output = self.output(self_outputs[0], hidden_states)
-        outputs = (attention_output,) + self_outputs[
-            1:
-        ]  # add attentions if we output them
+
+        if apply_residual_connection_post_layernorm:
+            # 3B dense
+            attention_output = self.output(self_outputs[0], deepnorm_alpha * ln_outputs)
+        else:
+            # 16B MoE
+            attention_output = self.output(self_outputs[0], hidden_states)
+        outputs = (attention_output,) + self_outputs[1:]  # add attentions if we output them
         return outputs
 
 
 def _config_to_kwargs(args):
+    if isinstance(args.torch_dtype, str):
+        torch_dtype = eval(args.torch_dtype)
+    else:
+        torch_dtype = args.torch_dtype
     common_kwargs = {
-        "dtype": args.torch_dtype,
+        "dtype": torch_dtype,
     }
     return common_kwargs
 
@@ -494,6 +555,7 @@ class FM4BioMLP(nn.Module):
             s, b, n = hidden_states.shape
             dtype = hidden_states.dtype
             hidden_states = hidden_states.view(-1, hidden_states.size(2))  # [s*b h]
+            self.router = self.router.float()
             route = self.router(hidden_states.float()).to(dtype)
 
             weights, selected_experts = torch.topk(route, self.experts_per_token)
@@ -543,6 +605,8 @@ class FM4BioLayer(nn.Module):
         self.attention = FM4BioAttention(config)
         self.is_decoder = config.is_decoder
         self.add_cross_attention = config.add_cross_attention
+        self.apply_residual_connection_post_layernorm = config.apply_residual_connection_post_layernorm
+        self.deepnorm_alpha = (2 * config.num_hidden_layers) ** 0.5
         if self.add_cross_attention:
             if not self.is_decoder:
                 raise TypeError(
@@ -575,6 +639,8 @@ class FM4BioLayer(nn.Module):
             output_attentions=output_attentions,
             past_key_value=self_attn_past_key_value,
             rotary_pos_emb=rotary_pos_emb,
+            apply_residual_connection_post_layernorm=self.apply_residual_connection_post_layernorm,
+            deepnorm_alpha=self.deepnorm_alpha
         )
         attention_output = self_attention_outputs[0]
 
@@ -635,7 +701,10 @@ class FM4BioLayer(nn.Module):
         # debug: attention_output[0]
         ln_output = self.ln(attention_output)
         mlp_output = self.mlp(ln_output)
-        layer_output = self.output(mlp_output, attention_output)
+        if self.apply_residual_connection_post_layernorm:
+            layer_output = self.output(mlp_output, self.deepnorm_alpha * ln_output)
+        else:
+            layer_output = self.output(mlp_output, attention_output)
         return layer_output
 
 
@@ -700,6 +769,7 @@ class FM4BioEncoder(nn.Module):
             () if output_attentions and self.config.add_cross_attention else None
         )
 
+        # print(f"self.gradient_checkpointing={self.gradient_checkpointing}, torch.is_grad_enabled()={torch.is_grad_enabled()}")
         next_decoder_cache = () if use_cache else None
         for i, layer_module in enumerate(self.layer):
             if output_hidden_states:
@@ -707,10 +777,10 @@ class FM4BioEncoder(nn.Module):
 
             layer_head_mask = head_mask[i] if head_mask is not None else None
             past_key_value = past_key_values[i] if past_key_values is not None else None
-
-            if self.gradient_checkpointing and self.training:
-                layer_outputs = self._gradient_checkpointing_func(
-                    layer_module.__call__,
+            
+            if self.gradient_checkpointing and torch.is_grad_enabled():
+                layer_outputs = get_checkpoint_fn()(
+                    layer_module,
                     hidden_states,
                     attention_mask,
                     layer_head_mask,
@@ -1027,6 +1097,10 @@ class FM4BioModel(FM4BioPreTrainedModel):
             # https://github.com/kingoflolz/mesh-transformer-jax/
             self.rotary_pos_emb = RotaryEmbedding(rotary_dim, config.rotary_percent)
 
+        elif config.position_embedding_type == "rope_2d":
+            rotary_dim = config.hidden_size // config.num_attention_heads // 2
+            self.rotary_pos_emb = RotaryEmbedding(rotary_dim, config.rotary_percent)
+
         # delete this from config so the config can be successfully saved
         del self.config.norm_cls
 
@@ -1063,6 +1137,7 @@ class FM4BioModel(FM4BioPreTrainedModel):
         position_ids: Optional[torch.LongTensor] = None,
         head_mask: Optional[torch.FloatTensor] = None,
         inputs_embeds: Optional[torch.FloatTensor] = None,
+        inputs_str_embeds: Optional[torch.FloatTensor] = None,
         encoder_hidden_states: Optional[torch.FloatTensor] = None,
         encoder_attention_mask: Optional[torch.FloatTensor] = None,
         past_key_values: Optional[Tuple[Tuple[torch.Tensor]]] = None,
@@ -1165,20 +1240,28 @@ class FM4BioModel(FM4BioPreTrainedModel):
         # attention_probs has shape bsz x n_heads x N x N
         # input head_mask has shape [num_heads] or [num_hidden_layers x num_heads]
         # and head_mask is converted to shape [num_hidden_layers x batch x num_heads x seq_length x seq_length]
-        head_mask = self.get_head_mask(head_mask, self.config.num_hidden_layers)
+        head_mask = self.get_head_mask(head_mask, self.config.num_hidden_layers) 
 
         # Rotary positional embeddings
         rotary_pos_emb = None
         if self.config.position_embedding_type == "rope":
             rotary_pos_emb = self.rotary_pos_emb(input_ids.size(1))
+        elif self.config.position_embedding_type == 'rope_2d':
+            # input_ids: [1, 12800]
+            # position_ids: [B, 2, 12800]
+            rotary_pos_emb = self.rotary_pos_emb(input_ids.size(1)).squeeze(1) # [12800, 1, 1, D//H] -> [12800, 1, D//H//2]
+            rotary_pos_emb = rotary_pos_emb[ position_ids ] # [12800, 1, D//H] -> [B, 2, 12800, 1, D//H//2]
+            rotary_pos_emb = rotary_pos_emb.permute([1,2,0,3,4]) # [2, 12800, B, 1, D//H//2]
 
         embedding_output = self.embeddings(
             input_ids=input_ids,
             position_ids=position_ids,
             token_type_ids=token_type_ids,
             inputs_embeds=inputs_embeds,
+            inputs_str_embeds=inputs_str_embeds,
             past_key_values_length=past_key_values_length,
-        )
+        ) 
+        
         encoder_outputs = self.encoder(
             embedding_output,
             attention_mask=extended_attention_mask,
@@ -1191,7 +1274,8 @@ class FM4BioModel(FM4BioPreTrainedModel):
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
             rotary_pos_emb=rotary_pos_emb,
-        )
+        ) 
+        
         sequence_output = encoder_outputs[0]
         pooled_output = (
             self.pooler(sequence_output) if self.pooler is not None else None
@@ -1249,6 +1333,7 @@ class FM4BioForPreTraining(FM4BioPreTrainedModel):
         position_ids: Optional[torch.LongTensor] = None,
         head_mask: Optional[torch.FloatTensor] = None,
         inputs_embeds: Optional[torch.FloatTensor] = None,
+        inputs_str_embeds: Optional[torch.FloatTensor] = None,
         labels: Optional[torch.LongTensor] = None,
         next_sentence_label: Optional[torch.LongTensor] = None,
         output_attentions: Optional[bool] = None,
@@ -1297,6 +1382,7 @@ class FM4BioForPreTraining(FM4BioPreTrainedModel):
             position_ids=position_ids,
             head_mask=head_mask,
             inputs_embeds=inputs_embeds,
+            inputs_str_embeds=inputs_str_embeds,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
@@ -1393,6 +1479,7 @@ class FM4BioForMaskedLM(FM4BioPreTrainedModel):
         position_ids: Optional[torch.LongTensor] = None,
         head_mask: Optional[torch.FloatTensor] = None,
         inputs_embeds: Optional[torch.FloatTensor] = None,
+        inputs_str_embeds: Optional[torch.FloatTensor] = None,
         encoder_hidden_states: Optional[torch.FloatTensor] = None,
         encoder_attention_mask: Optional[torch.FloatTensor] = None,
         labels: Optional[torch.LongTensor] = None,
@@ -1418,6 +1505,7 @@ class FM4BioForMaskedLM(FM4BioPreTrainedModel):
             position_ids=position_ids,
             head_mask=head_mask,
             inputs_embeds=inputs_embeds,
+            inputs_str_embeds=inputs_str_embeds,
             encoder_hidden_states=encoder_hidden_states,
             encoder_attention_mask=encoder_attention_mask,
             output_attentions=output_attentions,
@@ -1652,6 +1740,7 @@ class FM4BioForSequenceClassification(FM4BioPreTrainedModel):
         position_ids: Optional[torch.LongTensor] = None,
         head_mask: Optional[torch.Tensor] = None,
         inputs_embeds: Optional[torch.FloatTensor] = None,
+        inputs_str_embeds: Optional[torch.FloatTensor] = None,
         labels: Optional[torch.LongTensor] = None,
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
@@ -1673,6 +1762,7 @@ class FM4BioForSequenceClassification(FM4BioPreTrainedModel):
             position_ids=position_ids,
             head_mask=head_mask,
             inputs_embeds=inputs_embeds,
+            inputs_str_embeds=inputs_str_embeds,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
@@ -1769,6 +1859,7 @@ class FM4BioForTokenClassification(FM4BioPreTrainedModel):
         position_ids: Optional[torch.LongTensor] = None,
         head_mask: Optional[torch.Tensor] = None,
         inputs_embeds: Optional[torch.FloatTensor] = None,
+        inputs_str_embeds: Optional[torch.FloatTensor] = None,
         labels: Optional[torch.LongTensor] = None,
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
@@ -1788,6 +1879,7 @@ class FM4BioForTokenClassification(FM4BioPreTrainedModel):
             position_ids=position_ids,
             head_mask=head_mask,
             inputs_embeds=inputs_embeds,
+            inputs_str_embeds=inputs_str_embeds,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,

@@ -1,4 +1,5 @@
 import os
+import sys
 
 def reassemble_chunks(output_file, chunks_dir):
     with open(output_file, "wb") as f_out:

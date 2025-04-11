@@ -1,0 +1,109 @@
+# lightning.pytorch==2.4.0
+seed_everything: 42
+trainer:
+  accelerator: auto
+  strategy:
+    class_path: lightning.pytorch.strategies.DDPStrategy
+    init_args:
+      find_unused_parameters: false
+  devices: auto
+  num_nodes: 1
+  precision: 32
+  callbacks:
+  - class_path: lightning.pytorch.callbacks.LearningRateMonitor
+    init_args:
+      logging_interval: step
+      log_momentum: false
+      log_weight_decay: true
+  - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+    init_args:
+      # dirpath: logs/xtrimo_benchmark/fluorescence_AIDO.Protein_16B
+      filename: best_val:{epoch}-{val_spearman:.3f}
+      monitor: val_spearman
+      save_top_k: 1
+      mode: max
+      every_n_epochs: 1
+      save_last: true
+  max_epochs: 15
+  max_steps: -1
+  log_every_n_steps: 50
+  accumulate_grad_batches: 1
+  gradient_clip_val: 0.1
+  gradient_clip_algorithm: norm
+  default_root_dir: logs
+model:
+  class_path: modelgenerator.tasks.SequenceRegression
+  init_args:
+    backbone:
+      class_path: modelgenerator.backbones.aido_protein_rag_16b
+      init_args:
+        max_length: 12800
+        use_peft: true
+        save_peft_only: true
+        lora_r: 16
+        lora_alpha: 16
+        lora_dropout: 0.0
+        lora_target_modules:
+        - query
+        - value
+        - key
+        - dense
+        - router
+        lora_use_rslora: false
+        config_overwrites:
+          hidden_dropout_prob: 0
+          attention_probs_dropout_prob: 0
+          gradient_checkpointing: true
+          str_embedding_in: 384
+        model_init_args: null
+    adapter:
+      class_path: modelgenerator.adapters.MLPPoolAdapter
+      init_args:
+        pooling: mean_pooling
+        hidden_sizes:
+        - 1152
+        activation_layer:
+          class_path: torch.nn.Tanh
+        bias: true
+        dropout: 0.1
+        dropout_in_middle: true
+    num_outputs: 1
+    optimizer:
+      class_path: torch.optim.AdamW
+      init_args:
+        lr: 0.0001
+        betas:
+        - 0.9
+        - 0.95
+        eps: 1.0e-08
+        weight_decay: 0.0
+    lr_scheduler:
+      class_path: modelgenerator.lr_schedulers.CosineWithWarmup
+      init_args:
+        warmup_ratio: 0.05
+    strict_loading: true
+    reset_optimizer_states: false
+    log_grad_norm_step: 5
+data:
+  class_path: modelgenerator.data.FluorescencePrediction
+  init_args:
+    path: genbio-ai/fluorescence_prediction_rag
+    is_rag_dataset: true
+    config_name: null
+    x_col: seq
+    extra_cols:
+    - msa
+    - str_emb
+    extra_col_aliases:
+    - msa
+    - str_emb
+    normalize: true
+    train_split_name: train
+    test_split_name: test
+    valid_split_name: validation
+    random_seed: 42
+    batch_size: 1
+    shuffle: true
+    max_context_length: 12800
+    msa_random_seed: 1
+ckpt_path: null

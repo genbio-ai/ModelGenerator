@@ -10,11 +10,11 @@ ENV PATH=/opt/conda/envs/finetune/bin:$PATH
 # TODO: change to git clone when repos are public
 COPY modelgenerator modelgenerator
 COPY pyproject.toml .
+COPY README.md .
 
 RUN pip install --upgrade pip
-RUN pip install torch==2.2.1 torchvision==0.17.1 torchaudio==2.2.1 --index-url https://download.pytorch.org/whl/cu121
-RUN pip install flash_attn==2.5.6
-
+RUN pip install torch==2.6.0 torchvision==0.21.0 torchaudio==2.6.0
+RUN pip install flash_attn==2.7.4.post1
 
 ## RNA and Protein inverse folding requirements
 RUN pip install torch_geometric==2.6.1

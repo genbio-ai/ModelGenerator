@@ -16,7 +16,7 @@
 
 from transformers.configuration_utils import PretrainedConfig
 from transformers.utils import logging
-
+from typing import Optional
 
 logger = logging.get_logger(__name__)
 
@@ -111,6 +111,7 @@ class FM4BioConfig(PretrainedConfig):
         add_linear_bias=True,
         position_embedding_type="rope",
         normalization_type="RMSNorm",
+        apply_residual_connection_post_layernorm=False,
         use_cache=True,
         rotary_percent=1.0,
         seq_len_interpolation_factor=None,
@@ -120,6 +121,8 @@ class FM4BioConfig(PretrainedConfig):
         use_lm_head=True,
         tie_word_embeddings=True,
         output_vocab_size: int = None,  # when set, the output vocab size is different from the input vocab size
+        gradient_checkpointing=False,   # Gradient checkpoint for memory saving
+        str_embedding_in: Optional[int] = None, # Structure embedding input dimension
         **kwargs,
     ):
         super().__init__(pad_token_id=pad_token_id, **kwargs)
@@ -144,6 +147,7 @@ class FM4BioConfig(PretrainedConfig):
             "LayerNorm",
         ], "normalization_type must be 'RMSNorm' or 'LayerNorm'"
         self.normalization_type = normalization_type
+        self.apply_residual_connection_post_layernorm = apply_residual_connection_post_layernorm
         self.rotary_percent = rotary_percent
         self.seq_len_interpolation_factor = seq_len_interpolation_factor
         self.moe = moe
@@ -152,3 +156,5 @@ class FM4BioConfig(PretrainedConfig):
         self.use_lm_head = use_lm_head
         self.tie_word_embeddings = tie_word_embeddings
         self.output_vocab_size = output_vocab_size
+        self.gradient_checkpointing = gradient_checkpointing 
+        self.str_embedding_in = str_embedding_in

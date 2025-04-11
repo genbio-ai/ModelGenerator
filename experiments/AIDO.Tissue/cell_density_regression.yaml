@@ -1,0 +1,79 @@
+seed_everything: 42
+data:
+  class_path: modelgenerator.data.CellWithNeighborDataModule
+  init_args:
+    path: './downloads/cell_density/'
+    batch_size: 256
+    train_split_files:
+      - 'xenium_lung_for_density.train.h5ad'
+    valid_split_files:
+      - 'xenium_lung_for_density.test.h5ad'
+    test_split_files:
+      - 'xenium_lung_for_density.test.h5ad'
+    filter_columns:
+      - 'density'
+      - 'x'
+      - 'y'
+    rename_columns:
+      - 'labels'
+      - 'x'
+      - 'y'
+    neighbor_num: 10
+    num_workers: 4
+    persistent_workers: True
+model:
+  class_path: modelgenerator.tasks.SequenceRegression
+  init_args:
+    use_legacy_adapter: false
+    optimizer:
+      class_path: torch.optim.AdamW
+      init_args:
+        lr: 1e-3
+        weight_decay: 0.01
+        betas: [0.9, 0.95]
+    lr_scheduler:
+      class_path: modelgenerator.lr_schedulers.CosineWithWarmup
+      init_args:
+        warmup_ratio: 0.01
+    backbone:
+      class_path: modelgenerator.backbones.aido_tissue_3m
+      init_args:
+        from_scratch: False
+    adapter:
+      class_path: modelgenerator.adapters.LinearMaxPoolAdapter
+trainer:
+  log_every_n_steps: 10
+  precision: bf16
+  devices: auto
+  max_epochs: 10
+  gradient_clip_val: 0
+  profiler: null
+  callbacks:
+    # Save a checkpoint for max val f1:
+    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+      dict_kwargs:
+        monitor: val_mae
+        mode: min
+        save_top_k: 1
+        filename: "best_val_mae:{step}-{val_mae:.3f}"
+    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+      dict_kwargs:
+        monitor: train_loss
+        mode: min
+        save_top_k: 1
+        filename: "best_train_loss:{step}-{train_loss:.3f}"
+    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+      dict_kwargs:
+        monitor: val_loss
+        mode: min
+        save_top_k: 1
+        filename: "best_val_loss:{step}-{val_loss:.3f}"
+    # Save latest:
+    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+      dict_kwargs:
+        filename: "latest:{step}"
+  devices: 1
+  default_root_dir: './logs/cell_density.aido_tissue_3m'
+  strategy:
+    class_path: lightning.pytorch.strategies.DDPStrategy
+# TODO: Clean up parameter dependencies.

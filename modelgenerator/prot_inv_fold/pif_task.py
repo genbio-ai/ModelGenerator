@@ -303,7 +303,7 @@ class ProteinInvFold(TaskInterface):
 
         ##@ Run reverse process of diffusion
         denoise_step = 0
-        mapMPNN2LM = torch.tensor(
+        mapLM2MPNN = torch.tensor(
             [
                 0,
                 12,
@@ -351,7 +351,6 @@ class ProteinInvFold(TaskInterface):
 
             ##@ Sampling and modifying input for new reverse diffusion step
             if self.args.sample_seq:
-                raise
                 probs_t = F.softmax(
                     preds[0] / self.args.sampling_temperature, dim=-1
                 )  ## NOTE: higher sampling_temperature ==> more random sequence.
@@ -366,15 +365,12 @@ class ProteinInvFold(TaskInterface):
                 0, unmask_indices
             ] = pred_token_candidates  ## NOTE: Predicted and input tokens come from different vocabs. Make sure to map them properly.
 
-            data["input_mask"][0, unmask_indices] = (
-                data["input_ids"][:, :-1][0, unmask_indices] == 1
-            ).float()  ## TODO: [MASK]=1, hardcoded. change later.
-
+            data["input_mask"][0, unmask_indices] = 0 
             data["input_ids_mpnn"] = data["input_ids"].clone().detach()
             data["input_ids_mpnn"] = torch.where(
                 data["input_ids_mpnn"] > 20, 21, data["input_ids_mpnn"]
             )
-            data["input_ids_mpnn"] = mapMPNN2LM[data["input_ids_mpnn"]]
+            data["input_ids_mpnn"] = mapLM2MPNN[data["input_ids_mpnn"]]
 
             pred_tokens = data["input_ids"][:, :-1]
 

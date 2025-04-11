@@ -1,10 +1,8 @@
 from typing import Callable, Literal, Optional, Set, Union
-import numpy as np
 
 import torch
 from torch import Tensor
 import torch.nn as nn
-import torch.nn.functional as F
 
 import lightning.pytorch as pl
 from lightning.pytorch.cli import OptimizerCallable, LRSchedulerCallable
@@ -16,10 +14,8 @@ from jsonargparse import ArgumentParser
 from modelgenerator.lr_schedulers import LazyLRScheduler
 from modelgenerator.backbones import (
     HFSequenceBackbone,
-    HFSequenceBackbone,
     DefaultConfig,
     LegacyAdapterType,
-    aido_dna_dummy,
 )
 
 BackboneCallable = Callable[
@@ -201,7 +197,7 @@ class TaskInterface(pl.LightningModule):
         preds = self.forward(collated_batch)
         outputs = self.evaluate(preds, collated_batch, "val", loss_only=False)
         self.log_loss_and_metrics(outputs["loss"], "val")
-        return outputs
+        return {"predictions": preds, **batch, **collated_batch, **outputs}
 
     def test_step(
         self, batch: dict[str, Union[list, Tensor]], batch_idx: Optional[int] = None
@@ -219,7 +215,7 @@ class TaskInterface(pl.LightningModule):
         preds = self.forward(collated_batch)
         outputs = self.evaluate(preds, collated_batch, "test", loss_only=False)
         self.log_loss_and_metrics(outputs["loss"], "test")
-        return {"predictions": preds, **collated_batch}
+        return {"predictions": preds, **batch, **collated_batch, **outputs}
 
     def predict_step(
         self, batch: dict[str, Union[list, Tensor]], batch_idx: Optional[int] = None
@@ -235,7 +231,7 @@ class TaskInterface(pl.LightningModule):
         """
         collated_batch = self.transform(batch, batch_idx)
         preds = self.forward(collated_batch)
-        return {"predictions": preds, **collated_batch}
+        return {"predictions": preds, **batch, **collated_batch}
 
     def get_metrics_by_stage(
         self, stage: Literal["train", "val", "test"]
@@ -297,3 +293,4 @@ class TaskInterface(pl.LightningModule):
         init = parser.instantiate_classes(parser.parse_object(config))
         init.model.configure_model()
         return init.model
+

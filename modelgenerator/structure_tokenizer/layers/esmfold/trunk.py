@@ -121,11 +121,7 @@ class FoldingTrunk(nn.Module):
         s_s_0 = seq_feats
         s_z_0 = pair_feats
 
-        if no_recycles is None:
-            no_recycles = self.cfg.max_recycles
-        else:
-            assert no_recycles >= 0, "Number of recycles must not be negative."
-            no_recycles += 1  # First 'recycle' is just the standard forward pass through the model.
+        no_recycles = 1 # For the model we trained, we only used 1 recycle.
 
         def trunk_iter(s, z, residx, mask):
             z = z + self.pairwise_positional_embedding(residx, mask=mask)

@@ -1,7 +1,9 @@
 import torch
+import math
 import torch.nn as nn
 from torch import Tensor
-from typing import List, Callable
+from typing import List, Callable, Optional
+import numpy as np
 from modelgenerator.adapters.base import (
     TokenAdapter,
     SequenceAdapter,
@@ -45,6 +47,94 @@ class MLPAdapter(nn.Sequential, TokenAdapter):
 
         super().__init__(*layers)
 
+    def forward(self, hidden_states: Tensor, attention_mask: Tensor = None) -> Tensor:
+        """Forward pass
+
+        Args:
+            hidden_states (torch.Tensor): of shape (n, seq_len, in_features)
+
+        Returns:
+            torch.Tensor: predictions (n, seq_len, out_features)
+        """
+        output = super().forward(hidden_states)
+        return output
+
+class MLPAdapterWithoutOutConcat(nn.Module, TokenAdapter):
+    """Multi-layer perceptron (MLP) adapter without outer concatenate
+    
+    This class is generally used in PairwiseTokenClassification. The following two implementations are equivalent:
+    1. hidden_states -> outer_concat -> MLPAdapter
+    2. hidden_states -> MLPAdapterWithoutOutConcat
+    MLPAdapterWithoutOutConcat avoids the large memory consumption of outer_concat
+    
+    Args:
+        in_features (int): Number of features of the input
+        out_features (int): Number of features of the output
+        hidden_sizes (List[int], optional): List of the hidden feature dimensions. Defaults to [].
+        activation_layer (Callable[..., torch.nn.Module]): Activation function. Defaults to torch.nn.Tanh.
+        bias (bool): Whether to use bias in the linear layer. Defaults to True
+        dropout (float): The probability for the dropout layer. Defaults to 0.0
+        dropout_in_middle (bool): Whether to use dropout in the middle layers. Defaults to True
+    """
+    
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        hidden_sizes: List[int] = [],
+        activation_layer: Callable[..., torch.nn.Module] = torch.nn.Tanh,
+        bias: bool = True,
+        dropout: float = 0.0,
+        dropout_in_middle: bool = True,
+    ):
+        super().__init__()
+        self.in_dropout = nn.Dropout(dropout)
+        assert len(hidden_sizes) > 0, f"len(hidden_sizes) must be > 0"
+        
+        min_value = -np.sqrt(1 / (in_features*2))
+        max_value =  np.sqrt(1 / (in_features*2))
+        init_values = torch.FloatTensor(hidden_sizes[0], in_features*2).uniform_(min_value, max_value)
+        self.first_linear = torch.nn.Parameter( init_values, requires_grad=True )
+        init_values = torch.FloatTensor(hidden_sizes[0]).uniform_(min_value, max_value)
+        self.first_bias   = torch.nn.Parameter( init_values, requires_grad=True )
+        
+        in_dim = hidden_sizes[0]
+        
+        layers = [ activation_layer() ]
+        if dropout_in_middle:
+            layers.append(nn.Dropout(dropout))
+        for hidden_dim in hidden_sizes[1:]:
+            layers.append(nn.Linear(in_dim, hidden_dim, bias=bias))
+            layers.append(activation_layer())
+            if dropout_in_middle:
+                layers.append(nn.Dropout(dropout))
+            in_dim = hidden_dim
+        
+        layers.append(nn.Linear(in_dim, out_features, bias=bias))
+        self.layers = nn.Sequential(*layers)
+    
+    def forward(self, hidden_states: Tensor, attention_mask: Tensor = None) -> Tensor:
+        """Forward pass
+
+        Args:
+            hidden_states (torch.Tensor): of shape (n, seq_len, in_features)
+
+        Returns:
+            torch.Tensor: predictions (n, seq_len, seq_len, out_features)
+        """
+        n, seq_len, in_features = hidden_states.shape
+        
+        hidden_states = self.in_dropout(hidden_states) # [B, L, D]
+        
+        left  = hidden_states @ self.first_linear[:, 0::2].T # [B, L, E]
+        right = hidden_states @ self.first_linear[:, 1::2].T # [B, L, E]
+        
+        hidden_states = left[..., :, None, :] + right[..., None, :, :] + self.first_bias[None, None, None, :] # [B, L, L, D1]
+        
+        I, J = torch.tril_indices(seq_len, seq_len, -1)
+        hidden_states[..., I, J, :] = hidden_states[..., J, I, :]
+        
+        return self.layers(hidden_states)
 
 class MLPPoolAdapter(nn.Module, SequenceAdapter):
     """MLP adapter for a 2D embedding with pooling for the sequence length dimension
@@ -94,12 +184,15 @@ class MLPPoolAdapter(nn.Module, SequenceAdapter):
             torch.Tensor: predictions (n, out_features)
         """
         if self.pooling == "mean_pooling":
-            input_mask_expanded = (
-                attention_mask.unsqueeze(-1).expand(hidden_states.size()).float()
-            )
-            embeddings = torch.sum(
-                hidden_states * input_mask_expanded, 1
-            ) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
+            if attention_mask is not None:
+                input_mask_expanded = (
+                    attention_mask.unsqueeze(-1).expand(hidden_states.size()).to(hidden_states)
+                )
+                embeddings = torch.sum(
+                    hidden_states * input_mask_expanded, 1
+                ) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
+            else:
+                embeddings = hidden_states.mean(1)
         elif self.pooling == "cls_pooling":
             embeddings = hidden_states[:, 0]
         else:
@@ -168,12 +261,15 @@ class LinearMeanPoolAdapter(nn.Module, SequenceAdapter):
         Returns:
             torch.Tensor: predictions (n, out_features)
         """
-        input_mask_expanded = (
-            attention_mask.unsqueeze(-1).expand(hidden_states.size()).float()
-        )
-        embeddings = torch.sum(hidden_states * input_mask_expanded, 1) / torch.clamp(
-            input_mask_expanded.sum(1), min=1e-9
-        )
+        if attention_mask is not None:
+            input_mask_expanded = (
+                attention_mask.unsqueeze(-1).expand(hidden_states.size()).float()
+            )
+            embeddings = torch.sum(hidden_states * input_mask_expanded, 1) / torch.clamp(
+                input_mask_expanded.sum(1), min=1e-9
+            )
+        else:
+            embeddings = torch.mean(hidden_states, dim=1)
         output = self.linear(embeddings)
         return output
 
@@ -201,11 +297,8 @@ class LinearMaxPoolAdapter(nn.Module, SequenceAdapter):
             torch.Tensor: predictions (n, out_features)
         """
         if attention_mask is not None:
-            input_mask_expanded = (
-                attention_mask.unsqueeze(-1).expand(hidden_states.size()).float()
-            )
-            input_mask_expanded[input_mask_expanded == 0] = -torch.inf
-            hidden_states_final = hidden_states * input_mask_expanded
+            attention_mask = attention_mask.unsqueeze(-1)
+            hidden_states_final = hidden_states.masked_fill(attention_mask == 0, -torch.inf)
         else:
             hidden_states_final = hidden_states
         embeddings = hidden_states_final.max(1)[0]
@@ -339,7 +432,7 @@ class ResNet2DAdapter(nn.Module, SequenceAdapter):
         upper_triangular = torch.triu(matrix, diagonal=1)
         return upper_triangular + upper_triangular.transpose(-1, -2)
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor, attention_mask: Tensor = None) -> Tensor:
         """Forward pass
 
         Args:

@@ -81,10 +81,10 @@ class ProteinInverseFoldingDataModule(DataInterface):
             "[INFO]\tTest dataset generated! Size=", (self.test_dataset.dataset_length)
         )
 
-        if len(self.train_dataset) in {len(self.test_dataset), len(self.val_dataset)}:
-            print(
-                "\n[WARNING] Running overfitting experiment for debugging purposes only.\n\n"
-            )
+        # if len(self.train_dataset) in {len(self.test_dataset), len(self.val_dataset)}:
+        #     print(
+        #         "\n[WARNING] Running overfitting experiment for debugging purposes only.\n\n"
+        #     )
 
         print("[INFO]\tRunning training dataloader sanity check...")
         a = self.train_dataset.__getitem__(0)

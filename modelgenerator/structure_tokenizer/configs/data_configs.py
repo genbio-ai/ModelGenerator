@@ -63,10 +63,6 @@ class StructTokensDatasetConfig:
     def __post_init__(self):
         self.struct_tokens_path = Path(self.struct_tokens_path)
         self.codebook_path = Path(self.codebook_path)
-        if not self.struct_tokens_path.is_absolute():
-            self.struct_tokens_path = REPO_PATH / self.struct_tokens_path
-        if not self.codebook_path.is_absolute():
-            self.codebook_path = REPO_PATH / self.codebook_path
 
 
 @dataclass

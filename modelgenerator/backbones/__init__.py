@@ -89,6 +89,22 @@ aido_protein_16b_v1 = type(
     },
 )
 
+aido_protein_rag_16b = type(
+    "aido_protein_rag_16b",
+    (GenBioFM,),
+    {
+        "model_path": "genbio-ai/AIDO.Protein-RAG-16B",
+    },
+)
+
+aido_protein_rag_3b = type(
+    "aido_protein_rag_3b",
+    (GenBioFM,),
+    {
+        "model_path": "genbio-ai/AIDO.Protein-RAG-3B",
+    },
+)
+
 aido_protein2structoken_16b = type(
     "aido_protein2structoken_16b",
     (GenBioFM,),
@@ -96,7 +112,6 @@ aido_protein2structoken_16b = type(
         "model_path": "genbio-ai/AIDO.Protein2StructureToken-16B",
     },
 )
-
 
 class aido_protein_debug(GenBioFM):
     """
@@ -171,4 +186,102 @@ aido_cell_100m = type(
     "aido_cell_100m",
     (GenBioCellFoundation,),
     {"model_path": "genbio-ai/AIDO.Cell-100M"},
+)
+
+
+esm2_8m = type(
+    "esm2_8m",
+    (ESM,),
+    {
+        "model_path": "facebook/esm2_t6_8M_UR50D",
+    },
+)
+
+esm2_35m = type(
+    "esm2_35m",
+    (ESM,),
+    {
+        "model_path": "facebook/esm2_t12_35M_UR50D",
+    },
+)
+
+esm2_150m = type(
+    "esm2_150m",
+    (ESM,),
+    {
+        "model_path": "facebook/esm2_t30_150M_UR50D",
+    },
+)
+
+esm2_650m = type(
+    "esm2_650m",
+    (ESM,),
+    {
+        "model_path": "facebook/esm2_t33_650M_UR50D",
+    },
+)
+
+esm2_3b = type(
+    "esm2_3b",
+    (ESM,),
+    {
+        "model_path": "facebook/esm2_t36_3B_UR50D",
+    },
+)
+
+esm2_15b = type(
+    "esm2_15b",
+    (ESM,),
+    {
+        "model_path": "facebook/esm2_t48_15B_UR50D",
+    },
+)
+
+
+enformer = type(
+    "enformer",
+    (Enformer,),
+    {
+        "model_path": "EleutherAI/enformer-official-rough",
+    },
+)
+
+borzoi = type(
+    "borzoi",
+    (Borzoi,),
+    {
+        "model_path": "johahi/borzoi-replicate-0",
+    },
+)
+
+flashzoi = type(
+    "flashzoi",
+    (Borzoi,),
+    {
+        "model_path": "johahi/flashzoi-replicate-0",
+    }
+)
+
+scfoundation = type(
+    "scfoundation",
+    (SCFoundation,),
+    {
+        "model_path": "genbio-ai/scFoundation",
+    },
+)
+
+aido_tissue_3m = type(
+    "aido_tissue_3m",
+    (GenBioCellSpatialFoundation,),
+    {
+        "model_path": "genbio-ai/AIDO.Tissue-3M",
+    },
+)
+
+aido_tissue_60m = type(
+    "aido_tissue_60m",
+    (GenBioCellSpatialFoundation,),
+    {
+        "model_path": "genbio-ai/AIDO.Tissue-60M",
+    },
 )

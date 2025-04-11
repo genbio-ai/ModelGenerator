@@ -1,0 +1,7 @@
+trainer:
+  logger:
+    class_path: lightning.pytorch.loggers.WandbLogger
+    init_args:
+      name: test
+      save_dir: logs
+      project: xTrimo_Benchmark
