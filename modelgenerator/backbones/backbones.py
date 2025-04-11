@@ -2413,7 +2413,7 @@ class SCFoundation(HFSequenceBackbone):
         **kwargs,
     ):
 
-        from ..biomap_models.scfoundation.load_scfoundation import (
+        from modelgenerator.huggingface_models.scfoundation.load_scfoundation import (
             load_model_frommmf,
             getEncoerDecoderData,
             gatherData,
