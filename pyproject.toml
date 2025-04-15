@@ -51,7 +51,7 @@ dependencies = [
     "enformer-pytorch",
     "local_attention",
 ]
-requires-python = ">=3.10,<3.11"
+requires-python = ">=3.10,<3.12"
 
 [project.optional-dependencies]
 dev = [
@@ -59,6 +59,11 @@ dev = [
     "awscli",
     "pytest",
     "pytest-cov",
+]
+flash_attn = [
+    "torch==2.6.0",
+    "torchvision==0.21.0",
+    "flash_attn==2.7.4.post1",
 ]
 
 [project.scripts]
