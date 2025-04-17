@@ -1802,9 +1802,22 @@ class PertClassificationDataModule(DataInterface):
         self.test_dataset = AnyDataset(**D_test)
 
 
-def rag_collate_fn(batch, max_context_length, rng):
+def rag_collate_fn(batch: Union[dict|list|tuple], max_context_length: int, rng: random.Random):
+    """
+    Collate function for RAG dataset.
+    
+    Main functions:
+        1. Convert list batch to dict batch;
+        2. Subsample MSA for batch according to max_context_length;
+        3. Convert labels & str_emb & uid (if exists) to torch.Tensor;
+    
+    Args:
+        batch (Union[dict|list|tuple]): The batch of data to collate.
+        max_context_length (int): The maximum context length of input_ids.
+        rng (random.Random): Random number generator for sampling MSA.
+    """
 
-    # Convert batch into a dict
+    # If the input batch is a list/tuple, convert it into a dict
     if not isinstance(batch, dict):
         assert isinstance(batch, (list, tuple)), f"Unexpected input type: {type(batch)}"
         data_list = batch
@@ -1813,12 +1826,15 @@ def rag_collate_fn(batch, max_context_length, rng):
             for k, v in data.items():
                 batch[k] = batch.get(k, []) + [v]
 
+    # The key of protein sequence string must be unified to 'sequences'
     if "seq" in batch and "sequences" not in batch:
         batch["sequences"] = batch.pop("seq")
 
+    # For RAG dataset, "sequences", "msa" and "str_emb" must be in batch
     assert "sequences" in batch, f"sequences not in batch: {batch.keys()}"
     assert "msa" in batch, f"msa not in batch: {batch.keys()}"
     assert "str_emb" in batch, f"str_emb not in batch: {batch.keys()}"
+    # The number of elements of "sequences", "msa" and "str_emb" must be the same
     assert (
         len(batch["sequences"]) == len(batch["msa"]) == len(batch["str_emb"])
     ), f"sequences: {len(batch['sequences'])}, msa: {len(batch['msa'])}, str_emb: {len(batch['str_emb'])}"
@@ -1827,12 +1843,14 @@ def rag_collate_fn(batch, max_context_length, rng):
         sequence = batch["sequences"][i]
         msa = batch["msa"][i]
         str_emb = batch["str_emb"][i]
-
+        
+        # Convert str_emb to numpy array
         if torch.is_tensor(str_emb):
             batch["str_emb"][i] = str_emb.cpu().numpy()
         elif isinstance(str_emb, list):
             batch["str_emb"][i] = np.array(str_emb)
 
+        # Length of sequence, msa and str_emb should be the same, which is the length of protein sequence
         assert len(sequence) == len(
             msa[0]
         ), f"msa: {len(msa[0])}, sequences: {len(sequence)}"
@@ -1840,16 +1858,20 @@ def rag_collate_fn(batch, max_context_length, rng):
             str_emb
         ), f"str_emb: {len(str_emb)}, sequences: {len(sequence)}"
 
+        # Sample MSA: we estimate there are 25% gap tokens in MSAs, so divided by 0.75
         num_msa = int(max_context_length / len(sequence) / 0.75)
         msa = rng.sample(msa, num_msa) if num_msa < len(msa) else msa
         msa.sort(key=lambda x: x.count("-"))
         batch["msa"][i] = msa
 
-    # convert labels to tensor
+    # convert labels & str_emb & uid (if exists) to torch.Tensor
     for k, v in batch.items():
-        if k != "sequences" and isinstance(
-            v[0], (int, float, np.ndarray, torch.Tensor)
-        ):
-            batch[k] = torch.as_tensor(v)  # labels should be torch.Tensor
+        if isinstance(v, (list, tuple)):
+            if isinstance(v[0], (int, float)):
+                batch[k] = torch.as_tensor(v)
+            elif isinstance(v[0], np.ndarray):
+                batch[k] = torch.as_tensor(np.array(v))
+            elif isinstance(v[0], torch.Tensor):
+                batch[k] = torch.stack(v)
 
     return batch

@@ -589,36 +589,36 @@ class GenBioFM(HFSequenceBackbone):
             final_L = len(input_ids[0])
             position_ids = [
                 (
-                    pos_enc[:, :final_L]
+                    pos_enc[:, :final_L].tolist()
                     if final_L < pos_enc.shape[1]
-                    else np.pad(pos_enc, [(0, 0), (0, final_L - pos_enc.shape[1])])
+                    else np.pad(pos_enc, [(0, 0), (0, final_L - pos_enc.shape[1])]).tolist()
                 )
                 for pos_enc in position_ids
             ]
             query_tokens_mask = [
                 (
-                    q_mask[:final_L]
+                    q_mask[:final_L].tolist()
                     if final_L < q_mask.shape[0]
-                    else np.pad(q_mask, [(0, final_L - q_mask.shape[0])])
+                    else np.pad(q_mask, [(0, final_L - q_mask.shape[0])]).tolist()
                 )
                 for q_mask in query_tokens_mask
             ]
             str_embs_new = [
                 (
-                    str_emb[:final_L]
+                    str_emb[:final_L].tolist()
                     if final_L < str_emb.shape[0]
-                    else np.pad(str_emb, [(0, final_L - str_emb.shape[0]), (0, 0)])
+                    else np.pad(str_emb, [(0, final_L - str_emb.shape[0]), (0, 0)]).tolist()
                 )
                 for str_emb in str_embs_new
             ]
 
             full_attention_mask = attention_mask
             attention_mask = [
-                np.array(a_mask)[q_mask == 1].tolist()
+                np.array(a_mask)[np.array(q_mask) == 1].tolist()
                 for a_mask, q_mask in zip(attention_mask, query_tokens_mask)
             ]
             special_mask = [
-                np.array(s_mask)[q_mask == 1].tolist()
+                np.array(s_mask)[np.array(q_mask) == 1].tolist()
                 for s_mask, q_mask in zip(special_mask, query_tokens_mask)
             ]
         else:

@@ -1,0 +1,228 @@
+[build-system]
+build-backend = "setuptools.build_meta"
+requires = ["setuptools>=64.0.0", "setuptools-scm>=8"]
+
+[project]
+name = 'aidosp'
+description = 'AIDO Structure Prediction'
+readme = 'README.md'
+requires-python = '>= 3.11'
+authors = [{name = 'GenBio AI', email = 'contact@genbio.ai'}]
+maintainers = [{name = 'GenBio AI', email = 'contact@genbio.ai'}]
+classifiers = [
+    'Development Status :: 4 - Beta',
+    'Intended Audience :: Science/Research',
+    'Natural Language :: English',
+    'Operating System :: OS Independent',
+    'Programming Language :: Python',
+    'Programming Language :: Python :: 3 :: Only',
+    'Programming Language :: Python :: 3.11',
+    'Programming Language :: Python :: 3.12',
+    'Typing :: Typed',
+]
+
+dynamic = ['version']
+
+dependencies = [
+    'requests',
+    'typing-extensions',
+    'click',
+    'loguru',
+    'pyyaml',
+    'huggingface_hub', # Pulls minimal dependencies, not too much bloat
+    'ml_collections@git+https://github.com/google/ml_collections.git',
+]
+
+[project.optional-dependencies]
+dev = [
+    'nox[uv]>=2024',
+    'pre-commit',
+    'ruff',
+    'black',
+    'basedpyright',
+]
+docs = [
+    'sphinx!=5.1.0',
+    'sphinx-sitemap',
+    'sphinx-inline-tabs',
+    'sphinx-book-theme',
+    'sphinx_design',
+    'sphinx-toolbox',
+    'sphinx_togglebutton',
+    'jupytext>=1.11.2',
+    'myst-nb',
+    'ipywidgets',
+    'matplotlib',
+    'mapie',
+]
+tests = [
+    'coverage[toml]==7.6.1',
+    'pytest',
+    'mock',
+]
+typing = [
+    'mypy',
+    'types-pytz',
+    'types-PyYAML',
+    'types-setuptools',
+    'types-python-dateutil',
+    'types-mock',
+    'types-requests',
+]
+
+
+[project.scripts]
+genbio-aidosp = "genbio.aidosp.cli.base:cli"
+
+[tool.black]
+include = '/src/.*\.pyi?$|/tests/.*\.pyi?$|/docs/.*\.pyi?$'
+line-length = 88
+target-version = ['py311', 'py312']
+
+[tool.coverage.paths]
+source = [
+    "/absolute/path/to/src/genbio/aidosp",
+    ".cache/nox/*/lib/*/site-packages/genbio/aidosp"
+]
+
+
+[tool.coverage.report]
+show_missing = true
+
+[tool.coverage.run]
+branch = true
+source = [ "src/genbio/aidosp"]
+
+[tool.isort]
+known_first_party = "aidosp-structure-prediction"
+profile = "black"
+src_paths = ["src", "tests"]
+
+[tool.mypy]
+cache_dir = ".cache/mypy_cache"
+disallow_incomplete_defs = true
+disallow_subclassing_any = false
+disallow_untyped_decorators = false
+disallow_untyped_defs = true
+explicit_package_bases = true
+files = ['src/', 'tests/', 'noxfile.py']
+ignore_missing_imports = true
+mypy_path = 'src'
+namespace_packages = true
+no_implicit_optional = true
+plugins = ['pydantic.mypy']
+warn_redundant_casts =true
+warn_return_any = true
+warn_unreachable = true
+warn_unused_ignores = true
+show_error_codes = true
+
+[[tool.mypy.overrides]]
+check_untyped_defs = true
+disallow_untyped_defs = false
+module = 'tests.*'
+
+[[tool.mypy.overrides]]
+check_untyped_defs = true
+disallow_untyped_decorators = false
+disallow_untyped_defs = false
+module = 'noxfile'
+
+[tool.pytest.ini_options]
+addopts = ["-rv", "--strict-markers", "--strict-config", "--doctest-modules", "--color=yes"]
+pythonpath = ["src"]
+cache_dir = ".cache/pytest_cache"
+filterwarnings = [
+    "error",
+]
+log_cli = true
+log_cli_level = "WARNING"
+log_cli_format = "%(levelname)s:%(name)s: %(message)s"
+minversion = "6.0"
+testpaths = ['src', 'tests']
+xfail_strict = true
+
+[tool.ruff]
+cache-dir = ".cache/ruff"
+force-exclude = true
+extend-exclude = ["src/genbio/aidosp/version.py"]  # dynamically generated
+line-length = 88
+src = ["src/genbio/aidosp", "tests"]
+namespace-packages = ["src/genbio/aidosp"]
+respect-gitignore = true
+show-fixes = true
+
+[tool.ruff.lint]
+select = [ # https://beta.ruff.rs/docs/rules/
+    # "A",  # flake8-builtins
+    # "ARG", # flake8-unused-arguments
+    "B", # flake8-bugbear
+    # "BLE", # flake8-blind-except
+    "COM", # flake8-commas
+    "C4", # flake8-comprehensions
+    # "C90", # mccabe
+    # "D", # pydocstyle
+    "DTZ", # flake8-datetimz
+    "E",  # pycodestyle error
+    # "ERA", # eradicate
+    "F", # Pyflakes
+    # "G", # flake8-logging-format
+    "I", # isort
+    # "ISC", # flake8-implicit-str-concat
+    # "N", # pep8-naming
+    # "NPY", # NumPy-specific rules
+    "Q", # flake8-quotes
+    "PD", # pandas-vet
+    # "PIE", # flake8-pie
+    # "PL", # Pylint
+    # "PT", # flake8-pytest-style
+    # "PTH", # flake8-use-pathlib
+    "RSE",  # flake8-raise
+    "RUF", # Ruff-specific rules
+    "S", # flake8-bandit
+    # "SIM", # flake8-simplify
+    "TCH", # flake8-type-checking
+    "TID", # flake8-tidy-imports
+    # "TRY", # tryceratops
+    "T20", # flake8-print
+    "UP", # pyupgrade
+    "W", # pycodestyle warning
+    "YTT", # flake8-2020
+]
+ignore = ["E501", "S101", "PD901", "PD003", "UP035", "UP007", "UP038", "TC003", "TC004", "COM812", "C416", "RUF002"]
+
+[tool.ruff.lint.per-file-ignores]
+"docs/source/conf.py" = ["ERA"]
+"src/genbio/metrics/__init__.py" = ["F401"]
+"src/genbio/metrics/*/__init__.py" = ["F401"]
+"tests/*" = ["ARG001", "D", "S101", "PLR2004"]
+"noxfile.py" = ["T201"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["genbio/aidosp"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.basedpyright]
+include = ["src"]
+
+typeCheckingMode = "recommended"
+reportImplicitStringConcatenation = false # conflicts with ruff formatter
+reportUnknownMemberType = false # annoying
+reportAttributeAccessIssue = false
+
+[tool.setuptools_scm]
+local_scheme = "no-local-version"
+version_file = "src/genbio/aidosp/version.py"
+fallback_version = "0.0.0"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = true
+packages = ["genbio.aidosp"]
+
+[tool.setuptools.package-data]
+"genbio.aidosp.cli.completions" = ["*.bash", "*.zsh", "*.fish"]
+"genbio.aidosp.msa_retrieve.configs" = ["*.yaml", "*.yml"]
+"genbio.aidosp.scripts" = ["*.sh"]

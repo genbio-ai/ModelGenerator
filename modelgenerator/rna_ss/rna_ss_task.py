@@ -68,9 +68,9 @@ class RNASSPairwiseTokenClassification(TaskInterface):
         Returns:
             dict[str, Union[list, Tensor]]: The collated batch containing sample ids, sequences, secondary structures (labels), input_ids, and attention_mask
         """
-        input_ids, attention_mask, special_mask = self.backbone.tokenize(
-            batch["sequences"]
-        )
+        tokenized_result = self.backbone.tokenize(batch["sequences"])
+        input_ids = tokenized_result.pop("input_ids", None)
+        attention_mask = tokenized_result.pop("attention_mask", None)
         input_ids = torch.tensor(input_ids, dtype=torch.long).to(self.device)
         attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(self.device)
         labels = batch["sec_structures"].half().to(self.device)
@@ -80,6 +80,7 @@ class RNASSPairwiseTokenClassification(TaskInterface):
             "labels": labels,
             "input_ids": input_ids,
             "attention_mask": attention_mask,
+            **tokenized_result,
         }
 
     def outer_concat(self, x):
@@ -131,9 +132,7 @@ class RNASSPairwiseTokenClassification(TaskInterface):
         Returns:
             Tensor: The classifier logits
         """
-        encoder_hidden = self.backbone(
-            collated_batch["input_ids"], collated_batch["attention_mask"]
-        )
+        encoder_hidden = self.backbone(**collated_batch)
         if self.use_legacy_adapter:
             raise NotImplementedError()
         else:

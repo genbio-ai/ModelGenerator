@@ -1,0 +1,174 @@
+blocks_per_ckpt: 1
+c_atom: 128
+c_atompair: 16
+c_s: 384
+c_s_inputs: 449
+c_token: 384
+c_z: 128
+data:
+  ccd_components_file: path_to_components.v20240608.cif
+  ccd_components_rdkit_mol_file: path_to_components.v20240608.cif.rdkit_mol.pkl
+  epoch_size: 10000
+  msa:
+    enable: true
+    enable_rna_msa: false
+    max_size:
+      test: 16384
+      train: 16384
+    merge_method: dense_max
+    min_size:
+      test: 2048
+    rna:
+      indexing_method: sequence
+      rna_msa_dir: ''
+      seq_to_pdb_idx_path: ''
+    sample_cutoff:
+      test: 2048
+  template:
+    enable: false
+deterministic: true
+diffusion_batch_size: 48
+diffusion_chunk_size: 4
+dtype: bf16
+dump_dir: ./test1234
+infer_setting:
+  chunk_size: 64
+  lddt_metrics_chunk_size: 1
+  lddt_metrics_sparse_enable: true
+  sample_diffusion_chunk_size: 1
+inference_noise_scheduler:
+  rho: 7
+  s_max: 160.0
+  s_min: 0.0004
+  sigma_data: 16.0
+input_json_path: path_your_input.json
+checkpoint_path: path_to_your_checkpoint
+load_params_only: true
+load_strict: false
+loss:
+  distogram:
+    eps: 1.0e-06
+    max_bin: 21.6875
+    min_bin: 2.3125
+    no_bins: 64
+  pae:
+    eps: 1.0e-06
+    max_bin: 32
+    min_bin: 0
+    no_bins: 64
+  pde:
+    eps: 1.0e-06
+    max_bin: 32
+    min_bin: 0
+    no_bins: 64
+  plddt:
+    eps: 1.0e-06
+    max_bin: 1.0
+    min_bin: 0
+    no_bins: 50
+    normalize: true
+max_atoms_per_token: 24
+metrics:
+  clash:
+    af3_clash_threshold: 1.1
+    vdw_clash_threshold: 0.75
+model:
+  N_cycle: 10
+  N_model_seed: 1
+  confidence_head:
+    blocks_per_ckpt: 1
+    c_s: 384
+    c_s_inputs: 449
+    c_z: 128
+    distance_bin_end: 52.0
+    distance_bin_start: 3.25
+    distance_bin_step: 1.25
+    max_atoms_per_token: 24
+    n_blocks: 4
+    pairformer_dropout: 0.0
+    stop_gradient: true
+  diffusion_module:
+    atom_decoder:
+      n_blocks: 3
+      n_heads: 4
+    atom_encoder:
+      n_blocks: 3
+      n_heads: 4
+    blocks_per_ckpt: 1
+    c_atom: 128
+    c_atompair: 16
+    c_s: 384
+    c_s_inputs: 449
+    c_token: 768
+    c_z: 128
+    initialization:
+      glorot_init_self_attention: false
+      he_normal_init_atom_encoder_output: false
+      he_normal_init_atom_encoder_small_mlp: false
+      zero_init_adaln: true
+      zero_init_atom_decoder_linear: false
+      zero_init_atom_encoder_residual_linear: false
+      zero_init_condition_transition: false
+      zero_init_dit_output: true
+      zero_init_residual_condition_transition: false
+    sigma_data: 16.0
+    transformer:
+      n_blocks: 24
+      n_heads: 16
+    use_fine_grained_checkpoint: true
+  distogram_head:
+    c_z: 128
+    no_bins: 64
+  input_embedder:
+    c_atom: 128
+    c_atompair: 16
+    c_token: 384
+  msa_module:
+    blocks_per_ckpt: 1
+    c_m: 64
+    c_s_inputs: 449
+    c_z: 128
+    msa_dropout: 0.15
+    n_blocks: 4
+    pair_dropout: 0.25
+  pairformer:
+    blocks_per_ckpt: 1
+    c_s: 384
+    c_z: 128
+    dropout: 0.25
+    n_blocks: 48
+    n_heads: 16
+  relative_position_encoding:
+    c_z: 128
+    r_max: 32
+    s_max: 2
+  template_embedder:
+    blocks_per_ckpt: 1
+    c: 64
+    c_z: 128
+    dropout: 0.25
+    n_blocks: 0
+n_blocks: 48
+need_atom_confidence: false
+no_bins: 64
+num_workers: 4
+sample_diffusion:
+  N_sample: 1
+  N_sample_mini_rollout: 1
+  N_step: 200
+  N_step_mini_rollout: 20
+  gamma0: 0.8
+  gamma_min: 1.0
+  noise_scale_lambda: 1.003
+  step_scale_eta: 1.5
+seeds: "1234"
+sigma_data: 16.0
+skip_amp:
+  confidence_head: true
+  loss: true
+  sample_diffusion: true
+  sample_diffusion_training: true
+use_deepspeed_evo_attention: true
+use_lma: false
+use_memory_efficient_kernel: false
+use_msa: true
