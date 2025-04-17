@@ -18,7 +18,7 @@ The default `slurm_sweep.yaml` creates a wandb sweep with the training command `
 
 Run the following command to create a wandb sweep:
 ```bash
-wandb sweep genbio_scripts/wandb_sweep/slurm_sweep.yaml
+wandb sweep scripts/wandb_sweep/slurm_sweep.yaml
 ```
 Take a note of your sweep ID for step 2. It looks like `<entity>/<project>/<id>` and is found in the output: `wandb: Run sweep agent with: wandb agent`
 ### Step 2: submit the next training job to SLURM
@@ -26,7 +26,7 @@ Similar to step 1, you need to edit `slurm_agent.sh` for your experiment. The mo
 
 The following command creates one sweep agent that runs training with the next set of hyperparamenters.
 ```bash
-sbatch genbio_scripts/wandb_sweep/slurm_agent.sh
+sbatch scripts/wandb_sweep/slurm_agent.sh
 ```
 
 >**TIPS**: To queue your other sweep runs, use `sbatch --dependency`. To launch your other sweep runs in parallel, use `sbatch --array=1-X` where `X` is the number of parallel runs.
