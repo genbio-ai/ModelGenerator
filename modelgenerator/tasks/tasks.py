@@ -1899,6 +1899,7 @@ class ZeroshotPredictionDistance(TaskInterface):
         backbone (BackboneCallable): The callable that returns a backbone.
         use_legacy_adapter (bool, optional): Whether we use the legacy adapter from the pretrained model. Defaults to True.
         all_hidden_states (bool, optional): Whether to run the test on all available hidden layers. Defaults to False, only using the last layer.
+        shared_ref (bool, optional): Whether to use a shared reference sequence to accelerate zero-shot computation. Defaults to False, which uses a separate reference sequence for each mutated sequence.
     """
 
     def __init__(
@@ -1906,6 +1907,7 @@ class ZeroshotPredictionDistance(TaskInterface):
         backbone: BackboneCallable,
         use_legacy_adapter: bool = True,
         all_hidden_states: bool = False,
+        shared_ref: bool =False,
         **kwargs,
     ):
         if self.__class__ is ZeroshotPredictionDistance:
@@ -1916,6 +1918,7 @@ class ZeroshotPredictionDistance(TaskInterface):
         self.backbone_fn = backbone
         self.ref_hidden_mean = None
         self.all_hidden_states = all_hidden_states
+        self.shared_ref = shared_ref
 
     def configure_model(self) -> None:
         if self.backbone is not None:
@@ -1997,7 +2000,10 @@ class ZeroshotPredictionDistance(TaskInterface):
         else:
             mutation_encoder_hidden = torch.stack(output)
         n, b, s, d = mutation_encoder_hidden.shape
-        if self.ref_hidden_mean is None:
+
+        if self.ref_hidden_mean is not None:
+            ref_encoder_hidden = self.ref_hidden_mean.unsqueeze(1).repeat(1, b, 1)
+        else:
             ref_output = self.backbone(
                 collated_batch["ref_input_ids"],
                 attention_mask=None,
@@ -2007,16 +2013,14 @@ class ZeroshotPredictionDistance(TaskInterface):
                 ref_encoder_hidden = ref_output.unsqueeze(0)
             else:
                 ref_encoder_hidden = torch.stack(ref_output)
-
             if collated_batch.get('special_tokens_mask') is not None:
                 ref_encoder_hidden = ref_encoder_hidden[
                     :, torch.logical_not(collated_batch["special_tokens_mask"])
                 ].view(n, b, -1, d).mean(dim=-2)
             else:
                 ref_encoder_hidden = ref_encoder_hidden.mean(dim=-2)
-            self.ref_hidden_mean = ref_encoder_hidden[:,0,:]
-        else:
-            ref_encoder_hidden = self.ref_hidden_mean.unsqueeze(1).repeat(1, b, 1)
+            if self.shared_ref:
+                self.ref_hidden_mean = ref_encoder_hidden[:,0,:]
 
         # remove special token before computing zeroshot score
         if collated_batch.get('special_tokens_mask') is not None:

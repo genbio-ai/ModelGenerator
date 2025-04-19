@@ -12,7 +12,7 @@ model:
   class_path: modelgenerator.tasks.ZeroshotPredictionDistance
   init_args:
     backbone:
-      class_path: modelgenerator.backbones.aido_dna_300m
+      class_path: modelgenerator.backbones.aido_dna_7b
       init_args:
         frozen: true
     all_hidden_states: True

@@ -2,7 +2,7 @@ seed_everything: 42
 data:
   class_path: modelgenerator.data.CellWithNeighborDataModule
   init_args:
-    path: '/home/jing_gong_genbio_ai/bio-engine/data/ST_downstream/scGPT-spatial'
+    path: './downloads/'
     batch_size: 1
     train_split_files:
       - 'processed_fetal_lung_visium_xenium.xenium.convert.h5ad'
