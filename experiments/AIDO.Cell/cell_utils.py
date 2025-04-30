@@ -3,14 +3,10 @@ import anndata as ad
 import numpy as np
 import os
 import pandas as pd
-import scanpy as sc
+import bionty as bt
 
 
-current_dir = os.path.dirname(os.path.abspath(__file__))
-MODEL_GENES = pd.read_csv(os.path.join(current_dir, 'OS_scRNA_gene_index.19264.tsv'), sep='\t')['gene_name'].to_numpy()
-
-
-def align_adata(adata: ad.AnnData) -> Tuple[ad.AnnData, np.ndarray]:
+def align_adata(adata: ad.AnnData, is_esng: bool = False) -> Tuple[ad.AnnData, np.ndarray]:
     """Aligns the input AnnData object to the AIDO.Cell gene set.
 
     Args:
@@ -21,9 +17,20 @@ def align_adata(adata: ad.AnnData) -> Tuple[ad.AnnData, np.ndarray]:
             The aligned AnnData object has the same genes as AIDO.Cell, and the attention mask indicates which genes
             are present in the AIDO.Cell pretraining set.
     """
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    MODEL_GENES = pd.read_csv(os.path.join(current_dir, 'OS_scRNA_gene_index.19264.tsv'), sep='\t')['gene_name'].to_numpy()
     print('###########  Aligning data to AIDO.Cell  ###########')
     print(f'AIDO.Cell was pretrained on a fixed set of {len(MODEL_GENES)} genes.')
     print('Aligning your data to the AIDO.Cell gene set...')
+    if is_esng:
+        gene_map = bt.base.Gene(organism='human').standardize(
+            MODEL_GENES,
+            field='symbol',
+            return_field='ensembl_gene_id',
+            return_mapper=True,
+        )
+        MODEL_GENES = np.array([gene_map.get(g, f'{g}_unknown_ensg') for g in MODEL_GENES])
+
     missing_genes = np.setdiff1d(MODEL_GENES, adata.var.index)
     new_missing_genes = np.setdiff1d(adata.var.index, MODEL_GENES)
     print(f'{len(new_missing_genes)} in your data that cannot be used by AIDO.Cell. Removing these.')
