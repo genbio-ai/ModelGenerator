@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader
 import lightning.pytorch as pl
 from lightning.pytorch.utilities import rank_zero_info, rank_zero_warn
 from datasets import load_dataset
+from docstring_inheritance import GoogleDocstringInheritanceInitMeta
 
 
 class KFoldMixin:
@@ -168,7 +169,7 @@ class HFDatasetLoaderMixin:
         return train_dataset, valid_dataset, test_dataset
 
 
-class DataInterface(pl.LightningDataModule, KFoldMixin):
+class DataInterface(pl.LightningDataModule, KFoldMixin, metaclass=GoogleDocstringInheritanceInitMeta):
     """Base class for all data modules in this project. Handles the boilerplate of setting up data loaders.
 
     Note:
@@ -179,39 +180,38 @@ class DataInterface(pl.LightningDataModule, KFoldMixin):
         See [MLM](./#modelgenerator.data.MLMDataModule) for an example.
 
     Args:
-        path (str): Path to the dataset, can be one of:
-            1. a local path to a data folder
-            2. a Huggingface dataset identifier
-        config_name (str, optional): Defining the name of the dataset configuration.
-          it affects how the dataset is loaded.
-        train_split_name (str, optional): The name of the training split. Defaults to "train".
-        test_split_name (str, optional): The name of the test split. Defaults to "test".
-        valid_split_name (str, optional): The name of the validation split. Defaults to None.
-        train_split_files (Union[str, List[str]], optional): Create a split called "train" from these files.
-            not used unless referenced by the name "train" in one of the split_name arguments.
-        test_split_files (Union[str, List[str]], optional): Create a split called "test" from these files.
-            not used unless referenced by the name "test" in one of the split_name arguments.
-        valid_split_files (Union[str, List[str]], optional): Create a split called "valid" from these files.
-            not used unless referenced by the name "valid" in one of the split_name arguments.
-        test_split_size (float, optional): The size of the test split.
+        path: Path to the dataset, can be (1) a local path to a data folder or (2) a Huggingface dataset identifier
+        config_name: The name of the HF dataset configuration.
+            Affects how the dataset is loaded.
+        train_split_name: The name of the training split.
+        test_split_name: The name of the test split. Also used for `mgen predict`.
+        valid_split_name: The name of the validation split.
+        train_split_files: Create a split called "train" from these files.
+            Not used unless referenced by the name "train" in one of the split_name arguments.
+        test_split_files: Create a split called "test" from these files.
+            Not used unless referenced by the name "test" in one of the split_name arguments.
+            Also used for `mgen predict`.
+        valid_split_files: Create a split called "valid" from these files.
+            Not used unless referenced by the name "valid" in one of the split_name arguments.
+        test_split_size: The size of the test split.
            If test_split_name is None, creates a test split of this size from the training split.
-        valid_split_size (float, optional): The size of the validation split.
+        valid_split_size: The size of the validation split.
            If valid_split_name is None, creates a validation split of this size from the training split.
-        random_seed (int, optional): The random seed to use for splitting the data. Defaults to 42.
-        extra_reader_kwargs: (dict, optional): Extra kwargs for dataset readers. Defaults to None.
-        batch_size (int, optional): The batch size. Defaults to 128.
-        shuffle (bool, optional): Whether to shuffle the data. Defaults to True.
-        sampler (Optional[torch.utils.data.Sampler], optional): The sampler to use. Defaults to None.
-        num_workers (int, optional): The number of workers to use for data loading. Defaults to 0.
-        collate_fn (Optional[callable], optional): The function to use for collating data. Defaults to None.
-        pin_memory (bool, optional): Whether to pin memory. Defaults to True.
-        persistent_workers (bool, optional): Whether to use persistent workers. Defaults to False.
-        cv_num_folds (int, optional): The number of cross-validation folds, disables cv when <= 1. Defaults to 1.
-        cv_test_fold_id (int, optional): The fold id to use for cross-validation evaluation. Defaults to 0.
-        cv_enable_val_fold (bool, optional): Whether to enable a validation fold. Defaults to True.
-        cv_replace_val_fold_as_test_fold (bool, optional): Replace validation fold with test fold. Only useful when cv_enable_val_fold is False. Defaults to False
-        cv_fold_id_col (Optional[str], optional): The column name containing the fold id from a pre-split dataset. Set to None to enable automatic splitting. Defaults to None.
-        cv_val_offset (int, optional): the offset applied to cv_test_fold_id to determin val_fold_id
+        random_seed: The random seed to use for splitting the data.
+        extra_reader_kwargs: Extra kwargs for dataset readers.
+        batch_size: The batch size.
+        shuffle: Whether to shuffle the data.
+        sampler: The sampler to use.
+        num_workers: The number of workers to use for data loading.
+        collate_fn: The function to use for collating data.
+        pin_memory: Whether to pin memory.
+        persistent_workers: Whether to use persistent workers.
+        cv_num_folds: The number of cross-validation folds, disables cv when <= 1.
+        cv_test_fold_id: The fold id to use for cross-validation evaluation.
+        cv_enable_val_fold: Whether to enable a validation fold.
+        cv_replace_val_fold_as_test_fold: Replace validation fold with test fold. Only used when cv_enable_val_fold is False.
+        cv_fold_id_col: The column name containing the fold id from a pre-split dataset. Setting to None to enable automatic splitting.
+        cv_val_offset: The offset applied to cv_test_fold_id to determine val_fold_id.
     """
 
     def __init__(

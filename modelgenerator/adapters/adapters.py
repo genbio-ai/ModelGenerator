@@ -308,7 +308,7 @@ class LinearMaxPoolAdapter(nn.Module, SequenceAdapter):
 class LinearTransformerAdapter(nn.Module, SequenceAdapter):
     """Transformer adapter
 
-    Note: Sopport cls_pooling only.
+    Note: Support cls_pooling only.
 
     Args:
         embed_dim (int): Hidden size

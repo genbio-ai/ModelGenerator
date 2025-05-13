@@ -17,6 +17,10 @@ class MyLightningCLI(LightningCLI):
             "trainer.strategy.init_args.auto_wrap_policy.init_args.backbone_classes",
         )
         parser.link_arguments(
+            "model.init_args.backbone.class_path",
+            "data.init_args.backbone_class_path",
+        )
+        parser.link_arguments(
             "model.init_args.backbone.init_args.use_peft",
             "trainer.strategy.init_args.auto_wrap_policy.init_args.use_peft",
         )

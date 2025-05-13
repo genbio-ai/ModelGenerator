@@ -11,6 +11,8 @@ from modelgenerator.backbones.backbones import (
     Enformer,
     Borzoi,
     ESM,
+    Geneformer,
+    LegacyAdapterType,
 )
 
 
@@ -213,3 +215,49 @@ def esm():
             max_length=128,
         )
     return model
+
+
+@pytest.fixture
+def geneformer_cls():
+    class TinyModel(Geneformer):
+        def __init__(self, legacy_adapter_type=None, default_config=None):
+            if legacy_adapter_type == LegacyAdapterType.MASKED_LM:
+                config_overwrites = {
+                    "hidden_size": 8,
+                    "num_hidden_layers": 1,
+                    "num_attention_heads": 1,
+                    "intermediate_size": 8,
+                    "max_position_embeddings": 5,
+                }
+                max_length = 5
+            else:
+                config_overwrites = {
+                    "hidden_size": 16,
+                    "num_hidden_layers": 1,
+                    "num_attention_heads": 1,
+                    "intermediate_size": 16,
+                    "max_position_embeddings": 10,
+                }
+                max_length = 10
+
+            super().__init__(
+                legacy_adapter_type=legacy_adapter_type,
+                default_config=default_config,
+                from_scratch=True,
+                max_length=max_length,
+                config_overwrites=config_overwrites,
+            )
+
+    return TinyModel
+
+
+@pytest.fixture
+def geneformer(geneformer_cls):
+    # simple (non-MLM) tiny Geneformer
+    return geneformer_cls(None, None)
+
+
+@pytest.fixture
+def geneformer_mlm(geneformer_cls):
+    # masked-LM tiny Geneformer
+    return geneformer_cls(LegacyAdapterType.MASKED_LM, None)

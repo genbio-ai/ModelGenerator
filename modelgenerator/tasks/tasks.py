@@ -39,20 +39,13 @@ from modelgenerator.tasks.base import *
 
 
 class MLM(TaskInterface):
-    """Task for continuing pretraining on a masked language model. This task is used to fine-tune a model on a downstream task by continuing pretraining on a dataset with masked sequences.
+    """Task for performing masked language modeling (MLM) with a pretrained backbone.
+    Can be used to train from scratch or for domain adaptation.
+    Uses the [MLMDataModule](./#modelgenerator.data.MLMDataModule).
+    Evaluates in terms of reconstruction accuracy on all tokens and cross-entropy loss.
 
     Args:
-        backbone (BackboneCallable): The callable that returns a backbone.
-        optimizer (OptimizerCallable, optional): The optimizer to use for training. Defaults to torch.optim.AdamW.
-        lr_scheduler (LRSchedulerCallable, optional): The learning rate scheduler to use for training. Defaults to None.
-        batch_size (int, optional): The batch size to use for training. Defaults to None.
-        use_legacy_adapter (bool, optional):
-            Whether to use the adapter from the backbone. Defaults to False.
-            Will be deprecated once the new adapter API is fully verified.
-        strict_loading (bool, optional): Whether to strictly load the model. Defaults to True.
-            Set it to False if you want to replace the adapter (e.g. for continue pretraining)
-        reset_optimizer_states (bool, optional): Whether to reset the optimizer states. Defaults to False.
-            Set it to True if you want to replace the adapter (e.g. for continue pretraining).
+        backbone: A pretrained backbone from the modelgenerator library.
     """
 
     def __init__(
@@ -158,20 +151,14 @@ class MLM(TaskInterface):
 
 
 class Inference(MLM):
-    """Task for performing inference of token probabilities with a pre-trained backbone
+    """Task for performing inference with a pretrained backbone end-to-end, including the backbone's original adapter.
+    
+    Note:
+        Must be used with [PredictionWriter](../callbacks/#modelgenerator.callbacks.PredictionWriter). 
+        Model outputs are stored under "predictions".
 
     Args:
-        backbone (BackboneCallable): The callable that returns a backbone.
-        optimizer (OptimizerCallable, optional): The optimizer to use for training. Defaults to torch.optim.AdamW.
-        lr_scheduler (LRSchedulerCallable, optional): The learning rate scheduler to use for training. Defaults to None.
-        batch_size (int, optional): The batch size to use for training. Defaults to None.
-        use_legacy_adapter (bool, optional):
-            Whether to use the adapter from the backbone. Defaults to False.
-            Will be deprecated once the new adapter API is fully verified.
-        strict_loading (bool, optional): Whether to strictly load the model. Defaults to True.
-            Set it to False if you want to replace the adapter (e.g. for continue pretraining)
-        reset_optimizer_states (bool, optional): Whether to reset the optimizer states. Defaults to False.
-            Set it to True if you want to replace the adapter (e.g. for continue pretraining).
+        backbone: A pretrained backbone from the modelgenerator library.
     """
 
     def transform(
@@ -207,26 +194,17 @@ class Inference(MLM):
 
 
 class SequenceClassification(TaskInterface):
-    """Task for fine-tuning a model on a sequence classification task. Inherits from TaskInterface.
+    """Task for fine-tuning a sequence model for classification.
+    Evaluates in terms of accuracy, F1 score, Matthews correlation coefficient (MCC), and AUROC.
 
     Note:
-        Supports binary, multiclass, and multi-label classification tasks.
+        Supports binary, multiclass, and binary multi-label classification tasks.
 
     Args:
-        backbone (BackboneCallable): The callable that returns a backbone.
-        adapter (Callable[[int, int], SequenceAdapter], optional): The callable that returns an adapter. Defaults to LinearCLSAdapter.
-        n_classes (int, optional): The number of classes in the classification task. Defaults to 2.
-        multilabel (bool, optional): Indicate whether it is a multilabel classification task. If True, the n_classes should be set to the number of targets. Defaults to False.
-        optimizer (OptimizerCallable, optional): The optimizer to use for training. Defaults to torch.optim.AdamW.
-        lr_scheduler (LRSchedulerCallable, optional): The learning rate scheduler to use for training. Defaults to None.
-        batch_size (int, optional): The batch size to use for training. Defaults to None.
-        use_legacy_adapter (bool, optional):
-            Whether to use the adapter from the backbone. Defaults to False.
-            Will be deprecated once the new adapter API is fully verified.
-        strict_loading (bool, optional): Whether to strictly load the model. Defaults to True.
-            Set it to False if you want to replace the adapter (e.g. for continue pretraining)
-        reset_optimizer_states (bool, optional): Whether to reset the optimizer states. Defaults to False.
-            Set it to True if you want to replace the adapter (e.g. for continue pretraining).
+        backbone: A pretrained backbone from the modelgenerator library.
+        adapter: A SequenceAdapter for the model.
+        n_classes: The number of classes in the classification task.
+        multilabel: Indicate whether multiple labels can be positive, turning this into a multi-way binary classification task.
     """
 
     legacy_adapter_type = LegacyAdapterType.SEQ_CLS
@@ -438,35 +416,29 @@ class SequenceClassification(TaskInterface):
 
 
 class TokenClassification(SequenceClassification):
-    """Task for fine-tuning a model on a token classification task.
+    """Task for fine-tuning a model for token-wise classification.
+    Evaluates in terms of accuracy, F1 score, Matthews correlation coefficient (MCC), and AUROC.
 
     Args:
-        backbone (BackboneCallable): The callable that returns a backbone.
-        adapter (Callable[[int, int], TokenAdapter], optional): The callable that returns an adapter. Defaults to LinearAdapter.
-        n_classes (int, optional): The number of classes in the classification task. Defaults to 2.
-        optimizer (OptimizerCallable, optional): The optimizer to use for training. Defaults to torch.optim.AdamW.
-        lr_scheduler (LRSchedulerCallable, optional): The learning rate scheduler to use for training. Defaults to None.
-        batch_size (int, optional): The batch size to use for training. Defaults to None.
-        use_legacy_adapter (bool, optional):
-            Whether to use the adapter from the backbone. Defaults to False.
-            Will be deprecated once the new adapter API is fully verified.
-        strict_loading (bool, optional): Whether to strictly load the model. Defaults to True.
-            Set it to False if you want to replace the adapter (e.g. for continue pretraining)
-        reset_optimizer_states (bool, optional): Whether to reset the optimizer states. Defaults to False.
-            Set it to True if you want to replace the adapter (e.g. for continue pretraining).
+        adapter: A TokenAdapter for the model.
+        **kwargs: Additional keyword arguments for the parent class. `multilabel=False` is always overridden.
+
+    Attributes:
+        legacy_adapter_type (LegacyAdapterType): The LegacyAdapterType.TOKEN_CLS legacy adapter.
     """
 
     legacy_adapter_type = LegacyAdapterType.TOKEN_CLS
 
     def __init__(
         self,
-        *args,
+        backbone: BackboneCallable,
         adapter: Optional[Callable[[int, int], TokenAdapter]] = LinearAdapter,
+        n_classes: int = 2,
         **kwargs,
     ):
         # TODO: multi-label can be supported once token classification dataset
         # supports it and padding values are handled correctly
-        super().__init__(*args, adapter=adapter, multilabel=False, **kwargs)
+        super().__init__(backbone, adapter=adapter, n_classes=n_classes, multilabel=False, **kwargs)
         if self.__class__ is TokenClassification:
             self.save_hyperparameters()
 
@@ -512,32 +484,25 @@ class TokenClassification(SequenceClassification):
 
 
 class PairwiseTokenClassification(SequenceClassification):
-    """Task for fine-tuning a model on a pairwise token classification task.
+    """Task for fine-tuning a model for pairwise token classification.
+    Evaluates in terms of accuracy, F1 score, Matthews correlation coefficient (MCC), AUROC, and top-k accuracy for k=2,5,10.
+
+    Attributes:
+        legacy_adapter_type (LegacyAdapterType): The LegacyAdapterType.TOKEN_CLS legacy adapter.
 
     Args:
-        backbone (BackboneCallable): The callable that returns a backbone.
-        adapter (Callable[[int, int], TokenAdapter], optional): The callable that returns an adapter. Defaults to LinearAdapter.
-        n_classes (int, optional): The number of classes in the classification task. Defaults to 2.
-        optimizer (OptimizerCallable, optional): The optimizer to use for training. Defaults to torch.optim.AdamW.
-        lr_scheduler (LRSchedulerCallable, optional): The learning rate scheduler to use for training. Defaults to None.
-        batch_size (int, optional): The batch size to use for training. Defaults to None.
-        use_legacy_adapter (bool, optional):
-            Whether to use the adapter from the backbone. Defaults to False.
-            Will be deprecated once the new adapter API is fully verified.
-        strict_loading (bool, optional): Whether to strictly load the model. Defaults to True.
-            Set it to False if you want to replace the adapter (e.g. for continue pretraining)
-        reset_optimizer_states (bool, optional): Whether to reset the optimizer states. Defaults to False.
-            Set it to True if you want to replace the adapter (e.g. for continue pretraining).
+        adapter: A TokenAdapter for the model.
+        adapter_dim_multiplier (int, optional): The multiplier for the adapter dimension. Defaults to 2.
+        **kwargs: Additional keyword arguments for the parent class. `n_classes=2` and `multilabel=False` are always overridden.
     """
 
     legacy_adapter_type = LegacyAdapterType.TOKEN_CLS
 
     def __init__(
         self,
-        *args,
+        backbone: BackboneCallable,
         adapter: Optional[Callable[[int, int], TokenAdapter]] = LinearAdapter,
         adapter_dim_multiplier: int = 2,
-        n_classes: int = 2,
         **kwargs,
     ):
         """
@@ -545,14 +510,11 @@ class PairwiseTokenClassification(SequenceClassification):
         if we use MLPAdapterWithoutOutConcat, then adapter_dim_multiplier should be 1.
         The outer_concat operation is very memory intensive.
         """
-        # TODO: multi-class support in evaluate
-        if n_classes != 2:
-            raise ValueError(
-                "PairwiseTokenClassification currenlty only supports binary classification"
-            )
         self.adapter_dim_multiplier = adapter_dim_multiplier
+        kwargs["n_classes"] = 2
+        kwargs["multilabel"] = False
         super().__init__(
-            *args, adapter=adapter, n_classes=n_classes, multilabel=False, **kwargs
+            backbone, adapter=adapter, **kwargs
         )
         if self.__class__ is PairwiseTokenClassification:
             self.save_hyperparameters()
@@ -684,28 +646,17 @@ class PairwiseTokenClassification(SequenceClassification):
 
 
 class Diffusion(TaskInterface):
-    """Task Masked Diffusion Language Modeling training and denoising on sequences (https://arxiv.org/abs/2406.07524). Inherits from TaskInterface.
+    """[Masked Diffusion Language Modeling](https://arxiv.org/abs/2406.07524) training and generation on sequences.
+    Evaluates in terms of reconstruction accuracy on masked tokens and cross-entropy loss.
 
     Args:
-        backbone (BackboneCallable): The callable that returns a backbone.
-        adapter (Callable[[int, int], TokenAdapter], optional): The callable that returns an adapter. Defaults to None.
-        use_legacy_adapter (bool, optional):
-            Whether to use the legacy adapter. Defaults to True.
-            Will be deprecated once the new adapter API is fully verified.
-        sample_seq (bool, optional): Whether to sample tokens during denoising. Defaults to False.
-        num_denoise_steps (int, optional): The number of denoising steps to take. Defaults to 4.
-        sampling_temperature (float, optional): The temperature for sampling tokens. Defaults to 1.0.
-        normalize_posterior_weights (bool, optional): Whether to normalize posterior weights. Defaults to False.
-        optimizer (OptimizerCallable, optional): The optimizer to use for training. Defaults to torch.optim.AdamW.
-        lr_scheduler (LRSchedulerCallable, optional): The learning rate scheduler to use for training. Defaults to None.
-        batch_size (int, optional): The batch size to use for training. Defaults to None.
-        use_legacy_adapter (bool, optional):
-            Whether to use the adapter from the backbone. Defaults to False.
-            Will be deprecated once the new adapter API is fully verified.
-        strict_loading (bool, optional): Whether to strictly load the model. Defaults to True.
-            Set it to False if you want to replace the adapter (e.g. for continue pretraining)
-        reset_optimizer_states (bool, optional): Whether to reset the optimizer states. Defaults to False.
-            Set it to True if you want to replace the adapter (e.g. for continue pretraining).
+        backbone: A pretrained backbone from the modelgenerator library.
+        adapter: A TokenAdapter for the model. 
+        sample_seq: Whether to sample tokens during denoising, instead of always using the most likely token.
+        num_denoise_steps: Granularity of the denoising process. Less steps makes fewer forward passes and denoises more aggressively.
+        sampling_temperature: The temperature for sampling tokens, if sample_seq is True.
+        normalize_posterior_weights: Whether to normalize posterior weights. Experimental feature to help training stability.
+        verbose: Print while denoising (warning: fun to watch).
     """
 
     def __init__(
@@ -1065,25 +1016,14 @@ class Diffusion(TaskInterface):
 
 
 class ConditionalMLM(TaskInterface):
-    """Task for Conditional Masked Language Modeling training and denoising on sequences. Inherits from TaskInterface.
+    """Task for masked language modeling with extra condition inputs.
+    Evaluates in terms of reconstruction accuracy on all tokens and cross-entropy loss.
 
     Args:
-        backbone (BackboneCallable): The callable that returns a backbone.
-        adapter (Callable[[int, int, int, nn.Module], ConditionalGenerationAdapter], optional): The callable that returns an adapter. Defaults to ConditionalLMAdapter.
-        use_legacy_adapter (bool, optional):
-            Whether to use the pre-trained legacy adapter within the conditional decoder. Defaults to True.
-        condition_dim (int, optional): The dimension of the condition. Defaults to 1.
-        use_pretrained_decoder_head (bool, optional): Whether to use a pretrained decoder head in the condition adapter. Defaults to True.
-        sample_seq (bool, optional): Whether to sample tokens during denoising. Defaults to False.
-        num_denoise_steps (int, optional): The number of denoising steps to take. Defaults to 4.
-        sampling_temperature (float, optional): The temperature for sampling tokens. Defaults to 1.0.
-        optimizer (OptimizerCallable, optional): The optimizer to use for training. Defaults to torch.optim.AdamW.
-        lr_scheduler (LRSchedulerCallable, optional): The learning rate scheduler to use for training. Defaults to None.
-        batch_size (int, optional): The batch size to use for training. Defaults to None.
-        strict_loading (bool, optional): Whether to strictly load the model. Defaults to True.
-            Set it to False if you want to replace the adapter (e.g. for continue pretraining)
-        reset_optimizer_states (bool, optional): Whether to reset the optimizer states. Defaults to False.
-            Set it to True if you want to replace the adapter (e.g. for continue pretraining).
+        backbone: A pretrained backbone from the modelgenerator library.
+        adapter: A ConditionalGenerationAdapter for the model.
+        use_legacy_adapter: Whether to use the pre-trained legacy adapter within the conditional decoder.
+        condition_dim: The dimension of the condition.
     """
 
     def __init__(
@@ -1207,33 +1147,19 @@ class ConditionalMLM(TaskInterface):
 
 
 class ConditionalDiffusion(Diffusion):
-    """Task for Conditional Diffusion Language Modeling training and denoising on sequences (https://arxiv.org/abs/2406.07524). Inherits from Diffusion.
+    """Task for masked diffusion language modeling with extra condition inputs.
+    Evaluates in terms of reconstruction accuracy on masked tokens and cross-entropy loss.
 
     Args:
-        backbone (BackboneCallable, optional): The callable that returns a backbone. Defaults to aido_dna_dummy.
-        adapter (Callable[[int, int, int, nn.Module], ConditionalGenerationAdapter], optional): The callable that returns an adapter. Defaults to ConditionalLMAdapter.
-        use_legacy_adapter (bool, optional):
-            Whether to use the pre-trained legacy adapter within the conditional decoder. Defaults to True.
-        condition_dim (int, optional): The dimension of the condition. Defaults to 1.
-        sample_seq (bool, optional): Whether to sample tokens during denoising. Defaults to False.
-        num_denoise_steps (int, optional): The number of denoising steps to take. Defaults to 4.
-        sampling_temperature (float, optional): The temperature for sampling tokens. Defaults to 1.0.
-        normalize_posterior_weights (bool, optional): Whether to normalize posterior weights. Defaults to False.
-        optimizer (OptimizerCallable, optional): The optimizer to use for training. Defaults to torch.optim.AdamW.
-        lr_scheduler (LRSchedulerCallable, optional): The learning rate scheduler to use for training. Defaults to None.
-        batch_size (int, optional): The batch size to use for training. Defaults to None.
-        use_legacy_adapter (bool, optional):
-            Whether to use the adapter from the backbone. Defaults to False.
-            Will be deprecated once the new adapter API is fully verified.
-        strict_loading (bool, optional): Whether to strictly load the model. Defaults to True.
-            Set it to False if you want to replace the adapter (e.g. for continue pretraining)
-        reset_optimizer_states (bool, optional): Whether to reset the optimizer states. Defaults to False.
-            Set it to True if you want to replace the adapter (e.g. for continue pretraining).
+        backbone: A pretrained backbone from the modelgenerator library.
+        adapter: A ConditionalGenerationAdapter for the model.
+        use_legacy_adapter: Whether to use the pre-trained legacy adapter within the conditional decoder.
+        condition_dim: The dimension of the condition.
     """
 
     def __init__(
         self,
-        *args,
+        backbone: BackboneCallable,
         adapter: Optional[
             Callable[[int, int, int, nn.Module], ConditionalGenerationAdapter]
         ] = ConditionalLMAdapter,
@@ -1241,7 +1167,7 @@ class ConditionalDiffusion(Diffusion):
         condition_dim: int = 1,
         **kwargs,
     ):
-        super().__init__(*args, use_legacy_adapter=use_legacy_adapter, **kwargs)
+        super().__init__(backbone, use_legacy_adapter=use_legacy_adapter, **kwargs)
         if self.__class__ is ConditionalDiffusion:
             self.save_hyperparameters()
         self.adapter = None
@@ -1297,20 +1223,15 @@ class ConditionalDiffusion(Diffusion):
 
 
 class SequenceRegression(TaskInterface):
-    """Task for fine-tuning a model on single-/multi-task regression.
+    """Task for fine-tuning a sequence model for single-/multi-task regression.
+    Evaluates in terms of mean absolute error, mean squared error, R2 score, Pearson correlation, and Spearman correlation.
 
     Args:
-        backbone (BackboneCallable): The callable that returns a backbone.
-        adapter (Callable[[int, int], SequenceAdapter], optional): The callable that returns an adapter. Defaults to LinearCLSAdapter.
-        num_outputs (int, optional): The number of outputs in the regression task. Defaults to 1.
-        loss_func (Callable, optional): Loss function for regression tasks. Defaults to nn.MSELoss.
-        optimizer (OptimizerCallable, optional): The optimizer to use for training. Defaults to torch.optim.AdamW.
-        lr_scheduler (LRSchedulerCallable, optional): The learning rate scheduler to use for training. Defaults to None.
-        batch_size (int, optional): The batch size to use for training. Defaults to None.
-        strict_loading (bool, optional): Whether to strictly load the model. Defaults to True.
-            Set it to False if you want to replace the adapter (e.g. for continue pretraining)
-        reset_optimizer_states (bool, optional): Whether to reset the optimizer states. Defaults to False.
-            Set it to True if you want to replace the adapter (e.g. for continue pretraining).
+        backbone: A pretrained backbone from the modelgenerator library.
+        adapter: A SequenceAdapter for the model.
+        num_outputs: The number of outputs for the regression task.
+        loss_func: The loss function to use for training.
+        log_grad_norm_step: The step interval for logging gradient norms.
     """
 
     def __init__(
@@ -1540,32 +1461,23 @@ class SequenceRegression(TaskInterface):
 
 
 class SequenceRegressionWithScaling(SequenceRegression):
-    """Task for fine-tuning a model on a regression task with scaling, where the label is scaled with dynamically adjusted mean and standard derivation.
+    """Task for fine-tuning a sequence model on a regression task with scaling, where the label is scaled with dynamically adjusted mean and standard derivation.
+    Evaluates in terms of mean absolute error, mean squared error, R2 score, Pearson correlation, and Spearman correlation.
 
     Note:
         Does not tolerate legacy adapters.
-
-    Args:
-        backbone (BackboneCallable): The callable that returns a backbone.
-        adapter (Callable[[int, int], SequenceAdapter], optional): The callable that returns an adapter. Defaults to LinearCLSAdapter.
-        num_outputs (int, optional): The number of outputs in the regression task. Defaults to 1.
-        optimizer (OptimizerCallable, optional): The optimizer to use for training. Defaults to torch.optim.AdamW.
-        lr_scheduler (LRSchedulerCallable, optional): The learning rate scheduler to use for training. Defaults to None.
-        batch_size (int, optional): The batch size to use for training. Defaults to None.
-        strict_loading (bool, optional): Whether to strictly load the model. Defaults to True.
-            Set it to False if you want to replace the adapter (e.g. for continue pretraining)
-        reset_optimizer_states (bool, optional): Whether to reset the optimizer states. Defaults to False.
-            Set it to True if you want to replace the adapter (e.g. for continue pretraining).
     """
 
     def __init__(
         self,
-        *args,
+        backbone: BackboneCallable,
         adapter: Optional[Callable[[int, int], SequenceAdapter]] = LinearCLSAdapter,
         num_outputs: int = 1,
+        loss_func: Callable[..., torch.nn.Module] = torch.nn.MSELoss,
+        log_grad_norm_step: int = 0,
         **kwargs,
     ):
-        super().__init__(*args, **kwargs)
+        super().__init__(backbone, adapter=adapter, num_outputs=num_outputs, loss_func=loss_func, log_grad_norm_step=log_grad_norm_step, **kwargs)
         if self.__class__ is SequenceRegressionWithScaling:
             self.save_hyperparameters()
         self.adapter_fn = adapter
@@ -1579,11 +1491,11 @@ class SequenceRegressionWithScaling(SequenceRegression):
         for stage in ["train", "val", "test"]:
             self.metrics[f"{stage}_metrics"] = nn.ModuleDict(
                 {
-                    # "pearson": tm.PearsonCorrCoef(num_outputs=num_outputs),
-                    # "spearman": tm.SpearmanCorrCoef(num_outputs=num_outputs),
-                    # "mae": tm.MeanAbsoluteError(num_outputs=num_outputs),
+                    "pearson": tm.PearsonCorrCoef(num_outputs=num_outputs),
+                    "spearman": tm.SpearmanCorrCoef(num_outputs=num_outputs),
+                    "mae": tm.MeanAbsoluteError(num_outputs=num_outputs),
                     "r2": tm.R2Score(),
-                    # "mse": tm.MeanSquaredError(num_outputs=num_outputs),
+                    "mse": tm.MeanSquaredError(num_outputs=num_outputs),
                 }
             )
         self.metrics_to_pbar = set(self.metrics["train_metrics"].keys())
@@ -1691,16 +1603,16 @@ class SequenceRegressionWithScaling(SequenceRegression):
 
 
 class Embed(TaskInterface):
-    """Task for getting embeddings from a backbone. This task is used only for inference.
+    """Task for getting embeddings from a pretrained backbone. This task is used only for inference.
 
     Note:
-        Must be used with modelgenerator.callbacks.PredictionWriter. Embeddings are stored under "predictions".
+        Must be used with [PredictionWriter](../callbacks/#modelgenerator.callbacks.PredictionWriter). 
+        Embeddings are stored under "predictions".
 
     Args:
-        backbone (BackboneCallable): The callable that returns a backbone.
-        batch_size (int, optional): The batch size to use for training. Defaults to None.
-        strict_loading (bool, optional): Whether to strictly load the model. Defaults to True.
-            Set it to False if you want to replace the adapter (e.g. for continue pretraining)
+        backbone: A pretrained backbone from the modelgenerator library.
+        **kwargs: Additional keyword arguments for the parent class. 
+            `use_legacy_adapter=False` is always overridden.
     """
 
     def __init__(self, backbone: BackboneCallable, **kwargs):
@@ -1758,16 +1670,19 @@ class Embed(TaskInterface):
 
 
 class ZeroshotPredictionDiff(TaskInterface):
-    """Task for zero-shot prediction on masked languange model. This task is used to evaluate the embeddings of pretrained model
-       The evaluation metrics are AUROC and AUPRC, which compute the log-likelihood difference between probability of ref and alt at the mutated position
+    """Task for zero-shot prediction with a languange model that produces token logits.
+       Computes the log-likelihood difference between probability of ref and alt at the mutated position.
+       Evaluates in terms of AUROC and AUPRC.
+
     Args:
-        backbone (BackboneCallable): The callable that returns a backbone.
+        backbone: A pretrained backbone from the modelgenerator library.
+        **kwargs: Additional keyword arguments for the parent class. 
+            `use_legacy_adapter=True` is always overridden.
     """
 
     def __init__(
         self,
         backbone: BackboneCallable,
-        use_legacy_adapter: bool = True,
         **kwargs,
     ):
         if self.__class__ is ZeroshotPredictionDiff:
@@ -1891,23 +1806,23 @@ class ZeroshotPredictionDiff(TaskInterface):
 
 
 class ZeroshotPredictionDistance(TaskInterface):
-    """Task for zero-shot prediction on an embedding model.
-    Calculates the L1 and L2 distance between a reference and alt embeddings.
-    Then evaluates the AUROC and AUPRC of this distance statistic against a given label.
+    """Task for zero-shot prediction with a model that produces embeddings.
+       Computes the L1 and L2 distance between the reference and mutated sequence embeddings.
+       Evaluates in terms of AUROC and AUPRC of the embedding distance.
 
     Args:
-        backbone (BackboneCallable): The callable that returns a backbone.
-        use_legacy_adapter (bool, optional): Whether we use the legacy adapter from the pretrained model. Defaults to True.
-        all_hidden_states (bool, optional): Whether to run the test on all available hidden layers. Defaults to False, only using the last layer.
-        shared_ref (bool, optional): Whether to use a shared reference sequence to accelerate zero-shot computation. Defaults to False, which uses a separate reference sequence for each mutated sequence.
+        backbone: A pretrained backbone from the modelgenerator library.
+        all_hidden_states: Whether to run the test on all available hidden layers. Defaults to False, only using the last layer.
+        shared_ref: Whether to use a shared reference sequence to accelerate zero-shot computation. Uses a separate reference sequence for each mutated sequence by default.
+        **kwargs: Additional keyword arguments for the parent class.
+            `use_legacy_adapter=True` is always overridden.
     """
 
     def __init__(
         self,
         backbone: BackboneCallable,
-        use_legacy_adapter: bool = True,
         all_hidden_states: bool = False,
-        shared_ref: bool =False,
+        shared_ref: bool = False,
         **kwargs,
     ):
         if self.__class__ is ZeroshotPredictionDistance:
@@ -1924,7 +1839,7 @@ class ZeroshotPredictionDistance(TaskInterface):
         if self.backbone is not None:
             return
         self.backbone = self.backbone_fn(LegacyAdapterType.MASKED_LM, None)
-        self.adapter = self.backbone.get_decoder()
+        self.adapter = self.backbone.get_decoder()  # CE: Why does this require an adapter
         self.n_layers = self.backbone.get_num_layer() if self.all_hidden_states else 1
         metrics_dict = {}
         for i in range(self.n_layers):
@@ -2114,24 +2029,19 @@ class ZeroshotPredictionDistance(TaskInterface):
 
 class MMSequenceRegression(TaskInterface):
     """Task for fine-tuning multiple models on single-/multi-task regression.
+    Evaluates in terms of mean absolute error, mean squared error, R2 score, Pearson correlation, and Spearman correlation.
 
-    Note: Support any combination of DNA, RNA and protein backbones
+    Note: 
+        Supports any combination of DNA, RNA and protein backbones
 
     Args:
-        backbone (BackboneCallable): The callable that returns a backbone.
-        backbone1 (BackboneCallable): The callable that returns a backbone.
-        backbone2 (BackboneCallable, optional): The callable that returns a backbone. Defaults to None.
-        backbone_order (list): Specify the order of modalities corresponding to the backbone, backbone1,and backbone2. Defaults to ["dna", "rna"].
-        adapter (Callable[[int, int, int, int], FusionAdapter], optional): The callable that returns an adapter. Defaults to MMFusionTokenAdapter.
-        num_outputs (int, optional): The number of outputs in the regression task. Defaults to 1.
-        loss_func (Callable, optional): Loss function for regression tasks. Defaults to nn.MSELoss.
-        optimizer (OptimizerCallable, optional): The optimizer to use for training. Defaults to torch.optim.AdamW.
-        lr_scheduler (LRSchedulerCallable, optional): The learning rate scheduler to use for training. Defaults to None.
-        batch_size (int, optional): The batch size to use for training. Defaults to None.
-        strict_loading (bool, optional): Whether to strictly load the model. Defaults to True.
-            Set it to False if you want to replace the adapter (e.g. for continue pretraining)
-        reset_optimizer_states (bool, optional): Whether to reset the optimizer states. Defaults to False.
-            Set it to True if you want to replace the adapter (e.g. for continue pretraining).
+        backbone: A pretrained backbone from the modelgenerator library.
+        backbone1: A second pretrained backbone from the modelgenerator library.
+        backbone2: An optional third pretrained backbone from the modelgenerator library.
+        backbone_order: A list of data columns in order of the backbones. Defaults to ["dna_seq", "rna_seq", "protein_seq"].
+        adapter: A callable that returns a FusionAdapter.
+        num_outputs: The number of outputs for the regression task.
+        loss_func: A callable that returns a loss function.
     """
 
     def __init__(

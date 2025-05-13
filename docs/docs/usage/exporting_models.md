@@ -63,7 +63,7 @@ Checkpoints can also be converted to HF format.
 git clone https://huggingface.co/genbio-ai/dummy-ckpt
 
 # Convert to HF
-mgen convert --config conversion_config.yaml
+mgen-hf convert --config conversion_config.yaml
 
 # conversion_config.yaml:
 task_class: modelgenerator.tasks.SequenceClassification

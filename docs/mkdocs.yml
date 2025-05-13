@@ -32,14 +32,25 @@ nav:
     - experiment_design/datafiles.md
   - API Reference:
     - api_reference/backbones.md
+    - api_reference/data.md
     - api_reference/tasks.md
     - api_reference/adapters.md
-    - api_reference/data.md
     - api_reference/callbacks.md
+    - api_reference/trainer.md
 
 plugins:
 - search
-- mkdocstrings
+- mkdocstrings:
+    handlers:
+      python:
+        options:
+          show_root_heading: true
+          show_source: false
+          members: false
+          heading_level: 3
+          extensions:
+            - griffe_inherited_docstrings
+            - docstring_inheritance.griffe
 
 markdown_extensions:
   - attr_list

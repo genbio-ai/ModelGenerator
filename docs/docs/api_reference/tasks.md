@@ -1,16 +1,22 @@
 # Tasks
 
-> Note: Adapters and Backbones are typed as [`Callables`](https://jsonargparse.readthedocs.io/en/stable/index.html#callable-type), since some args are reserved to be automatically configured within the task.
-As a general rule, positional arguments are reserved while keyword arguments are free to use.
-For example, the backbone, adapter, optimizer, and lr_scheduler can be configured as
+Tasks define data and model usage.
+They provide a simple interface for swapping backbones, adapters, and data without any code changes, enabling rapid and reproducible experimentation.
+They are specified with the `--model` argument in the CLI or in the `model` section of a configuration file.
+
+Tasks automatically configure [backbones](./backbones) and [adapters](./adapters) for training with `mgen fit`, evaluation with `mgen test/validate`, and inference with `mgen predict`.
+They cover a range of use-cases for information extraction, domain adaptation, supervised prediction, generative modeling, and zero-shot applications.
+
+This reference overviews the available no-code tasks for finetuning and inference.
+If you would like to develop new tasks, see [Experiment Design](../../experiment_design).
 
 ```yaml
-# My SequenceClassification task
+# Example Task Configuration
 model:
   class_path: SequenceClassification
   init_args:
     backbone:
-      class_path: aido_dna_dummy
+      class_path: aido_dna_7b
       init_args:
         use_peft: true
         lora_r: 16
@@ -35,74 +41,46 @@ model:
       init_args:
         step_size: 1
         gamma: 0.1
+data:
+  ...
+trainer:
+  ...
 ```
 
-::: modelgenerator.tasks.SequenceClassification
-    handler: python
-    options:
-      members: false
-      show_root_heading: true
-      show_source: false
+> Note: Adapters and Backbones are typed as [`Callables`](https://jsonargparse.readthedocs.io/en/stable/index.html#callable-type), since some args are reserved to be automatically configured within the task.
+As a general rule, positional arguments are reserved while keyword arguments are free to use.
+For example, the backbone, adapter, optimizer, and lr_scheduler can be configured as
 
-::: modelgenerator.tasks.TokenClassification
-    handler: python
-    options:
-      members: false
-      show_root_heading: true
-      show_source: false
-
-::: modelgenerator.tasks.PairwiseTokenClassification
-    handler: python
-    options:
-      members: false
-      show_root_heading: true
-      show_source: false
-
-::: modelgenerator.tasks.Diffusion
-    handler: python
-    options:
-      members: false
-      show_root_heading: true
-      show_source: false
-
-::: modelgenerator.tasks.ConditionalDiffusion
-    handler: python
-    options:
-      members: false
-      show_root_heading: true
-      show_source: false
-
-::: modelgenerator.tasks.ConditionalMLM
-    handler: python
-    options:
-      members: false
-      show_root_heading: true
-      show_source: false
+## Extract
 
 ::: modelgenerator.tasks.Embed
-    handler: python
-    options:
-      members: false
-      show_root_heading: true
-      show_source: false
 
 ::: modelgenerator.tasks.Inference
-    handler: python
-    options:
-      members: false
-      show_root_heading: true
-      show_source: false
+
+## Adapt
 
 ::: modelgenerator.tasks.MLM
-    handler: python
-    options:
-      members: false
-      show_root_heading: true
-      show_source: false
+
+::: modelgenerator.tasks.ConditionalMLM
+
+## Predict
+
+::: modelgenerator.tasks.SequenceClassification
+
+::: modelgenerator.tasks.TokenClassification
+
+::: modelgenerator.tasks.PairwiseTokenClassification
 
 ::: modelgenerator.tasks.MMSequenceRegression
-    handler: python
-    options:
-      members: false
-      show_root_heading: true
-      show_source: false
+
+## Generate
+
+::: modelgenerator.tasks.Diffusion
+
+::: modelgenerator.tasks.ConditionalDiffusion
+
+## Zero-Shot
+
+::: modelgenerator.tasks.ZeroshotPredictionDiff
+
+::: modelgenerator.tasks.ZeroshotPredictionDistance

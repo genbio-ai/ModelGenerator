@@ -319,3 +319,32 @@ def test_esm(esm):
     # Test get_vocab_size method
     vocab_size = model.get_vocab_size()
     assert vocab_size == 33
+
+
+def test_geneformer_forward_and_getters(geneformer):
+    model = geneformer
+
+    # feed random token IDs and an all-ones mask
+    input_ids = torch.randint(0, 100, (2, 10), dtype=torch.long)
+    attention_mask = torch.ones(2, 10, dtype=torch.long)
+
+    out = model.forward(input_ids, attention_mask)
+    # expect (batch, seq_len, hidden_size)
+    assert isinstance(out, torch.Tensor)
+    assert out.shape == (2, 10, 16)
+
+    # getters
+    assert model.get_max_context() == 10
+    assert model.get_embedding_size() == 16
+    # default has no decoder
+    assert model.get_decoder() is None
+
+def test_geneformer_decoder_for_masked_lm_head(geneformer_mlm):
+    model = geneformer_mlm
+    dec = model.get_decoder()
+
+    fake_hidden = torch.randn(2, 5, 8)
+    logits = dec(fake_hidden)
+    assert isinstance(logits, torch.Tensor)
+    # logits shape should be (batch, seq_len, vocab_size)
+    assert logits.ndim == 3

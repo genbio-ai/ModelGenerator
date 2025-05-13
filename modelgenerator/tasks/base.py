@@ -10,6 +10,7 @@ from lightning.pytorch.cli import OptimizerCallable, LRSchedulerCallable
 import torchmetrics as tm
 
 from jsonargparse import ArgumentParser
+from docstring_inheritance import GoogleDocstringInheritanceInitMeta
 
 from modelgenerator.lr_schedulers import LazyLRScheduler
 from modelgenerator.backbones import (
@@ -23,7 +24,7 @@ BackboneCallable = Callable[
 ]
 
 
-class TaskInterface(pl.LightningModule):
+class TaskInterface(pl.LightningModule, metaclass=GoogleDocstringInheritanceInitMeta):
     """Interface class to ensure consistent implementation of essential methods for all tasks.
 
     Note:
@@ -34,15 +35,17 @@ class TaskInterface(pl.LightningModule):
         the __init__, configure_model, collate, forward, and evaluate methods.
 
     Args:
-        use_legacy_adapter (bool, optional):
-            Whether to use the adapter from the backbone (HF head support). Defaults to False.
-        strict_loading (bool, optional): Whether to strictly load the model. Defaults to True.
-            Set it to False if you want to replace the adapter (e.g. for continue pretraining)
-        batch_size (int, optional): The batch size to use for training. Defaults to None.
-        optimizer (OptimizerCallable, optional): The optimizer to use for training. Defaults to torch.optim.AdamW.
-        reset_optimizer_states (bool, optional): Whether to reset the optimizer states. Defaults to False.
-            Set it to True if you want to replace the adapter (e.g. for continue pretraining).
-        lr_scheduler (LRSchedulerCallable, optional): The learning rate scheduler to use for training. Defaults to None.
+        use_legacy_adapter: Whether to use the adapter from the backbone (HF head support). 
+            **Warning**: This is not supported for all tasks and will be depreciated in the future.
+        strict_loading: Whether to strictly load the model from the checkpoint. 
+            If False, replaces missing weights with pretrained weights. 
+            Should be enabled when loading a checkpoint from a run with `use_peft` and `save_peft_only`.
+        batch_size: The batch size to use for training.
+        optimizer: The optimizer to use for training.
+        reset_optimizer_states: Whether to reset the optimizer states.
+            Set it to True if you want to replace the adapter (e.g. for continued pretraining).
+        lr_scheduler: The learning rate scheduler to use for training.
+        **kwargs: Additional arguments passed to the parent class.
     """
 
     def __init__(
