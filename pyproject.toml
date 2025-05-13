@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "modelgenerator"
-version = "0.1.1-4"
+version = "0.1.2"
 description = "AIDO.ModelGenerator is a software stack powering the development of an AI-driven Digital Organism by enabling researchers to adapt pretrained models and generate finetuned models for downstream tasks."
 readme = "README.md"
 authors = [
