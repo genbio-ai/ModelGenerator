@@ -4,6 +4,7 @@ from typing import Union, Optional, List, Tuple
 
 import torch.nn as nn
 from torch import Tensor
+from docstring_inheritance import GoogleDocstringInheritanceInitMeta
 
 
 class LegacyAdapterType(enum.Enum):
@@ -35,8 +36,13 @@ class DefaultConfig:
     config_overwrites: dict = dataclasses.field(default_factory=dict)
 
 
-class SequenceBackboneInterface(nn.Module):
-    """Interface class to ensure consistent implementation of essential methods for all backbones."""
+class SequenceBackboneInterface(nn.Module, metaclass=GoogleDocstringInheritanceInitMeta):
+    """Interface class to ensure consistent implementation of essential methods for all backbones.
+
+    Attributes:
+        fsdp_wrap_modules: List of module paths to wrap when using distributed training with FSDP.
+        model_path (str): Path to the model weights. May be HF.
+    """
 
     # import paths of modules to wrap when using FSDP
     fsdp_wrap_modules: List[str] = []
@@ -155,10 +161,10 @@ class HFSequenceBackbone(SequenceBackboneInterface):
         be changed by the user.
 
     Args:
-        legacy_adapter_type (LegacyAdapterType, None): Type of legacy adapter, setting it to None disables it.
-        default_config (dict, None): Default values set by downstream tasks. Defaults to None.
-        config_overwrites (dict, optional): Optional model arguments for PretrainedConfig. Defaults to None.
-        model_init_args (dict, optional): Optional model arguments passed to its init method. Defaults to None.
+        legacy_adapter_type: Ignore. Reserved for use by `use_legacy_adapter` in Tasks.
+        default_config: Ignore. Reserved for use by `use_legacy_adapter` in Tasks. 
+        config_overwrites: Optional model arguments for PretrainedConfig.
+        model_init_args: Optional model arguments passed to its init method.
     """
 
     def __init__(

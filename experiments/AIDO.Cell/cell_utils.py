@@ -5,9 +5,8 @@ import os
 import pandas as pd
 import scanpy as sc
 
-
 current_dir = os.path.dirname(os.path.abspath(__file__))
-MODEL_GENES = pd.read_csv(os.path.join(current_dir, 'OS_scRNA_gene_index.19264.tsv'), sep='\t')['gene_name'].to_numpy()
+MODEL_GENES = pd.read_csv(os.path.join(current_dir, '../../modelgenerator/cell/gene_lists/OS_scRNA_gene_index.19264.tsv'), sep='\t')['gene_name'].to_numpy()
 
 
 def align_adata(adata: ad.AnnData) -> Tuple[ad.AnnData, np.ndarray]:

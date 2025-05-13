@@ -400,15 +400,16 @@ class ConcatFusion(nn.Module):
 class MMFusionSeqAdapter(nn.Module, FusionAdapter):
     """Multimodal embeddings fusion with SequenceAdapter.
 
-    Note: Accept 2-3 sequence embeddings as input and fused them into a multimodal embedding for the adpter
+    Note: 
+        Accepts 2-3 sequence embeddings as input and fuses them into a multimodal embedding for the adapter.
 
     Args:
-        out_features (int): Number of output features
-        input_size (int): number of input features for the first modality
-        input_size_1 (int): number of input features for the second modality
-        input_size_2 (int, optinal): number of input features for the third modality
-        fusion (Callable, torch.nn.Module): The callable that returns a fusion module. Defaults to CrossAttentionFusion.
-        adapter (Callable[[int, int], SequenceAdapter]): The callable that returns an adapter. Defaults to LinearCLSAdapter.
+        out_features: Number of output features.
+        input_size: number of input features for the first modality.
+        input_size_1: number of input features for the second modality.
+        input_size_2: number of input features for the third modality.
+        fusion: The callable that returns a fusion module.
+        adapter: The callable that returns an adapter.
     """
 
     def __init__(
@@ -417,7 +418,7 @@ class MMFusionSeqAdapter(nn.Module, FusionAdapter):
         input_size: int,
         input_size_1: int,
         input_size_2: int = None,
-        fusion: Callable[[int, int, int], torch.nn.Module] = CrossAttentionFusion,
+        fusion: Callable[[int, int, int], CrossAttentionFusion] = CrossAttentionFusion,
         adapter: Callable[[int, int], SequenceAdapter] = LinearCLSAdapter,
     ):
         super().__init__()
@@ -452,17 +453,18 @@ class MMFusionSeqAdapter(nn.Module, FusionAdapter):
         return preds
 
 class MMFusionTokenAdapter(nn.Module, FusionAdapter):
-    """Multimodal embeddings fusion with TokenAdapter, fuse embeddings at token level
+    """Multimodal embeddings fusion with TokenAdapter. Fuses embeddings into a single token embedding.
 
-    Note: Accept 2-3 sequence embeddings as input and fused them into a multimodal embedding for the adpter
+    Note: 
+        Accepts 2-3 sequence embeddings as input and fuse them into a multimodal embedding for the adapter
 
     Args:
-        out_features (int): Number of output features
-        input_size (int): number of input features for the first modality
-        input_size_1 (int): number of input features for the second modality
-        input_size_2 (int, optinal): number of input features for the third modality
-        fusion (Callable, torch.nn.Module): The callable that returns a fusion module. Defaults to CrossAttentionFusion.
-        adapter (Callable[[int, int], TokenAdapter]): The callable that returns an adapter. Defaults to MLPAdapter.
+        out_features: Number of output features.
+        input_size: number of input features for the first modality.
+        input_size_1: number of input features for the second modality.
+        input_size_2: number of input features for the third modality.
+        fusion: The callable that returns a fusion module.
+        adapter: The callable that returns an adapter.
     """
 
     def __init__(
@@ -471,7 +473,7 @@ class MMFusionTokenAdapter(nn.Module, FusionAdapter):
         input_size: int,
         input_size_1: int,
         input_size_2: int = None,
-        fusion: Callable[[int, int, int], torch.nn.Module] = CrossAttentionFusion,
+        fusion: Callable[[int, int, int], ConcatFusion] = ConcatFusion,
         adapter: Callable[[int, int], TokenAdapter] = MLPAdapter,
     ):
         super().__init__()

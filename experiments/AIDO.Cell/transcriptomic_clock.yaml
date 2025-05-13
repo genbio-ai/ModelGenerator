@@ -13,7 +13,6 @@ data:
     rename_columns:
       - 'labels'
     label_scaling: 'z_scaling'
-    gene_set_file: '/workspace/experiments/AIDO.Cell/OS_scRNA_gene_index.19264.tsv'
 model:
   class_path: modelgenerator.tasks.SequenceRegression
   init_args:

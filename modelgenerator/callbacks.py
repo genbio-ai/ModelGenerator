@@ -255,7 +255,7 @@ class FTScheduler(BaseFinetuning):
     """Finetuning scheduler that gradually unfreezes layers based on a schedule
 
     Args:
-        ft_schedule_path (str): Path to a finetuning schedule that mentions which modules to unfreeze at which epoch.
+        ft_schedule_path (str): Path to a finetuning schedule that mentions which modules to unfreeze at which epoch. See tutorial for examples.
     """
 
     # Adapted from https://github.com/lbcb-sci/RiNALMo/blob/main/rinalmo/utils/finetune_callback.py

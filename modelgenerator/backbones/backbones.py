@@ -26,21 +26,19 @@ class GenBioBERT(HFSequenceBackbone):
         Models using this interface include `aido_dna_7b`, `aido_dna_300m`, `dna_dummy`, `aido_dna_debug`,
         `aido_rna_1b600m`, `aido_rna_1b600m_cds`, `aido_rna_1m_mars`, `aido_rna_25m_mars`, `aido_rna_300m_mars`,
         `aido_rna_650m`, `aido_rna_650m_cds`.
-
+        
         FSDP auto_wrap_policy is `modelgenerator.distributed.fsdp.wrap.AutoWrapPolicy`
 
     Args:
-        config_overwrites (dict, optional): Optional model arguments for PretrainedConfig. Defaults to None.
-        model_init_args (dict, optional): Optional model arguments passed to its init method. Defaults to None.
-        from_scratch (bool, optional): Whether to create the model from scratch. Defaults to False.
-        max_length (int, optional): Maximum sequence length. Defaults to 512.
-        use_peft (bool, optional): Whether to use LoRA PEFT. Defaults to False.
-        frozen (bool, optional): Whether to freeze encoder. Defaults to False.
-        save_peft_only (bool, optional): Whether to save only the PEFT weights. Defaults to True.
-        lora_r (int, optional): LoRA r parameter. Defaults to 16.
-        lora_alpha (int, optional): LoRA alpha parameter. Defaults to 32.
-        lora_dropout (float, optional): LoRA dropout. Defaults to 0.1.
-        lora_target_modules (Optional[List[str]], optional): LoRA target modules. Defaults to ["query", "value"].
+        from_scratch: Whether to create the model from scratch.
+        max_length: Maximum sequence length.
+        use_peft: Whether to use LoRA PEFT.
+        frozen: Whether to freeze encoder.
+        save_peft_only: Whether to save only the PEFT weights.
+        lora_r: LoRA r parameter.
+        lora_alpha: LoRA alpha parameter.
+        lora_dropout: LoRA dropout.
+        lora_target_modules: LoRA target modules.
     """
 
     fsdp_wrap_modules = [
@@ -60,7 +58,8 @@ class GenBioBERT(HFSequenceBackbone):
         lora_alpha: int = 32,
         lora_dropout: float = 0.1,
         lora_target_modules: Optional[list] = ["query", "value"],
-        **kwargs,
+        config_overwrites: Optional[dict] = None,
+        model_init_args: Optional[dict] = None,
     ):
         # Delays hf model imports to avoid model name conflicts
         from modelgenerator.huggingface_models.rnabert import (
@@ -72,7 +71,7 @@ class GenBioBERT(HFSequenceBackbone):
             RNABertForSequenceClassification,
         )
 
-        super().__init__(legacy_adapter_type, default_config, **kwargs)
+        super().__init__(legacy_adapter_type, default_config, config_overwrites=config_overwrites, model_init_args=model_init_args)
         repo_base_dir = Path(__file__).resolve().parent.parent.parent
         vocab_file = os.path.join(
             repo_base_dir, "modelgenerator/huggingface_models/rnabert/vocab.txt"
@@ -293,19 +292,17 @@ class GenBioFM(HFSequenceBackbone):
         FSDP auto_wrap_policy is `modelgenerator.distributed.fsdp.wrap.AutoWrapPolicy`
 
     Args:
-        config_overwrites (dict, optional): Optional model arguments for PretrainedConfig. Defaults to None.
-        model_init_args (dict, optional): Optional model arguments passed to its init method. Defaults to None.
-        from_scratch (bool, optional): Whether to create the model from scratch. Defaults to False.
-        max_length (int, optional): Maximum sequence length. Defaults to 512.
-        use_peft (bool, optional): Whether to use LoRA PEFT. Defaults to False.
-        frozen (bool, optional): Whether to freeze encoder. Defaults to False.
-        save_peft_only (bool, optional): Whether to save only the PEFT weights. Defaults to True.
-        lora_r (int, optional): LoRA r parameter. Defaults to 16.
-        lora_alpha (int, optional): LoRA alpha parameter. Defaults to 16.
-        lora_dropout (float, optional): LoRA dropout. Defaults to 0.1.
-        lora_target_modules (Optional[List[str]], optional): LoRA target modules. Defaults to ["query", "value", "key", "dense", "router"].
-        lora_modules_to_save (Optional[List[str]], optional): LoRA modules to save. Defaults to None.
-        lora_use_rslora (bool, optional): Whether to use RSLora. Defaults to False.
+        from_scratch: Whether to create the model from scratch.
+        max_length: Maximum sequence length.
+        use_peft: Whether to use LoRA PEFT.
+        frozen: Whether to freeze encoder.
+        save_peft_only: Whether to save only the PEFT weights.
+        lora_r: LoRA r parameter.
+        lora_alpha: LoRA alpha parameter.
+        lora_dropout: LoRA dropout.
+        lora_target_modules: LoRA target modules.
+        lora_modules_to_save: LoRA modules to save.
+        lora_use_rslora: Whether to use RSLora.
     """
 
     fsdp_wrap_modules = [
@@ -335,7 +332,8 @@ class GenBioFM(HFSequenceBackbone):
         ],
         lora_modules_to_save: Optional[List[str]] = None,
         lora_use_rslora: bool = False,
-        **kwargs,
+        config_overwrites: Optional[dict] = None,
+        model_init_args: Optional[dict] = None,
     ):
         from modelgenerator.huggingface_models.fm4bio import (
             FM4BioConfig,
@@ -346,7 +344,7 @@ class GenBioFM(HFSequenceBackbone):
             FM4BioForSequenceClassification,
         )
 
-        super().__init__(legacy_adapter_type, default_config, **kwargs)
+        super().__init__(legacy_adapter_type, default_config, config_overwrites=config_overwrites, model_init_args=model_init_args)
         self.max_length = max_length
         if self.use_legacy_adapter:
             rank_zero_info(
@@ -721,19 +719,17 @@ class GenBioCellFoundation(HFSequenceBackbone):
         FSDP auto_wrap_policy is `modelgenerator.distributed.fsdp.wrap.AutoWrapPolicy`
 
     Args:
-        config_overwrites (dict, optional): Optional model arguments for PretrainedConfig. Defaults to None.
-        model_init_args (dict, optional): Optional model arguments passed to its init method. Defaults to None.
-        from_scratch (bool, optional): Whether to create the model from scratch. Defaults to False.
-        max_length (int, optional): Maximum sequence length. Defaults to 512.
-        use_peft (bool, optional): Whether to use LoRA PEFT. Defaults to False.
-        frozen (bool, optional): Whether to freeze encoder. Defaults to False.
-        save_peft_only (bool, optional): Whether to save only the PEFT weights. Defaults to True.
-        lora_r (int, optional): LoRA r parameter. Defaults to 16.
-        lora_alpha (int, optional): LoRA alpha parameter. Defaults to 16.
-        lora_dropout (float, optional): LoRA dropout. Defaults to 0.1.
-        lora_target_modules (Optional[List[str]], optional): LoRA target modules. Defaults to ["query", "value", "key", "dense", "router"].
-        lora_modules_to_save (Optional[List[str]], optional): LoRA modules to save. Defaults to None.
-        lora_use_rslora (bool, optional): Whether to use RSLora. Defaults to False.
+        from_scratch: Whether to create the model from scratch.
+        max_length: Maximum sequence length.
+        use_peft: Whether to use LoRA PEFT.
+        frozen: Whether to freeze encoder.
+        save_peft_only: Whether to save only the PEFT weights.
+        lora_r: LoRA r parameter.
+        lora_alpha: LoRA alpha parameter.
+        lora_dropout: LoRA dropout.
+        lora_target_modules: LoRA target modules.
+        lora_modules_to_save: LoRA modules to save.
+        lora_use_rslora: Whether to use RSLora.
     """
 
     fsdp_wrap_modules = [
@@ -761,14 +757,15 @@ class GenBioCellFoundation(HFSequenceBackbone):
         ],
         lora_modules_to_save: Optional[List[str]] = None,
         lora_use_rslora: bool = False,
-        **kwargs,
+        config_overwrites: Optional[dict] = None,
+        model_init_args: Optional[dict] = None,
     ):
         from modelgenerator.huggingface_models.cellfoundation import (
             CellFoundationConfig,
             CellFoundationModel,
         )
 
-        super().__init__(legacy_adapter_type, default_config, **kwargs)
+        super().__init__(legacy_adapter_type, default_config, config_overwrites=config_overwrites, model_init_args=model_init_args)
         self.max_length = max_length
         # Note: Legacy adapters are for older sequence models.
         if legacy_adapter_type is not None:
@@ -961,19 +958,19 @@ class GenBioCellSpatialFoundation(HFSequenceBackbone):
         FSDP auto_wrap_policy is `modelgenerator.distributed.fsdp.wrap.AutoWrapPolicy`
 
     Args:
-        config_overwrites (dict, optional): Optional model arguments for PretrainedConfig. Defaults to None.
-        model_init_args (dict, optional): Optional model arguments passed to its init method. Defaults to None.
-        from_scratch (bool, optional): Whether to create the model from scratch. Defaults to False.
-        max_length (int, optional): Maximum sequence length. Defaults to 512.
-        use_peft (bool, optional): Whether to use LoRA PEFT. Defaults to False.
-        frozen (bool, optional): Whether to freeze encoder. Defaults to False.
-        save_peft_only (bool, optional): Whether to save only the PEFT weights. Defaults to True.
-        lora_r (int, optional): LoRA r parameter. Defaults to 16.
-        lora_alpha (int, optional): LoRA alpha parameter. Defaults to 16.
-        lora_dropout (float, optional): LoRA dropout. Defaults to 0.1.
-        lora_target_modules (Optional[List[str]], optional): LoRA target modules. Defaults to ["query", "value", "key", "dense", "router"].
-        lora_modules_to_save (Optional[List[str]], optional): LoRA modules to save. Defaults to None.
-        lora_use_rslora (bool, optional): Whether to use RSLora. Defaults to False.
+        from_scratch: Whether to create the model from scratch.
+        max_length: Maximum sequence length.
+        use_peft: Whether to use LoRA PEFT.
+        frozen: Whether to freeze encoder.
+        save_peft_only: Whether to save only the PEFT weights.
+        lora_r: LoRA r parameter.
+        lora_alpha: LoRA alpha parameter.
+        lora_dropout: LoRA dropout.
+        lora_target_modules: LoRA target modules.
+        lora_modules_to_save: LoRA modules to save.
+        lora_use_rslora: Whether to use RSLora.
+        rope2d_use_xy: Whether to use 2D rope encoding.
+        sep_value: Separator value for the model.
     """
 
     fsdp_wrap_modules = [
@@ -1003,14 +1000,15 @@ class GenBioCellSpatialFoundation(HFSequenceBackbone):
         lora_use_rslora: bool = False,
         rope2d_use_xy: bool = False,
         sep_value: int = -10000,
-        **kwargs,
+        config_overwrites: Optional[dict] = None,
+        model_init_args: Optional[dict] = None,
     ):
         from modelgenerator.huggingface_models.cellspatialfoundation import (
             CellSpatialFoundationConfig,
             CellSpatialFoundationModel,
         )
 
-        super().__init__(legacy_adapter_type, default_config, **kwargs)
+        super().__init__(legacy_adapter_type, default_config, config_overwrites=config_overwrites, model_init_args=model_init_args)
         self.max_length = max_length
         # Note: Legacy adapters are for older sequence models.
         if legacy_adapter_type is not None:
@@ -1432,10 +1430,13 @@ class Onehot(HFSequenceBackbone):
 
         Does not contain any parameters, and cannot be used without an adapter.
 
+    Attributes:
+        vocab_file (str): Path to the vocabulary file.
+
     Args:
         vocab_file (str, optional): Path to the vocabulary file. Defaults to
             "modelgenerator/huggingface_models/rnabert/vocab.txt".
-        max_length (Optional[int], optional): Maximum sequence length. Defaults to 512.
+        max_length (Optional[int], optional): Maximum sequence length.
     """
 
     fsdp_wrap_modules = [
@@ -1453,11 +1454,10 @@ class Onehot(HFSequenceBackbone):
         default_config: Union[DefaultConfig, None],
         vocab_file: Optional[str] = None,
         max_length: Optional[int] = 512,
-        **kwargs,
     ):
         from modelgenerator.huggingface_models.fm4bio import FM4BioTokenizer
 
-        super().__init__(None, None, **kwargs)
+        super().__init__(legacy_adapter_type, default_config)
         self.max_length = max_length
         if vocab_file is not None:
             self.vocab_file = vocab_file
@@ -1577,13 +1577,23 @@ class _Identity(nn.Identity):
 class Huggingface(HFSequenceBackbone):
     """A generic huggingface wrapper allows for using any huggingface model as backbone.
 
-        Warning: This is an experimental feature, don't expect it to work with all models.
+    Note:
+        **Warning:** This is an experimental feature, don't expect it to work with all models.
         Downstream task support is also extremely limited to the standard huggingface heads.
         Its usage often involves manual configuration of the model's head through `config_overwrites`.
 
     Args:
-        model_path (str): Path to the huggingface model
-        max_length (int, optional): Maximum sequence length. Defaults to None.
+        model_path: Path to the huggingface model.
+        modules_for_model_registration: List of python modules to register the model.
+        max_length: Maximum sequence length.
+        use_peft: Whether to use LoRA PEFT.
+        save_peft_only: Whether to save only the PEFT weights.
+        lora_r: LoRA r parameter.
+        lora_alpha: LoRA alpha parameter.
+        lora_dropout: LoRA dropout.
+        lora_target_modules: LoRA target modules.
+        lora_modules_to_save: LoRA modules to save.
+        lora_use_rslora: Whether to use RSLora.
     """
 
     def __init__(
@@ -1601,7 +1611,8 @@ class Huggingface(HFSequenceBackbone):
         lora_target_modules: Optional[List[str]] = None,
         lora_modules_to_save: Optional[List[str]] = None,
         lora_use_rslora: bool = False,
-        **kwargs,
+        config_overwrites: Optional[dict] = None,
+        model_init_args: Optional[dict] = None,
     ):
         from transformers import (
             AutoConfig,
@@ -1620,7 +1631,7 @@ class Huggingface(HFSequenceBackbone):
         modules_for_model_registration = modules_for_model_registration or []
         for module in modules_for_model_registration:
             importlib.import_module(module)
-        super().__init__(legacy_adapter_type, default_config, **kwargs)
+        super().__init__(legacy_adapter_type, default_config, model_init_args=model_init_args, config_overwrites=config_overwrites)
         self.model_path = model_path
         self.max_length = max_length
         self.use_peft = use_peft
@@ -1782,19 +1793,16 @@ class Huggingface(HFSequenceBackbone):
 
 
 class Enformer(HFSequenceBackbone):
-    """Wrap Enformer https://github.com/lucidrains/enformer-pytorch in ModelGenerator backbone
-
-    Note: Do not support LoRA
+    """Wraps [Enformer](https://github.com/lucidrains/enformer-pytorch) as a ModelGenerator backbone
+    
+    Note: 
+        Does not support LoRA
 
     Args:
-        legacy_adapter_type (LegacyAdapterType, None): Type of legacy adapter, setting it to None disables it.
-        default_config (dict, None): Default values set by downstream tasks. Defaults to None.
-        config_overwrites (dict, optional): Optional model arguments for PretrainedConfig. Defaults to None.
-        model_init_args (dict, optional): Optional model arguments passed to its init method. Defaults to None.
-        from_scratch (bool, optional): Whether to create the model from scratch. Defaults to False.
-        max_length (int, optional): Maximum sequence length. Defaults to 196_608.
-        frozen (bool, optional): Whether to freeze model. Defaults to False.
-        delete_crop_layer: Whether to delete cropping layer. Defaults to False.
+        from_scratch: Whether to create the model from scratch.
+        max_length: Maximum sequence length.
+        frozen: Whether to freeze model.
+        delete_crop_layer: Whether to delete cropping layer.
     """
 
     def __init__(
@@ -1805,14 +1813,15 @@ class Enformer(HFSequenceBackbone):
         max_length: Optional[int] = 196_608,
         frozen: bool = False,
         delete_crop_layer: bool = False,
-        **kwargs,
+        config_overwrites: Optional[dict] = None,
+        model_init_args: Optional[dict] = None,
     ):
         from modelgenerator.huggingface_models.enformer_pytorch import Enformer, str_to_one_hot, EnformerConfig
 
         if legacy_adapter_type is not None:
             legacy_adapter_type = None
 
-        super().__init__(legacy_adapter_type, default_config, **kwargs)
+        super().__init__(legacy_adapter_type, default_config, config_overwrites=config_overwrites, model_init_args=model_init_args)
         if from_scratch:
             config = EnformerConfig()
         else:
@@ -1964,19 +1973,16 @@ class Enformer(HFSequenceBackbone):
 
 
 class Borzoi(HFSequenceBackbone):
-    """Wrap Borzoi https://github.com/johahi/borzoi-pytorch in ModelGenerator backbone
+    """Wraps [Borzoi](https://github.com/johahi/borzoi-pytorch) as a ModelGenerator backbone
 
-    Note: Do not support LoRA
+    Note: 
+        Does not support LoRA
 
     Args:
-        legacy_adapter_type (LegacyAdapterType, None): Type of legacy adapter, setting it to None disables it.
-        default_config (dict, None): Default values set by downstream tasks. Defaults to None.
-        config_overwrites (dict, optional): Optional model arguments for PretrainedConfig. Defaults to None.
-        model_init_args (dict, optional): Optional model arguments passed to its init method. Defaults to None.
-        from_scratch (bool, optional): Whether to create the model from scratch. Defaults to False.
-        max_length (int, optional): Maximum sequence length. Defaults to 524_288.
-        frozen (bool, optional): Whether to freeze model. Defaults to False.
-        delete_crop_layer: Whether to skip cropping layer. Defaults to False.
+        from_scratch: Whether to create the model from scratch.
+        max_length: Maximum sequence length.
+        frozen: Whether to freeze model.
+        delete_crop_layer: Whether to skip cropping layer.
     """
 
     def __init__(
@@ -1987,13 +1993,14 @@ class Borzoi(HFSequenceBackbone):
         max_length: Optional[int] = 524_288,
         frozen: bool = False,
         delete_crop_layer: bool = False,
-        **kwargs,
+        config_overwrites: Optional[dict] = None,
+        model_init_args: Optional[dict] = None,
     ):
         from modelgenerator.huggingface_models.borzoi_pytorch import Borzoi
         from modelgenerator.huggingface_models.borzoi_pytorch.config_borzoi import BorzoiConfig
         from modelgenerator.huggingface_models.enformer_pytorch import str_to_one_hot
 
-        super().__init__(legacy_adapter_type, default_config, **kwargs)
+        super().__init__(legacy_adapter_type, default_config, config_overwrites=config_overwrites, model_init_args=model_init_args)
         if from_scratch:
             config = BorzoiConfig()
         else:
@@ -2145,23 +2152,19 @@ class Borzoi(HFSequenceBackbone):
 
 
 class ESM(HFSequenceBackbone):
-    """A wrapper allows for using ESM series model as backbone.
+    """A wrapper for using ESM series model as backbone.
 
     Args:
-        legacy_adapter_type (LegacyAdapterType, None): Type of legacy adapter, setting it to None disables it.
-        default_config (dict, None): Default values set by downstream tasks. Defaults to None.
-        config_overwrites (dict, optional): Optional model arguments for PretrainedConfig. Defaults to None.
-        model_init_args (dict, optional): Optional model arguments passed to its init method. Defaults to None.
-        max_length (int, optional): Maximum sequence length. Defaults to 1024.
-        use_peft (bool, optional): Whether to use LoRA PEFT. Defaults to False.
-        frozen (bool, optional): Whether to freeze encoder. Defaults to False.
-        save_peft_only (bool, optional): Whether to save only the PEFT weights. Defaults to True.
-        lora_r (int, optional): LoRA r parameter. Defaults to 16.
-        lora_alpha (int, optional): LoRA alpha parameter. Defaults to 32.
-        lora_dropout (float, optional): LoRA dropout. Defaults to 0.1.
-        lora_target_modules (Optional[List[str]], optional): LoRA target modules. Defaults to ["query", "value"].
-        lora_modules_to_save (Optional[List[str]], optional): LoRA modules to save. Defaults to None.
-        lora_use_rslora (bool, optional): Whether to use RSLora. Defaults to False.
+        max_length: Maximum sequence length.
+        use_peft: Whether to use LoRA PEFT.
+        frozen: Whether to freeze encoder.
+        save_peft_only: Whether to save only the PEFT weights.
+        lora_r: LoRA r parameter.
+        lora_alpha: LoRA alpha parameter.
+        lora_dropout: LoRA dropout.
+        lora_target_modules: LoRA target modules.
+        lora_modules_to_save: LoRA modules to save.
+        lora_use_rslora: Whether to use RSLora.
     """
 
     def __init__(
@@ -2178,7 +2181,8 @@ class ESM(HFSequenceBackbone):
         lora_target_modules: Optional[List[str]] = None,
         lora_modules_to_save: Optional[List[str]] = None,
         lora_use_rslora: bool = False,
-        **kwargs,
+        config_overwrites: Optional[dict] = None,
+        model_init_args: Optional[dict] = None,
     ):
         from transformers import (
             AutoConfig,
@@ -2189,7 +2193,7 @@ class ESM(HFSequenceBackbone):
             AutoTokenizer,
         )
 
-        super().__init__(legacy_adapter_type, default_config, **kwargs)
+        super().__init__(legacy_adapter_type, default_config, config_overwrites=config_overwrites, model_init_args=model_init_args)
         self.max_length = max_length
         self.use_peft = use_peft
         self.frozen = frozen
@@ -2385,18 +2389,16 @@ class SCFoundation(HFSequenceBackbone):
     """Wraps SCFoundation model in ModelGenerator backbone with multiple gene embedding modes
 
     Note:
-        Models using this interface include `aido_scfoundation`
+        Does not support LoRA.
 
     Args:
-        legacy_adapter_type: Type of legacy adapter
-        default_config: Default values set by downstream tasks
-        max_length: Maximum sequence length
-        frozen: Whether to freeze model
-        output_type: Type of output embedding ('cell', 'gene', 'gene_batch', 'gene_expression')
-        pool_type: Pooling type for cell embedding ('all', 'max')
-        input_type: Input data type ('singlecell', 'bulk')
-        pre_normalized: Whether input is pre-normalized ('T', 'F', 'A')
-        train_last_n_layers: Number of layers to train in the encoder
+        num_genes: Number of genes in the model context.
+        frozen: Whether to freeze model.
+        output_type: Type of output embedding ('cell', 'gene', 'gene_batch', 'gene_expression').
+        pool_type: Pooling type for cell embedding ('all', 'max').
+        input_type: Input data type ('singlecell', 'bulk').
+        pre_normalized: Whether input is pre-normalized ('T', 'F', 'A').
+        train_last_n_layers: Number of layers to train in the encoder.
     """
 
     def __init__(
@@ -2410,7 +2412,8 @@ class SCFoundation(HFSequenceBackbone):
         input_type: str = "singlecell",
         pre_normalized: str = "F",
         train_last_n_layers: int = 0,
-        **kwargs,
+        config_overwrites: Optional[dict] = None,
+        model_init_args: Optional[dict] = None,
     ):
 
         from modelgenerator.huggingface_models.scfoundation.load_scfoundation import (
@@ -2419,7 +2422,7 @@ class SCFoundation(HFSequenceBackbone):
             gatherData,
         )
 
-        super().__init__(legacy_adapter_type, default_config, **kwargs)
+        super().__init__(legacy_adapter_type, default_config, config_overwrites=config_overwrites, model_init_args=model_init_args)
         self.frozen = frozen
         self.num_genes = num_genes
         self.output_type = output_type
@@ -2590,3 +2593,136 @@ class SCFoundation(HFSequenceBackbone):
                 continue
             if self.frozen:
                 checkpoint["state_dict"].pop(k)
+
+
+class Geneformer(HFSequenceBackbone):
+    """Geneformer model for single-cell transcriptomics inference
+
+    Note:
+        Does not support LoRA.
+
+    Args:
+        from_scratch: Whether to initialize from random weights.
+        max_length: Maximum input sequence length.
+        emb_layer: Layer to extract embeddings from.
+    """
+
+    def __init__(
+        self,
+        legacy_adapter_type: Union[LegacyAdapterType, None],
+        default_config: Union[DefaultConfig, None],
+        from_scratch: bool = False,
+        max_length: int = 4096,
+        emb_layer: int = -2,
+        config_overwrites: Optional[dict] = None,
+        model_init_args: Optional[dict] = None,
+    ):
+        # initialize base class with adapters
+        super().__init__(legacy_adapter_type, default_config, config_overwrites=config_overwrites, model_init_args=model_init_args)
+
+        self.emb_layer = emb_layer
+
+        from modelgenerator.huggingface_models.geneformer import TranscriptomeTokenizer, TOKEN_DICTIONARY_FILE
+        from transformers import (
+            BertConfig,
+            BertModel,
+            BertForMaskedLM,
+        )
+
+        if self.legacy_adapter_type is LegacyAdapterType.MASKED_LM:
+            model_class = BertForMaskedLM
+            peft_task = TaskType.FEATURE_EXTRACTION
+        else:
+            model_class = BertModel
+            peft_task = TaskType.FEATURE_EXTRACTION
+            self.model_init_args = {"add_pooling_layer": False, **self.model_init_args}
+
+        if from_scratch:
+            config = BertConfig()
+        else:
+            config = BertConfig.from_pretrained(self.model_path, trust_remote_code=True)
+        
+        for k, v in self.config_overwrites.items():
+            setattr(config, k, v)
+
+        # instantiate model
+        if from_scratch:
+            model = model_class(config=config, **self.model_init_args)
+        else:
+            model = model_class.from_pretrained(
+                self.model_path,
+                config=config,
+                trust_remote_code=True,
+                **self.model_init_args,
+            )
+
+        # set encoder and decoder according to legacy adapter usage
+        if self.use_legacy_adapter:
+            self.encoder = model.bert
+            self.decoder = model.cls
+        else:
+            self.encoder = model
+            self.decoder = None
+
+        # Tokenizer and other attributes
+        self.tokenizer = TranscriptomeTokenizer(
+            model_input_size=max_length,
+            special_token=True,
+            collapse_gene_ids=True,
+        )
+        self.max_length = max_length
+
+    def forward(self, input_ids, attention_mask=None, **kwargs):
+        """Return encoder outputs (last hidden state)."""
+
+        outputs = self.encoder(
+            input_ids=input_ids,
+            attention_mask=(attention_mask.to(input_ids.device) if attention_mask is not None else None),
+            output_hidden_states=True,
+        )
+        return outputs.hidden_states[self.emb_layer]
+
+    def get_decoder(self) -> Optional[nn.Module]:
+        """Returns the pre-trained decoder (if using legacy adapter)."""
+        return self.decoder
+        
+    def tokenize(self, input_data, **kwargs):
+        import modelgenerator.huggingface_models.geneformer.perturber_utils as pu
+
+        if 'ensemble_id' in kwargs:  
+            ensembl_ids = kwargs['ensemble_id']
+            result = self.tokenizer.process_input_dict(input_data, ensembl_ids)
+        else:
+            result = self.tokenizer.process_input_dict(input_data)
+
+        ids = sorted(result["input_ids"], key=lambda seq: len(seq), reverse=True)
+
+        input_ids = [torch.tensor(i, dtype=torch.long) for i in ids]
+
+        model_input_size = self.max_length
+        pad_token_id = 0
+        max_len = len(input_ids[0])
+
+        padded_input_ids = pu.pad_tensor_list(
+            input_ids,
+            max_len,
+            pad_token_id,
+            model_input_size
+        )
+
+        original_lens = [len(i) for i in ids]
+        attention_mask = [
+            [1] * original_len + [0] * (max_len - original_len)
+            if original_len <= max_len
+            else [1] * max_len
+            for original_len in original_lens
+        ]
+
+        return {'input_ids': padded_input_ids, 'attention_mask': attention_mask}
+
+    def get_embedding_size(self):
+        return self.encoder.config.hidden_size
+
+    def get_max_context(self):
+        return self.encoder.config.max_position_embeddings
+

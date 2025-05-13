@@ -5,13 +5,14 @@ import pandas as pd
 import re
 import random
 import datasets
-from typing import List, Literal, Optional, Tuple
+from typing import List, Literal, Optional, Tuple, Any
 from pyfaidx import Fasta
 import numpy as np
 import torch
 from torch.utils.data import Dataset
 from lightning.pytorch.utilities import rank_zero_info, rank_zero_warn
 from modelgenerator.data.base import *
+import modelgenerator.cell.utils as cell_utils
 
 from scipy.spatial import cKDTree
 import math
@@ -227,19 +228,26 @@ class SequencesDataModule(DataInterface, HFDatasetLoaderMixin):
         Each sample includes a single sequence under key 'sequences' and optionally an 'id' to track outputs.
 
     Args:
-        x_col (str, optional): The name of the column containing the sequences. Defaults to "sequence".
-        id_col (str, optional): The name of the column containing the ids. Defaults to "id".
+        x_col: The name of the column containing the sequences.
+        id_col: The name of the column containing the ids.
+        **kwargs: Additional keyword arguments for the parent class.
     """
 
     def __init__(
         self,
-        *args,
+        path: str,
+        config_name: Optional[str] = None,
+        test_split_name: Optional[str] = None,
+        test_split_files: Optional[str] = None,
         x_col: str = "sequence",
         id_col: str = "id",
         **kwargs,
     ):
         super().__init__(
-            *args,
+            path=path,
+            config_name=config_name,
+            test_split_name=test_split_name,
+            test_split_files=test_split_files,
             **kwargs,
         )
         self.x_col = x_col
@@ -260,24 +268,37 @@ class SequencesDataModule(DataInterface, HFDatasetLoaderMixin):
 
 
 class DependencyMappingDataModule(SequencesDataModule):
-    """Data module for doing dependency mapping via in silico mutagenesis on a dataset of sequences. Inherits from Sequences.
+    """Data module for doing dependency mapping via in silico mutagenesis on a dataset of sequences.
 
     Note:
         Each sample includes a single sequence under key 'sequences' and optionally an 'ids' to track outputs.
 
     Args:
-        x_col (str, optional): The name of the column containing the sequences. Defaults to "sequence".
-        id_col (str, optional): The name of the column containing the ids. Defaults to "id".
-        vocab_file (str, optional): The path to the file with the vocabulary to mutate.
+        x_col: The name of the column containing the sequences. Defaults to "sequence".
+        id_col: The name of the column containing the ids. Defaults to "id".
+        vocab_file: The path to the file with the vocabulary to mutate.
     """
 
     def __init__(
         self,
-        *args,
+        path: str,
         vocab_file: str,
+        config_name: Optional[str] = None,
+        test_split_name: Optional[str] = None,
+        test_split_files: Optional[str] = None,
+        x_col: str = "sequence",
+        id_col: str = "id",
         **kwargs,
     ):
-        super().__init__(*args, **kwargs)
+        super().__init__(
+            path=path, 
+            config_name=config_name, 
+            test_split_name=test_split_name, 
+            test_split_files=test_split_files,
+            x_col=x_col, 
+            id_col=id_col, 
+            **kwargs
+        )
         self.vocab_file = vocab_file
 
     def setup(self, stage: Optional[str] = None) -> None:
@@ -366,26 +387,78 @@ class SequenceClassificationDataModule(DataInterface, HFDatasetLoaderMixin):
         Each sample includes a single sequence under key 'sequences' and a single class label under key 'labels'
 
     Args:
-        x_col (str, optional): The name of the column containing the sequences. Defaults to "sequence".
-        y_col (str | List[str], optional): The name of the column(s) containing the labels. Defaults to "label".
-        extra_cols (List[str] | optional): Additional columns to include in the dataset. Defaults to None.
-        extra_col_aliases (List[str], optional): The name of the columns to use as the alias for the extra columns. Defaults to None.
-        class_filter (List[int] | int, optional): The class to filter. Defaults to None.
-        generate_uid (bool, optional): Whether to generate a unique ID for each sample. Defaults to False.
+        x_col: The name of the column containing the sequences.
+        y_col: The name of the column(s) containing the labels.
+        extra_cols: Additional columns to include in the dataset.
+        extra_col_aliases: The name of the columns to use as the alias for the extra columns.
+        class_filter: Filter the dataset to only include samples with the specified class(es).
+        generate_uid: Whether to generate a unique ID for each sample.
+        **kwargs: Additional keyword arguments for the parent class.
     """
 
     def __init__(
         self,
-        *args,
+        path: str,
+        config_name: Optional[str] = None,
         x_col: str = "sequence",
         y_col: str | List[str] = "label",
         extra_cols: List[str] | None = None,
         extra_col_aliases: List[str] | None = None,
         class_filter: int | List[int] | None = None,
         generate_uid: bool = False,
+        train_split_name: Optional[str] = "train",
+        test_split_name: Optional[str] = "test",
+        valid_split_name: Optional[str] = None,
+        train_split_files: Optional[Union[str, List[str]]] = None,
+        test_split_files: Optional[Union[str, List[str]]] = None,
+        valid_split_files: Optional[Union[str, List[str]]] = None,
+        test_split_size: float = 0.2,
+        valid_split_size: float = 0.1,
+        random_seed: int = 42,
+        extra_reader_kwargs: Optional[dict] = None,
+        batch_size: int = 128,
+        shuffle: bool = True,
+        sampler: Optional[torch.utils.data.Sampler] = None,
+        num_workers: int = 0,
+        collate_fn: Optional[callable] = None,
+        pin_memory: bool = True,
+        persistent_workers: bool = False,
+        cv_num_folds: int = 1,
+        cv_test_fold_id: int = 0,
+        cv_enable_val_fold: bool = True,
+        cv_replace_val_fold_as_test_fold: bool = False,
+        cv_fold_id_col: Optional[str] = None,
+        cv_val_offset: int = 1,
         **kwargs,
     ):
-        super().__init__(*args, **kwargs)
+        super().__init__(
+            path=path,
+            config_name=config_name,
+            train_split_name=train_split_name,
+            test_split_name=test_split_name,
+            valid_split_name=valid_split_name,
+            train_split_files=train_split_files,
+            test_split_files=test_split_files,
+            valid_split_files=valid_split_files,
+            test_split_size=test_split_size,
+            valid_split_size=valid_split_size,
+            random_seed=random_seed,
+            extra_reader_kwargs=extra_reader_kwargs,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            sampler=sampler,
+            num_workers=num_workers,
+            collate_fn=collate_fn,
+            pin_memory=pin_memory,
+            persistent_workers=persistent_workers,
+            cv_num_folds=cv_num_folds,
+            cv_test_fold_id=cv_test_fold_id,
+            cv_enable_val_fold=cv_enable_val_fold,
+            cv_replace_val_fold_as_test_fold=cv_replace_val_fold_as_test_fold,
+            cv_fold_id_col=cv_fold_id_col,
+            cv_val_offset=cv_val_offset,
+            **kwargs,
+        )
         self.x_col = x_col
         self.y_col = y_col
         self.extra_cols = extra_cols or []
@@ -489,18 +562,21 @@ class TokenClassificationDataModule(DataInterface, HFDatasetLoaderMixin):
         Each sample includes a single sequence under key 'sequences' and a single class sequence under key 'labels'
 
     Args:
-        x_col (str, optional): The name of the column containing the sequences. Defaults to "sequence".
-        y_col (str, optional): The name of the column containing the labels. Defaults to "label".
-        extra_cols (List[str] | optional): Additional columns to include in the dataset. Defaults to None.
-        extra_col_aliases (List[str], optional): The name of the columns to use as the alias for the extra columns. Defaults to None.
-        max_length (int, optional): The maximum length of the sequences. Defaults to None.
-        pairwise (bool, optional): Whether the labels are pairwise. Defaults to False.
-        generate_uid (bool, optional): Whether to generate a unique ID for each sample. Defaults to False.
+        x_col: The name of the column containing the sequences.
+        y_col: The name of the column containing the labels.
+        extra_cols: Additional columns to include in the dataset.
+        extra_col_aliases: The name of the columns to use as the alias for the extra columns.
+        max_length: The maximum length of the sequences.
+        truncate_extra_cols: Whether to truncate the extra columns to the maximum length.
+        pairwise: Whether the labels are pairwise.
+        generate_uid: Whether to generate a unique ID for each sample.
+        **kwargs: Additional keyword arguments for the parent class.
     """
 
     def __init__(
         self,
-        *args,
+        path: str,
+        config_name: Optional[str] = None,
         x_col: str = "sequence",
         y_col: str = "label",
         extra_cols: List[str] | None = None,
@@ -510,6 +586,28 @@ class TokenClassificationDataModule(DataInterface, HFDatasetLoaderMixin):
         pairwise: bool = False,
         collate_fn: Optional[callable] = None,
         generate_uid: bool = False,
+        train_split_name: Optional[str] = "train",
+        test_split_name: Optional[str] = "test",
+        valid_split_name: Optional[str] = None,
+        train_split_files: Optional[Union[str, List[str]]] = None,
+        test_split_files: Optional[Union[str, List[str]]] = None,
+        valid_split_files: Optional[Union[str, List[str]]] = None,
+        test_split_size: float = 0.2,
+        valid_split_size: float = 0.1,
+        random_seed: int = 42,
+        extra_reader_kwargs: Optional[dict] = None,
+        batch_size: int = 128,
+        shuffle: bool = True,
+        sampler: Optional[torch.utils.data.Sampler] = None,
+        num_workers: int = 0,
+        pin_memory: bool = True,
+        persistent_workers: bool = False,
+        cv_num_folds: int = 1,
+        cv_test_fold_id: int = 0,
+        cv_enable_val_fold: bool = True,
+        cv_replace_val_fold_as_test_fold: bool = False,
+        cv_fold_id_col: Optional[str] = None,
+        cv_val_offset: int = 1,
         **kwargs,
     ):
         def collate_pad_labels(batch):
@@ -541,7 +639,34 @@ class TokenClassificationDataModule(DataInterface, HFDatasetLoaderMixin):
                 batch = collate_fn(batch)
             return batch
 
-        super().__init__(*args, collate_fn=final_collate_fn, **kwargs)
+        super().__init__(
+            path=path,
+            config_name=config_name,
+            train_split_name=train_split_name,
+            test_split_name=test_split_name,
+            valid_split_name=valid_split_name,
+            train_split_files=train_split_files,
+            test_split_files=test_split_files,
+            valid_split_files=valid_split_files,
+            test_split_size=test_split_size,
+            valid_split_size=valid_split_size,
+            random_seed=random_seed,
+            extra_reader_kwargs=extra_reader_kwargs,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            sampler=sampler,
+            num_workers=num_workers,
+            collate_fn=final_collate_fn,
+            pin_memory=pin_memory,
+            persistent_workers=persistent_workers,
+            cv_num_folds=cv_num_folds,
+            cv_test_fold_id=cv_test_fold_id,
+            cv_enable_val_fold=cv_enable_val_fold,
+            cv_replace_val_fold_as_test_fold=cv_replace_val_fold_as_test_fold,
+            cv_fold_id_col=cv_fold_id_col,
+            cv_val_offset=cv_val_offset,
+            **kwargs,
+        )
         self.x_col = x_col
         self.y_col = y_col
         self.extra_cols = extra_cols or []
@@ -663,10 +788,6 @@ class StructureTokenDataModule(DataInterface, HFDatasetLoaderMixin):
         If structural token labels are not provided, dummy labels are created.
 
     Args:
-        path (str): The path to the dataset files.
-        config_name (Optional[str], optional): Configuration name for dataset loading. Defaults to None.
-        test_split_files (Optional[List[str]], optional): List of files for the test split. Defaults to None.
-        batch_size (int, optional): The batch size for data loading. Defaults to 1.
         **kwargs: Additional keyword arguments passed to the parent class, in which training and validation split
             settings are overridden so that only the test split is loaded.
     """
@@ -723,18 +844,19 @@ class ZeroshotClassificationRetrieveDataModule(DataInterface, HFDatasetLoaderMix
         Each sample includes index for a single sequence under key ["chrom","start","end","ref","mutate"] and a single class label under key 'effect'
 
     Args:
-        method (str, ["Diff", "Distance"]): method mode to compute metrics
-        index_cols ([str], optional): The list of the column name containing the index for sequence retrieval.
-        y_col (str, optional): The name of the column containing the labels. Defaults to "label".
-        test_split_name (str, optional): The name of the test split. Defaults to "test".
-        test_split_size (float, optional): ignored
-        window (int, optional): The number of token taken on either side of the mutation site. The processed sequence length is 2* window + 1
-        reference_file (str, optional): The file path to the reference file for retrieving sequences
+        method: method mode to compute metrics
+        index_cols: The list of the column name containing the index for sequence retrieval.
+        y_col: The name of the column containing the labels. Defaults to "label".
+        window: The number of token taken on either side of the mutation site. The processed sequence length is `2 * window + 1`
+        reference_file: The file path to the reference file for retrieving sequences
+        **kwargs: Additional keyword arguments passed to the parent class. 
+            `train_split_name=None`, `valid_split_name=None`, and `valid_split_size=0` are always overridden.
     """
 
     def __init__(
         self,
-        *args,
+        path: str,
+        test_split_files: Optional[str] = None,
         index_cols: List[str] = ["chrom", "start", "end", "ref", "mutate"],
         y_col: str = "label",
         method: Optional[Literal["Diff", "Distance"]] = None,
@@ -743,7 +865,8 @@ class ZeroshotClassificationRetrieveDataModule(DataInterface, HFDatasetLoaderMix
         **kwargs,
     ):
         super().__init__(
-            *args,
+            path,
+            test_split_files=test_split_files,
             train_split_name=None,
             valid_split_name=None,
             valid_split_size=0,
@@ -889,33 +1012,83 @@ class ZeroshotClassificationRetrieveDataModule(DataInterface, HFDatasetLoaderMix
 
 
 class DiffusionDataModule(DataInterface, HFDatasetLoaderMixin):
-    """Data module for datasets with discrete diffusion-based noising and loss weights from MDLM https://arxiv.org/abs/2406.07524.
+    """Data module for datasets with discrete diffusion-based noising and loss weights from [MDLM](https://arxiv.org/abs/2406.07524).
 
     Notes:
         Each sample includes timesteps_per_sample sequences at different noise levels
         Each sample's target sequences are under 'target_sequences', the input sequences are under 'sequences', and posterior weights are under 'posterior_weights'
 
     Args:
-        x_col (str, optional): The column with the data to train on, defaults to "sequence"
-        extra_cols (List[str], optional): Additional columns to include in the dataset, defaults to None
-        extra_col_aliases (List[str], optional): The name of the columns to use as the alias for the extra columns, defaults to None
-        timesteps_per_sample (int, optional): The number of timesteps per sample, defaults to 10
-        randomize_targets (bool, optional): Whether to randomize the target sequences for each timestep (experimental efficiency boost proposed by Sazan)
-        batch_size (int, optional): The batch size, defaults to 10
+        x_col: The column with the data to train on.
+        extra_cols: Additional columns to include in the dataset.
+        extra_col_aliases: The name of the columns to use as the alias for the extra columns.
+        timesteps_per_sample: The number of timesteps per sample.
+        randomize_targets: Whether to randomize the target sequences for each timestep (experimental efficiency boost).
+        **kwargs: Additional keyword arguments for the parent class.
     """
 
     def __init__(
         self,
-        *args,
+        path: str,
+        config_name: Optional[str] = None,
         x_col: str = "sequence",
         extra_cols: List[str] | None = None,
         extra_col_aliases: List[str] | None = None,
         timesteps_per_sample: int = 10,
         randomize_targets: bool = False,
         batch_size: int = 10,
+        train_split_name: Optional[str] = "train",
+        test_split_name: Optional[str] = "test",
+        valid_split_name: Optional[str] = None,
+        train_split_files: Optional[Union[str, List[str]]] = None,
+        test_split_files: Optional[Union[str, List[str]]] = None,
+        valid_split_files: Optional[Union[str, List[str]]] = None,
+        test_split_size: float = 0.2,
+        valid_split_size: float = 0.1,
+        random_seed: int = 42,
+        extra_reader_kwargs: Optional[dict] = None,
+        shuffle: bool = True,
+        sampler: Optional[torch.utils.data.Sampler] = None,
+        num_workers: int = 0,
+        collate_fn: Optional[callable] = None,
+        pin_memory: bool = True,
+        persistent_workers: bool = False,
+        cv_num_folds: int = 1,
+        cv_test_fold_id: int = 0,
+        cv_enable_val_fold: bool = True,
+        cv_replace_val_fold_as_test_fold: bool = False,
+        cv_fold_id_col: Optional[str] = None,
+        cv_val_offset: int = 1,
         **kwargs,
     ):
-        super().__init__(*args, batch_size=batch_size, **kwargs)
+        super().__init__(
+            path=path,
+            config_name=config_name,
+            train_split_name=train_split_name,
+            test_split_name=test_split_name,
+            valid_split_name=valid_split_name,
+            train_split_files=train_split_files,
+            test_split_files=test_split_files,
+            valid_split_files=valid_split_files,
+            test_split_size=test_split_size,
+            valid_split_size=valid_split_size,
+            random_seed=random_seed,
+            extra_reader_kwargs=extra_reader_kwargs,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            sampler=sampler,
+            num_workers=num_workers,
+            collate_fn=collate_fn,
+            pin_memory=pin_memory,
+            persistent_workers=persistent_workers,
+            cv_num_folds=cv_num_folds,
+            cv_test_fold_id=cv_test_fold_id,
+            cv_enable_val_fold=cv_enable_val_fold,
+            cv_replace_val_fold_as_test_fold=cv_replace_val_fold_as_test_fold,
+            cv_fold_id_col=cv_fold_id_col,
+            cv_val_offset=cv_val_offset,
+            **kwargs,
+        )
         self.x_col = x_col
         self.extra_cols = extra_cols or []
         self.extra_col_aliases = extra_col_aliases or self.extra_cols
@@ -971,29 +1144,88 @@ class DiffusionDataModule(DataInterface, HFDatasetLoaderMixin):
 
 
 class ClassDiffusionDataModule(SequenceClassificationDataModule):
-    """Data module for conditional (or class-filtered) diffusion, and applying discrete diffusion noising. Inherits from SequenceClassification.
+    """Data module for conditional (or class-filtered) diffusion, and applying discrete diffusion noising.
 
     Note:
         Each sample includes timesteps_per_sample sequences at different noise levels
         Each sample's target sequences are under 'target_seqs', the input sequences are under 'input_seqs', and posterior weights are under 'posterior_weights'
 
     Args:
-        timesteps_per_sample (int, optional): The number of timesteps per sample, defaults to 10
-        randomize_targets (bool, optional): Whether to randomize the target sequences for each timestep (experimental efficiency boost proposed by Sazan)
-        batch_size (int, optional): The batch size, defaults to 10
-        extra_cols (List[str], optional): Additional columns to include in the dataset, defaults to None
-        extra_col_aliases (List[str], optional): The name of the columns to use as the alias for the extra columns, defaults to None
+        timesteps_per_sample: The number of timesteps per sample.
+        randomize_targets: Whether to randomize the target sequences for each timestep (experimental efficiency boost).
     """
 
     def __init__(
         self,
-        *args,
+        path: str,
+        config_name: Optional[str] = None,
+        x_col: str = "sequence",
+        y_col: str | List[str] = "label",
         timesteps_per_sample: int = 10,
         randomize_targets: bool = False,
         batch_size: int = 10,
+        extra_cols: List[str] | None = None,
+        extra_col_aliases: List[str] | None = None,
+        class_filter: int | List[int] | None = None,
+        generate_uid: bool = False,
+        train_split_name: Optional[str] = "train",
+        test_split_name: Optional[str] = "test",
+        valid_split_name: Optional[str] = None,
+        train_split_files: Optional[Union[str, List[str]]] = None,
+        test_split_files: Optional[Union[str, List[str]]] = None,
+        valid_split_files: Optional[Union[str, List[str]]] = None,
+        test_split_size: float = 0.2,
+        valid_split_size: float = 0.1,
+        random_seed: int = 42,
+        extra_reader_kwargs: Optional[dict] = None,
+        shuffle: bool = True,
+        sampler: Optional[torch.utils.data.Sampler] = None,
+        num_workers: int = 0,
+        collate_fn: Optional[callable] = None,
+        pin_memory: bool = True,
+        persistent_workers: bool = False,
+        cv_num_folds: int = 1,
+        cv_test_fold_id: int = 0,
+        cv_enable_val_fold: bool = True,
+        cv_replace_val_fold_as_test_fold: bool = False,
+        cv_fold_id_col: Optional[str] = None,
+        cv_val_offset: int = 1,
         **kwargs,
     ):
-        super().__init__(*args, batch_size=batch_size, **kwargs)
+        super().__init__(
+            path=path,
+            config_name=config_name,
+            x_col=x_col,
+            y_col=y_col,
+            extra_cols=extra_cols,
+            extra_col_aliases=extra_col_aliases,
+            class_filter=class_filter,
+            generate_uid=generate_uid,
+            train_split_name=train_split_name,
+            test_split_name=test_split_name,
+            valid_split_name=valid_split_name,
+            train_split_files=train_split_files,
+            test_split_files=test_split_files,
+            valid_split_files=valid_split_files,
+            test_split_size=test_split_size,
+            valid_split_size=valid_split_size,
+            random_seed=random_seed,
+            extra_reader_kwargs=extra_reader_kwargs,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            sampler=sampler,
+            num_workers=num_workers,
+            collate_fn=collate_fn,
+            pin_memory=pin_memory,
+            persistent_workers=persistent_workers,
+            cv_num_folds=cv_num_folds,
+            cv_test_fold_id=cv_test_fold_id,
+            cv_enable_val_fold=cv_enable_val_fold,
+            cv_replace_val_fold_as_test_fold=cv_replace_val_fold_as_test_fold,
+            cv_fold_id_col=cv_fold_id_col,
+            cv_val_offset=cv_val_offset,
+            **kwargs,
+        )
         self.timesteps_per_sample = timesteps_per_sample
         self.randomize_targets = randomize_targets
 
@@ -1029,7 +1261,7 @@ class ClassDiffusionDataModule(SequenceClassificationDataModule):
 
 # TODO: This data module should not require labels.
 class MLMDataModule(SequenceClassificationDataModule):
-    """Data module for continuing pretraining on a masked language modeling task. Inherits from SequenceClassificationDataModule.
+    """Data module for continuing pretraining on a masked language modeling task.
 
     Note:
         Each sample includes a single sequence under key 'sequences' and a single target sequence under key 'target_sequences'
@@ -1040,11 +1272,74 @@ class MLMDataModule(SequenceClassificationDataModule):
 
     def __init__(
         self,
-        *args,
+        path: str,
+        config_name: Optional[str] = None,
         masking_rate: float = 0.15,
+        x_col: str = "sequence",
+        y_col: str | List[str] = "label",
+        extra_cols: List[str] | None = None,
+        extra_col_aliases: List[str] | None = None,
+        class_filter: int | List[int] | None = None,
+        generate_uid: bool = False,
+        train_split_name: Optional[str] = "train",
+        test_split_name: Optional[str] = "test",
+        valid_split_name: Optional[str] = None,
+        train_split_files: Optional[Union[str, List[str]]] = None,
+        test_split_files: Optional[Union[str, List[str]]] = None,
+        valid_split_files: Optional[Union[str, List[str]]] = None,
+        test_split_size: float = 0.2,
+        valid_split_size: float = 0.1,
+        random_seed: int = 42,
+        extra_reader_kwargs: Optional[dict] = None,
+        batch_size: int = 128,
+        shuffle: bool = True,
+        sampler: Optional[torch.utils.data.Sampler] = None,
+        num_workers: int = 0,
+        collate_fn: Optional[callable] = None,
+        pin_memory: bool = True,
+        persistent_workers: bool = False,
+        cv_num_folds: int = 1,
+        cv_test_fold_id: int = 0,
+        cv_enable_val_fold: bool = True,
+        cv_replace_val_fold_as_test_fold: bool = False,
+        cv_fold_id_col: Optional[str] = None,
+        cv_val_offset: int = 1,
         **kwargs,
     ):
-        super().__init__(*args, **kwargs)
+        super().__init__(
+            path=path,
+            config_name=config_name,
+            x_col=x_col,
+            y_col=y_col,
+            extra_cols=extra_cols,
+            extra_col_aliases=extra_col_aliases,
+            class_filter=class_filter,
+            generate_uid=generate_uid,
+            train_split_name=train_split_name,
+            test_split_name=test_split_name,
+            valid_split_name=valid_split_name,
+            train_split_files=train_split_files,
+            test_split_files=test_split_files,
+            valid_split_files=valid_split_files,
+            test_split_size=test_split_size,
+            valid_split_size=valid_split_size,
+            random_seed=random_seed,
+            extra_reader_kwargs=extra_reader_kwargs,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            sampler=sampler,
+            num_workers=num_workers,
+            collate_fn=collate_fn,
+            pin_memory=pin_memory,
+            persistent_workers=persistent_workers,
+            cv_num_folds=cv_num_folds,
+            cv_test_fold_id=cv_test_fold_id,
+            cv_enable_val_fold=cv_enable_val_fold,
+            cv_replace_val_fold_as_test_fold=cv_replace_val_fold_as_test_fold,
+            cv_fold_id_col=cv_fold_id_col,
+            cv_val_offset=cv_val_offset,
+            **kwargs,
+        )
         self.masking_rate = masking_rate
 
     def setup(self, stage: Optional[str] = None):
@@ -1064,29 +1359,81 @@ class MLMDataModule(SequenceClassificationDataModule):
 
 
 class SequenceRegressionDataModule(DataInterface, HFDatasetLoaderMixin):
-    """Data module sequence regression datasets.
+    """Data module for sequence regression datasets.
 
     Args:
-        x_col (union[str, list], optional): The name of columns containing the sequences. Defaults to "sequence".
-        y_col (union[str, list], optional): The name of columns containing the labels. Defaults to "label".
-        extra_cols (list, optional): Additional columns to include in the dataset. Defaults to None.
-        extra_col_aliases (list, optional): The name of the columns to use as the alias for the extra columns. Defaults to None.
-        normalize (bool, optional): Whether to normalize the labels. Defaults to True.
-        generate_uid (bool, optional): Whether to generate a unique ID for each sample. Defaults to False.
+        x_col: The name of columns containing the sequences.
+        y_col: The name of columns containing the labels.
+        extra_cols: Additional columns to include in the dataset.
+        extra_col_aliases: The name of the columns to use as the alias for the extra columns.
+        normalize: Whether to normalize the labels.
+        generate_uid: Whether to generate a unique ID for each sample.
+        **kwargs: Additional keyword arguments for the parent class.
     """
 
     def __init__(
         self,
-        *args,
+        path: str,
+        config_name: Optional[str] = None,
         x_col: str = "sequence",
         y_col: str = "label",
         extra_cols: List[str] = None,
         extra_col_aliases: List[str] = None,
         normalize: bool = True,
         generate_uid: bool = False,
+        train_split_name: Optional[str] = "train",
+        test_split_name: Optional[str] = "test",
+        valid_split_name: Optional[str] = None,
+        train_split_files: Optional[Union[str, List[str]]] = None,
+        test_split_files: Optional[Union[str, List[str]]] = None,
+        valid_split_files: Optional[Union[str, List[str]]] = None,
+        test_split_size: float = 0.2,
+        valid_split_size: float = 0.1,
+        random_seed: int = 42,
+        extra_reader_kwargs: Optional[dict] = None,
+        batch_size: int = 128,
+        shuffle: bool = True,
+        sampler: Optional[torch.utils.data.Sampler] = None,
+        num_workers: int = 0,
+        collate_fn: Optional[callable] = None,
+        pin_memory: bool = True,
+        persistent_workers: bool = False,
+        cv_num_folds: int = 1,
+        cv_test_fold_id: int = 0,
+        cv_enable_val_fold: bool = True,
+        cv_replace_val_fold_as_test_fold: bool = False,
+        cv_fold_id_col: Optional[str] = None,
+        cv_val_offset: int = 1,
         **kwargs,
     ):
-        super().__init__(*args, **kwargs)
+        super().__init__(
+            path=path,
+            config_name=config_name,
+            train_split_name=train_split_name,
+            test_split_name=test_split_name,
+            valid_split_name=valid_split_name,
+            train_split_files=train_split_files,
+            test_split_files=test_split_files,
+            valid_split_files=valid_split_files,
+            test_split_size=test_split_size,
+            valid_split_size=valid_split_size,
+            random_seed=random_seed,
+            extra_reader_kwargs=extra_reader_kwargs,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            sampler=sampler,
+            num_workers=num_workers,
+            collate_fn=collate_fn,
+            pin_memory=pin_memory,
+            persistent_workers=persistent_workers,
+            cv_num_folds=cv_num_folds,
+            cv_test_fold_id=cv_test_fold_id,
+            cv_enable_val_fold=cv_enable_val_fold,
+            cv_replace_val_fold_as_test_fold=cv_replace_val_fold_as_test_fold,
+            cv_fold_id_col=cv_fold_id_col,
+            cv_val_offset=cv_val_offset,
+            **kwargs,
+        )
         self.x_col = x_col
         self.y_col = y_col
         self.extra_cols = extra_cols or []
@@ -1170,16 +1517,73 @@ class SequenceRegressionDataModule(DataInterface, HFDatasetLoaderMixin):
 
 
 class ColumnRetrievalDataModule(DataInterface, HFDatasetLoaderMixin):
-    """Simple data module for retrieving and renaming columns from a dataset. Inherits from BaseDataModule."""
+    """Simple data module for retrieving and renaming columns from a dataset.
+
+    Args:
+        in_cols: The name of the columns to retrieve.
+        out_cols: The name of the columns to use as the alias for the retrieved columns.
+        **kwargs: Additional keyword arguments passed to the parent class.
+    """
 
     def __init__(
         self,
-        *args,
+        path: str,
+        config_name: Optional[str] = None,
         in_cols: List[str] = [],
         out_cols: Optional[List[str]] = None,
+        train_split_name: Optional[str] = "train",
+        test_split_name: Optional[str] = "test",
+        valid_split_name: Optional[str] = None,
+        train_split_files: Optional[Union[str, List[str]]] = None,
+        test_split_files: Optional[Union[str, List[str]]] = None,
+        valid_split_files: Optional[Union[str, List[str]]] = None,
+        test_split_size: float = 0.2,
+        valid_split_size: float = 0.1,
+        random_seed: int = 42,
+        extra_reader_kwargs: Optional[dict] = None,
+        batch_size: int = 128,
+        shuffle: bool = True,
+        sampler: Optional[torch.utils.data.Sampler] = None,
+        num_workers: int = 0,
+        collate_fn: Optional[callable] = None,
+        pin_memory: bool = True,
+        persistent_workers: bool = False,
+        cv_num_folds: int = 1,
+        cv_test_fold_id: int = 0,
+        cv_enable_val_fold: bool = True,
+        cv_replace_val_fold_as_test_fold: bool = False,
+        cv_fold_id_col: Optional[str] = None,
+        cv_val_offset: int = 1,
         **kwargs,
     ):
-        super().__init__(*args, **kwargs)
+        super().__init__(
+            path=path,
+            config_name=config_name,
+            train_split_name=train_split_name,
+            test_split_name=test_split_name,
+            valid_split_name=valid_split_name,
+            train_split_files=train_split_files,
+            test_split_files=test_split_files,
+            valid_split_files=valid_split_files,
+            test_split_size=test_split_size,
+            valid_split_size=valid_split_size,
+            random_seed=random_seed,
+            extra_reader_kwargs=extra_reader_kwargs,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            sampler=sampler,
+            num_workers=num_workers,
+            collate_fn=collate_fn,
+            pin_memory=pin_memory,
+            persistent_workers=persistent_workers,
+            cv_num_folds=cv_num_folds,
+            cv_test_fold_id=cv_test_fold_id,
+            cv_enable_val_fold=cv_enable_val_fold,
+            cv_replace_val_fold_as_test_fold=cv_replace_val_fold_as_test_fold,
+            cv_fold_id_col=cv_fold_id_col,
+            cv_val_offset=cv_val_offset,
+            **kwargs,
+        )
         self.in_cols = in_cols
         self.out_cols = out_cols or in_cols
 
@@ -1207,22 +1611,42 @@ class ColumnRetrievalDataModule(DataInterface, HFDatasetLoaderMixin):
 
 # TODO: Almost identical to SequenceRegressionDataModule, except for label unsqueezing.
 class RNAMeanRibosomeLoadDataModule(SequenceRegressionDataModule):
+    """Data module for the mean ribosome load dataset.
+
+    Note:
+        - Manuscript: [Human 5′ UTR design and variant effect prediction from a massively parallel translation assay](https://www.nature.com/articles/s41587-019-0164-5)
+        - Data Card: [genbio-ai/rna-downstream-tasks](https://huggingface.co/datasets/genbio-ai/rna-downstream-tasks)
+
+    Args:
+        **kwargs: Additional keyword arguments passed to the parent class.
+    """
     def __init__(
         self,
         path: str = "genbio-ai/rna-downstream-tasks",
         config_name: str = "mean_ribosome_load",
+        train_split_name: str = "train",
+        valid_split_name: str = "validation",
+        test_split_name: str = "test",
+        x_col: str = "utr",
+        y_col: str = "rl",
+        extra_cols: List[str] = None,
+        extra_col_aliases: List[str] = None,
         normalize: bool = False,
+        generate_uid: bool = False,
         **kwargs,
     ):
         super().__init__(
             path=path,
             config_name=config_name,
-            x_col="utr",
-            y_col="rl",
-            train_split_name="train",
-            valid_split_name="validation",
-            test_split_name="test",
+            train_split_name=train_split_name,
+            valid_split_name=valid_split_name,
+            test_split_name=test_split_name,
+            x_col=x_col,
+            y_col=y_col,
+            extra_cols=extra_cols,
+            extra_col_aliases=extra_col_aliases,
             normalize=normalize,
+            generate_uid=generate_uid,
             **kwargs,
         )
 
@@ -1273,27 +1697,88 @@ class RNAMeanRibosomeLoadDataModule(SequenceRegressionDataModule):
 
 
 class ConditionalDiffusionDataModule(SequenceRegressionDataModule):
-    """Data module for conditional diffusion with a continuous condition, and applying discrete diffusion noising. Inherits from SequenceRegression.
+    """Data module for conditional diffusion with a continuous condition, and applying discrete diffusion noising.
 
     Note:
         Each sample includes timesteps_per_sample sequences at different noise levels
         Each sample's target sequences are under 'target_seqs', the input sequences are under 'input_seqs', and posterior weights are under 'posterior_weights'
 
     Args:
-        timesteps_per_sample (int, optional): The number of timesteps per sample, defaults to 10
-        randomize_targets (bool, optional): Whether to randomize the target sequences for each timestep (experimental efficiency boost proposed by Sazan)
-        batch_size (int, optional): The batch size, defaults to 10
+        timesteps_per_sample: The number of timesteps per sample.
+        randomize_targets: Whether to randomize the target sequences for each timestep (experimental efficiency boost).
     """
 
     def __init__(
         self,
-        *args,
+        path: str,
+        config_name: Optional[str] = None,
+        x_col: str = "sequence",
+        y_col: str = "label",
+        extra_cols: List[str] = None,
+        extra_col_aliases: List[str] = None,
+        normalize: bool = True,
+        generate_uid: bool = False,
         timesteps_per_sample: int = 10,
         randomize_targets: bool = False,
         batch_size: int = 10,
+        train_split_name: Optional[str] = "train",
+        test_split_name: Optional[str] = "test",
+        valid_split_name: Optional[str] = None,
+        train_split_files: Optional[Union[str, List[str]]] = None,
+        test_split_files: Optional[Union[str, List[str]]] = None,
+        valid_split_files: Optional[Union[str, List[str]]] = None,
+        test_split_size: float = 0.2,
+        valid_split_size: float = 0.1,
+        random_seed: int = 42,
+        extra_reader_kwargs: Optional[dict] = None,
+        shuffle: bool = True,
+        sampler: Optional[torch.utils.data.Sampler] = None,
+        num_workers: int = 0,
+        collate_fn: Optional[callable] = None,
+        pin_memory: bool = True,
+        persistent_workers: bool = False,
+        cv_num_folds: int = 1,
+        cv_test_fold_id: int = 0,
+        cv_enable_val_fold: bool = True,
+        cv_replace_val_fold_as_test_fold: bool = False,
+        cv_fold_id_col: Optional[str] = None,
+        cv_val_offset: int = 1,
         **kwargs,
     ):
-        super().__init__(*args, batch_size=batch_size, **kwargs)
+        super().__init__(
+            path=path,
+            config_name=config_name,
+            x_col=x_col,
+            y_col=y_col,
+            extra_cols=extra_cols,
+            extra_col_aliases=extra_col_aliases,
+            normalize=normalize,
+            generate_uid=generate_uid,
+            train_split_name=train_split_name,
+            test_split_name=test_split_name,
+            valid_split_name=valid_split_name,
+            train_split_files=train_split_files,
+            test_split_files=test_split_files,
+            valid_split_files=valid_split_files,
+            test_split_size=test_split_size,
+            valid_split_size=valid_split_size,
+            random_seed=random_seed,
+            extra_reader_kwargs=extra_reader_kwargs,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            sampler=sampler,
+            num_workers=num_workers,
+            collate_fn=collate_fn,
+            pin_memory=pin_memory,
+            persistent_workers=persistent_workers,
+            cv_num_folds=cv_num_folds,
+            cv_test_fold_id=cv_test_fold_id,
+            cv_enable_val_fold=cv_enable_val_fold,
+            cv_replace_val_fold_as_test_fold=cv_replace_val_fold_as_test_fold,
+            cv_fold_id_col=cv_fold_id_col,
+            cv_val_offset=cv_val_offset,
+            **kwargs,
+        )
         self.timesteps_per_sample = timesteps_per_sample
         self.randomize_targets = randomize_targets
 
@@ -1328,25 +1813,80 @@ class ConditionalDiffusionDataModule(SequenceRegressionDataModule):
 
 
 class CellClassificationDataModule(DataInterface):
-    """Data module for cell classification. Inherits from BaseDataModule.
+    """Data module for cell classification.
 
     Note:
         Each sample includes a feature vector (one of the rows in <adata.X>) and a single class label (one of the columns in <adata.obs>)
 
     Args:
-        filter_columns (Optional[list[str]], optional): The columns of <obs> we want to use. Defaults to None, in which case all columns are used.
-        rename_columns (Optional[list[str]], optional): New name of columns. Defaults to None, in which case columns are not renamed. Does nothing if filter_colums is None.
-        # TODO: Add option to return a subset of genes by filtering on <var>.
+        backbone_class_path: Class path of the backbone model.
+        filter_columns: The columns of <obs> we want to use. Defaults to None, in which case all columns are used.
+        rename_columns: New name of columns. Defaults to None, in which case columns are not renamed. Does nothing if filter_colums is None.
+        **kwargs: Additional keyword arguments passed to the parent class.
     """
+    # TODO: Add option to return a subset of genes by filtering on <var>.
 
     def __init__(
         self,
-        *args,
+        path: str,
+        backbone_class_path: Optional[str] = None,
         filter_columns: Optional[list[str]] = None,
         rename_columns: Optional[list[str]] = None,
+        config_name: Optional[str] = None,
+        train_split_name: Optional[str] = "train",
+        test_split_name: Optional[str] = "test",
+        valid_split_name: Optional[str] = None,
+        train_split_files: Optional[Union[str, List[str]]] = None,
+        test_split_files: Optional[Union[str, List[str]]] = None,
+        valid_split_files: Optional[Union[str, List[str]]] = None,
+        test_split_size: float = 0.2,
+        valid_split_size: float = 0.1,
+        random_seed: int = 42,
+        extra_reader_kwargs: Optional[dict] = None,
+        batch_size: int = 128,
+        shuffle: bool = True,
+        sampler: Optional[torch.utils.data.Sampler] = None,
+        num_workers: int = 0,
+        collate_fn: Optional[callable] = None,
+        pin_memory: bool = True,
+        persistent_workers: bool = False,
+        cv_num_folds: int = 1,
+        cv_test_fold_id: int = 0,
+        cv_enable_val_fold: bool = True,
+        cv_replace_val_fold_as_test_fold: bool = False,
+        cv_fold_id_col: Optional[str] = None,
+        cv_val_offset: int = 1,
         **kwargs,
     ):
-        super().__init__(*args, **kwargs)
+        super().__init__(
+            path=path,
+            config_name=config_name,
+            train_split_name=train_split_name,
+            test_split_name=test_split_name,
+            valid_split_name=valid_split_name,
+            train_split_files=train_split_files,
+            test_split_files=test_split_files,
+            valid_split_files=valid_split_files,
+            test_split_size=test_split_size,
+            valid_split_size=valid_split_size,
+            random_seed=random_seed,
+            extra_reader_kwargs=extra_reader_kwargs,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            sampler=sampler,
+            num_workers=num_workers,
+            collate_fn=collate_fn,
+            pin_memory=pin_memory,
+            persistent_workers=persistent_workers,
+            cv_num_folds=cv_num_folds,
+            cv_test_fold_id=cv_test_fold_id,
+            cv_enable_val_fold=cv_enable_val_fold,
+            cv_replace_val_fold_as_test_fold=cv_replace_val_fold_as_test_fold,
+            cv_fold_id_col=cv_fold_id_col,
+            cv_val_offset=cv_val_offset,
+            **kwargs,
+        )
+        self.backbone_gene_list = cell_utils.load_backbone_gene_list(backbone_class_path)
         if len(self.train_split_files) != 1:
             raise NotImplementedError("Multiple files not yet supported.")
         if len(self.valid_split_files) != 1:
@@ -1362,8 +1902,15 @@ class CellClassificationDataModule(DataInterface):
     def setup(self, stage: Optional[str] = None):
         """Set up the data module by loading the whole datasets and splitting them into training, validation, and test sets."""
         adata_train = ad.read_h5ad(os.path.join(self.path, self.trainfile))
+        adata_train = cell_utils.map_gene_symbols(adata_train, symbol_field='gene_symbols')
+        adata_train = cell_utils.align_genes(adata_train, self.backbone_gene_list)
         adata_val = ad.read_h5ad(os.path.join(self.path, self.valfile))
+        adata_val = cell_utils.map_gene_symbols(adata_val, symbol_field='gene_symbols')
+        adata_val = cell_utils.align_genes(adata_val, self.backbone_gene_list)
         adata_test = ad.read_h5ad(os.path.join(self.path, self.testfile))
+        adata_test = cell_utils.map_gene_symbols(adata_test, symbol_field='gene_symbols')
+        adata_test = cell_utils.align_genes(adata_test, self.backbone_gene_list)
+
         # only remain useful data for classification
         if self.filter_columns is not None:
             adata_train.obs = adata_train.obs[self.filter_columns]
@@ -1391,37 +1938,295 @@ class CellClassificationDataModule(DataInterface):
         self.test_dataset = AnyDataset(**D_test)
 
 
+class CellTypeTileDBCollateFn:
+    def __init__(self, cell_type_encoder, data_gene_list, obs_column_name, backbone_gene_list):
+        self.cell_type_encoder = cell_type_encoder
+        self.obs_column_name = obs_column_name
+        self.setup(backbone_gene_list, data_gene_list)
+
+    def setup(self, backbone_gene_list, data_gene_list):
+        rank_zero_info('###########  Preparing gene alignment  ###########')
+        rank_zero_info(f'Model was pretrained on a fixed set of {len(backbone_gene_list)} genes.')
+        missing_genes = np.setdiff1d(backbone_gene_list, data_gene_list)
+        emsemble_gene_ids = np.concatenate([data_gene_list, missing_genes])
+        self.n_missing_genes = len(missing_genes)
+        self.align_indices = np.where(backbone_gene_list[:, None] == emsemble_gene_ids[None, :])[1]
+        rank_zero_info(f'{len(data_gene_list) - len(self.align_indices) + self.n_missing_genes} genes in the data that cannot be used by the model. Removing these.')
+        rank_zero_info('e.g. ' + str(data_gene_list[list(set(np.arange(len(data_gene_list))) - set(self.align_indices))[:10]]))
+        rank_zero_info(f'{len(missing_genes)} model genes missing in the data. Zero padding.')
+        rank_zero_info('e.g. ' + str(missing_genes[:10]))
+        rank_zero_info(f'{len(self.align_indices) - self.n_missing_genes} non-zero genes remaining.')
+        rank_zero_info('####################  Ready for in-cycle alignment ####################')
+
+    def __call__(self, data):
+        X, labels = data
+        X_missing = np.zeros((X.shape[0], self.n_missing_genes))
+        X_aligned = np.concatenate([X, X_missing], axis=1)[:, self.align_indices]
+        X_transformed = torch.from_numpy(X_aligned)
+        labels_transformed = torch.from_numpy(
+            self.cell_type_encoder.transform(labels[self.obs_column_name])
+        )
+        return {"sequences": X_transformed, "labels": labels_transformed}
+
+class CellClassificationLargeDataModule(DataInterface):
+    """Data module for cell classification. This class handles large dataset and is implemented based on TileDB.
+
+    Note:
+        Each sample includes a feature vector (one of the rows in <adata.X>) and a single class label (one of the columns in <adata.obs>)
+
+    Args:
+        path: Path to the TileDB dataset folder
+        train_split_subfolder: Subfolder name for the training split.
+        valid_split_subfolder: Subfolder name for the validation split.
+        test_split_subfolder: Subfolder name for the test split.
+        backbone_class_path: Class path of the backbone model.
+        layer_name: Name of the layer in the TileDB dataset.
+        obs_column_name: Name of the column in <obs> to use as the label.
+        measurement_name: Name of the measurement in the TileDB dataset.
+        axis_query_value_filter: Optional filter for the axis query.
+        prefetch_factor: Number of batches to prefetch.
+        **kwargs: Additional keyword arguments passed to the parent class.
+    """
+    def __init__(
+        self, 
+        path: str,
+        train_split_subfolder: str,
+        valid_split_subfolder: str,
+        test_split_subfolder: str,
+        backbone_class_path: Optional[str] = None,
+        layer_name: str = "data",
+        obs_column_name: str = "cell_type",
+        measurement_name: str = "RNA",
+        axis_query_value_filter: Optional[str] = None,
+        prefetch_factor: int = 16,
+        config_name: Optional[str] = None,
+        train_split_name: Optional[str] = "train",
+        test_split_name: Optional[str] = "test",
+        valid_split_name: Optional[str] = None,
+        train_split_files: Optional[Union[str, List[str]]] = None,
+        test_split_files: Optional[Union[str, List[str]]] = None,
+        valid_split_files: Optional[Union[str, List[str]]] = None,
+        test_split_size: float = 0.2,
+        valid_split_size: float = 0.1,
+        random_seed: int = 42,
+        extra_reader_kwargs: Optional[dict] = None,
+        batch_size: int = 128,
+        shuffle: bool = True,
+        sampler: Optional[torch.utils.data.Sampler] = None,
+        num_workers: int = 0,
+        collate_fn: Optional[callable] = None,
+        pin_memory: bool = True,
+        persistent_workers: bool = False,
+        cv_num_folds: int = 1,
+        cv_test_fold_id: int = 0,
+        cv_enable_val_fold: bool = True,
+        cv_replace_val_fold_as_test_fold: bool = False,
+        cv_fold_id_col: Optional[str] = None,
+        cv_val_offset: int = 1,
+        **kwargs,
+    ):
+        super().__init__(
+            path=path,
+            config_name=config_name,
+            train_split_name=train_split_name,
+            test_split_name=test_split_name,
+            valid_split_name=valid_split_name,
+            train_split_files=train_split_files,
+            test_split_files=test_split_files,
+            valid_split_files=valid_split_files,
+            test_split_size=test_split_size,
+            valid_split_size=valid_split_size,
+            random_seed=random_seed,
+            extra_reader_kwargs=extra_reader_kwargs,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            sampler=sampler,
+            num_workers=num_workers,
+            collate_fn=collate_fn,
+            pin_memory=pin_memory,
+            persistent_workers=persistent_workers,
+            cv_num_folds=cv_num_folds,
+            cv_test_fold_id=cv_test_fold_id,
+            cv_enable_val_fold=cv_enable_val_fold,
+            cv_replace_val_fold_as_test_fold=cv_replace_val_fold_as_test_fold,
+            cv_fold_id_col=cv_fold_id_col,
+            cv_val_offset=cv_val_offset,
+            **kwargs,
+        )
+        self.train_split_folder = os.path.join(self.path, train_split_subfolder)
+        self.val_split_folder = os.path.join(self.path, valid_split_subfolder)
+        self.test_split_folder = os.path.join(self.path, test_split_subfolder)
+        assert os.path.isdir(self.train_split_folder)
+        assert os.path.isdir(self.val_split_folder)
+        assert os.path.isdir(self.test_split_folder)
+        self.backbone_gene_list = cell_utils.load_backbone_gene_list(backbone_class_path)
+        self.layer_name = layer_name
+        self.obs_column_name = obs_column_name
+        self.measurement_name = measurement_name
+        self.axis_query_value_filter = axis_query_value_filter
+        self.prefetch_factor = prefetch_factor
+        self.collate_fn = None
+
+    def setup(self, stage: Optional[str] = None):
+        import tiledbsoma
+        import tiledbsoma.io
+        import tiledbsoma_ml as soma_ml
+        from sklearn.preprocessing import LabelEncoder
+
+        def _get_split_dataset(experiment_path):
+            experiment = tiledbsoma.Experiment.open(experiment_path)
+            with experiment.axis_query(
+                measurement_name=self.measurement_name, obs_query=tiledbsoma.AxisQuery(value_filter=self.axis_query_value_filter)
+            ) as query:
+                obs_df = query.obs(column_names=[self.obs_column_name]).concat().to_pandas()
+                experiment_dataset = soma_ml.ExperimentDataset(
+                    query,
+                    layer_name=self.layer_name,
+                    obs_column_names=[self.obs_column_name],
+                    batch_size=self.batch_size,
+                    shuffle=self.shuffle,
+                    seed=self.random_seed,
+                )
+            cell_type_encoder = LabelEncoder().fit(obs_df[self.obs_column_name].unique())
+            gene_names = experiment.ms[self.measurement_name].var.read().concat().to_pandas()["feature_name"]
+            gene_map = cell_utils.build_map(gene_names)
+            data_gene_list = np.array([gene_map.get(x, f'{x}_unknown_ensg') for x in gene_names])
+            collate_fn = CellTypeTileDBCollateFn(cell_type_encoder, data_gene_list, self.obs_column_name, self.backbone_gene_list)
+            return experiment_dataset, collate_fn
+
+        self.train_dataset, self.train_collate_fn = _get_split_dataset(self.train_split_folder)
+        self.val_dataset, self.val_collate_fn = _get_split_dataset(self.val_split_folder)
+        self.test_dataset, self.test_collate_fn = _get_split_dataset(self.test_split_folder)
+
+    def train_dataloader(self) -> Any:
+        import tiledbsoma_ml as soma_ml
+        return soma_ml.experiment_dataloader(
+            self.train_dataset, 
+            prefetch_factor = self.prefetch_factor,
+            num_workers=self.num_workers,
+            collate_fn=self.train_collate_fn,
+            pin_memory=self.pin_memory,
+            persistent_workers=self.persistent_workers,
+        )
+
+    def val_dataloader(self) -> Any:
+        import tiledbsoma_ml as soma_ml
+        return soma_ml.experiment_dataloader(
+            self.val_dataset, 
+            prefetch_factor = self.prefetch_factor,
+            num_workers=self.num_workers,
+            collate_fn=self.val_collate_fn,
+            pin_memory=self.pin_memory,
+            persistent_workers=self.persistent_workers,
+        )
+
+    def test_dataloader(self) -> Any:
+        import tiledbsoma_ml as soma_ml
+        return soma_ml.experiment_dataloader(
+            self.test_dataset, 
+            prefetch_factor = self.prefetch_factor,
+            num_workers=self.num_workers,
+            collate_fn=self.test_collate_fn,
+            pin_memory=self.pin_memory,
+            persistent_workers=self.persistent_workers,
+        )
+
+    def predict_dataloader(self) -> Any:
+        import tiledbsoma_ml as soma_ml
+        return soma_ml.experiment_dataloader(
+            self.test_dataset, 
+            prefetch_factor = self.prefetch_factor,
+            num_workers=self.num_workers,
+            collate_fn=self.test_collate_fn,
+            pin_memory=self.pin_memory,
+            persistent_workers=self.persistent_workers,
+        )   
+
+
 class ClockDataModule(DataInterface):
-    """Data module for transcriptomic clock tasks. Inherits from BaseDataModule.
+    """Data module for transcriptomic clock tasks.
 
     Note:
         Each sample includes a feature vector (one of the rows in <adata.X>) and a single scalar corresponding to donor age (one of the columns in <adata.obs>)
 
     Args:
-        split_column (str): The column of <obs> that defines the split assignments.
-        gene_set_file (str): Path to a csv file containing gene symbols in the order expected by the model being used.
-        filter_columns (Optional[list[str]], optional): The columns of <obs> we want to use. Defaults to None, in which case all columns are used.
-        rename_columns (Optional[list[str]], optional): New name of columns. Defaults to None, in which case columns are not renamed. Does nothing if filter_colums is None.
-        # TODO: Add option to return a subset of genes by filtering on <var>.
+        split_column: The column of <obs> that defines the split assignments.
+        label_scaling: The type of label scaling to apply.
+        backbone_class_path: Class path of the backbone model.
+        filter_columns: The columns of <obs> we want to use. Defaults to None, in which case all columns are used.
+        rename_columns: New name of columns. Defaults to None, in which case columns are not renamed. Does nothing if filter_colums is None.
+        **kwargs: Additional keyword arguments passed to the parent class.
     """
+    # TODO: Add option to return a subset of genes by filtering on <var>.
 
     def __init__(
         self,
-        *args,
+        path: str,
         split_column: str,
-        gene_set_file: str,
         label_scaling: Optional[str] = 'z_scaling',
+        backbone_class_path: Optional[str] = None,
         filter_columns: Optional[list[str]] = None,
         rename_columns: Optional[list[str]] = None,
+        config_name: Optional[str] = None,
+        train_split_name: Optional[str] = "train",
+        test_split_name: Optional[str] = "test",
+        valid_split_name: Optional[str] = None,
+        train_split_files: Optional[Union[str, List[str]]] = None,
+        test_split_files: Optional[Union[str, List[str]]] = None,
+        valid_split_files: Optional[Union[str, List[str]]] = None,
+        test_split_size: float = 0.2,
+        valid_split_size: float = 0.1,
+        random_seed: int = 42,
+        extra_reader_kwargs: Optional[dict] = None,
+        batch_size: int = 128,
+        shuffle: bool = True,
+        sampler: Optional[torch.utils.data.Sampler] = None,
+        num_workers: int = 0,
+        collate_fn: Optional[callable] = None,
+        pin_memory: bool = True,
+        persistent_workers: bool = False,
+        cv_num_folds: int = 1,
+        cv_test_fold_id: int = 0,
+        cv_enable_val_fold: bool = True,
+        cv_replace_val_fold_as_test_fold: bool = False,
+        cv_fold_id_col: Optional[str] = None,
+        cv_val_offset: int = 1,
         **kwargs,
     ):
-        super().__init__(*args, **kwargs)
+        super().__init__(
+            path=path,
+            config_name=config_name,
+            train_split_name=train_split_name,
+            test_split_name=test_split_name,
+            valid_split_name=valid_split_name,
+            train_split_files=train_split_files,
+            test_split_files=test_split_files,
+            valid_split_files=valid_split_files,
+            test_split_size=test_split_size,
+            valid_split_size=valid_split_size,
+            random_seed=random_seed,
+            extra_reader_kwargs=extra_reader_kwargs,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            sampler=sampler,
+            num_workers=num_workers,
+            collate_fn=collate_fn,
+            pin_memory=pin_memory,
+            persistent_workers=persistent_workers,
+            cv_num_folds=cv_num_folds,
+            cv_test_fold_id=cv_test_fold_id,
+            cv_enable_val_fold=cv_enable_val_fold,
+            cv_replace_val_fold_as_test_fold=cv_replace_val_fold_as_test_fold,
+            cv_fold_id_col=cv_fold_id_col,
+            cv_val_offset=cv_val_offset,
+            **kwargs,
+        )
+        self.backbone_gene_list = cell_utils.load_backbone_gene_list(backbone_class_path)
         if len(self.train_split_files) != 1:
             raise NotImplementedError("Multiple files not yet supported.")
         if (self.valid_split_files is not None) or (self.test_split_files is not None):
             raise NotImplementedError("Data should live in a single file with splits defined by a column of <obs>.")
         self.split_column = split_column
-        self.gene_set_file = gene_set_file
         self.label_scaling = label_scaling
         self.trainfile = self.train_split_files[0]
         self.rename_columns = rename_columns
@@ -1430,25 +2235,11 @@ class ClockDataModule(DataInterface):
     def setup(self, stage: Optional[str] = None):
         """Set up the data module by loading the whole datasets and splitting them into training, validation, and test sets."""
         adata = ad.read_h5ad(os.path.join(self.path, self.trainfile))
+        adata = cell_utils.align_genes(adata, self.backbone_gene_list, ensembl_field='feature_id')
 
-        # align genes
-        adata.var.index = adata.var['feature_name']
-        model_genes = pd.read_csv(self.gene_set_file, sep='\t')['gene_name'].to_numpy()
-        data_genes = adata.var.index
-        common_genes = np.intersect1d(model_genes, data_genes)
-        if len(common_genes) == 0:
-            raise ValueError(f'Gene alignment failed, no common genes found. Are the gene names in the same format? (model: {model_genes[:5]}, data: {data_genes[:5]})')
-        missing_genes = np.setdiff1d(model_genes, data_genes)
-        adata_missing = ad.AnnData(np.zeros((adata.shape[0], len(missing_genes))))
-        adata_missing.var.index = missing_genes
-        adata_missing.obs = adata.obs
-        adata_aligned = ad.concat((adata, adata_missing), axis=1, join='inner', merge='same')
-        adata_aligned = adata_aligned[:, model_genes]
-        rank_zero_info(f'\n***\ngene alignment results: {len(common_genes)} common genes; {len(missing_genes)} missing genes filled with zeros\n***\n')
-
-        adata_train = adata_aligned[adata_aligned.obs[self.split_column] == 'train']
-        adata_val = adata_aligned[adata_aligned.obs[self.split_column] == 'val']
-        adata_test = adata_aligned[adata_aligned.obs[self.split_column] == 'test']
+        adata_train = adata[adata.obs[self.split_column] == 'train']
+        adata_val = adata[adata.obs[self.split_column] == 'val']
+        adata_test = adata[adata.obs[self.split_column] == 'test']
 
         # label scaling
         if self.label_scaling == 'z_scaling':
@@ -1576,20 +2367,85 @@ class SpatialDataGenerator(Dataset):
 
 
 class CellWithNeighborDataModule(DataInterface):
-    """Lightning-compatible DataModule with memory optimization"""
+    """Data module for cell classification with neighbors for AIDO.Tissue.
+    
+    Note:
+        Each sample includes a feature vector (one of the rows in <adata.X>) and a single class label (one of the columns in <adata.obs>)
+        The feature vector is concatenated with the feature vectors of its neighbors.
+        
+    Args:
+        filter_columns: The columns of <obs> we want to use. Defaults to None, in which case all columns are used.
+        rename_columns: Optional list of columns to rename.
+        use_random_neighbor: Whether to use random neighbors.
+        copy_center_as_neighbor: Whether to copy center as a neighbor.
+        neighbor_num: Number of neighbors to consider.
+        generate_uid: Whether to generate a unique identifier.
+        **kwargs: Additional keyword arguments passed to the parent class.
+    """
 
     def __init__(
         self,
-        *args,
-        filter_columns=None,
-        rename_columns=None,
-        use_random_neighbor=False,
-        copy_center_as_neighbor=False,
-        neighbor_num=10,
-        generate_uid=False,
+        path: str,
+        filter_columns: Optional[List[str]] = None,
+        rename_columns: Optional[List[str]] = None,
+        use_random_neighbor: bool = False,
+        copy_center_as_neighbor: bool = False,
+        neighbor_num: int = 10,
+        generate_uid: bool = False,
+        config_name: Optional[str] = None,
+        train_split_name: Optional[str] = "train",
+        test_split_name: Optional[str] = "test",
+        valid_split_name: Optional[str] = None,
+        train_split_files: Optional[Union[str, List[str]]] = None,
+        test_split_files: Optional[Union[str, List[str]]] = None,
+        valid_split_files: Optional[Union[str, List[str]]] = None,
+        test_split_size: float = 0.2,
+        valid_split_size: float = 0.1,
+        random_seed: int = 42,
+        extra_reader_kwargs: Optional[dict] = None,
+        batch_size: int = 128,
+        shuffle: bool = True,
+        sampler: Optional[torch.utils.data.Sampler] = None,
+        num_workers: int = 0,
+        collate_fn: Optional[callable] = None,
+        pin_memory: bool = True,
+        persistent_workers: bool = False,
+        cv_num_folds: int = 1,
+        cv_test_fold_id: int = 0,
+        cv_enable_val_fold: bool = True,
+        cv_replace_val_fold_as_test_fold: bool = False,
+        cv_fold_id_col: Optional[str] = None,
+        cv_val_offset: int = 1,
         **kwargs,
     ):
-        super().__init__(*args, **kwargs)
+        super().__init__(
+            path=path,
+            config_name=config_name,
+            train_split_name=train_split_name,
+            test_split_name=test_split_name,
+            valid_split_name=valid_split_name,
+            train_split_files=train_split_files,
+            test_split_files=test_split_files,
+            valid_split_files=valid_split_files,
+            test_split_size=test_split_size,
+            valid_split_size=valid_split_size,
+            random_seed=random_seed,
+            extra_reader_kwargs=extra_reader_kwargs,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            sampler=sampler,
+            num_workers=num_workers,
+            collate_fn=collate_fn,
+            pin_memory=pin_memory,
+            persistent_workers=persistent_workers,
+            cv_num_folds=cv_num_folds,
+            cv_test_fold_id=cv_test_fold_id,
+            cv_enable_val_fold=cv_enable_val_fold,
+            cv_replace_val_fold_as_test_fold=cv_replace_val_fold_as_test_fold,
+            cv_fold_id_col=cv_fold_id_col,
+            cv_val_offset=cv_val_offset,
+            **kwargs,
+        )
         if len(self.train_split_files) != 1:
             raise NotImplementedError("Multiple files not yet supported.")
         if len(self.valid_split_files) != 1:
@@ -1685,28 +2541,28 @@ def gather_data(data, labels, pad_token_id):
     return new_data, padding_labels
 
 class PertClassificationDataModule(DataInterface):
-    """Data module for perturbation classification. Inherits from BaseDataModule.
+    """Data module for perturbation classification.
 
     Note:
         Each sample includes a feature vector (one of the rows in <adata.X>) and a single class label (one of the columns in <adata.obs>)
 
     Args:
-        gene_set_file (str): Path to a csv file containing gene symbols in the order expected by the model being used.
-        pert_column (str): Column of <obs> containing perturbation labels.
-        cell_line_column (str): Column of <obs> containing cell line labels.
-        cell_line (str): Name of cell line to consider.
-        split_seed (int): Seed for train/val/test splits.
-        train_frac (float): Fraction of examples to assign to train set.
-        val_frac (float): Fraction of examples to assign to val set.
-        test_frac (float): Fraction of examples to assign to test set.
-        filter_columns (Optional[list[str]], optional): The columns of <obs> we want to use. Defaults to None, in which case all columns are used.
-        rename_columns (Optional[list[str]], optional): New name of columns. Defaults to None, in which case columns are not renamed. Does nothing if filter_colums is None.
+        pert_column: Column of <obs> containing perturbation labels.
+        cell_line_column: Column of <obs> containing cell line labels.
+        cell_line: Name of cell line to consider.
+        split_seed: Seed for train/val/test splits.
+        train_frac: Fraction of examples to assign to train set.
+        val_frac: Fraction of examples to assign to val set.
+        test_frac: Fraction of examples to assign to test set.
+        backbone_class_path: Class path of the backbone model.
+        filter_columns: The columns of <obs> we want to use. Defaults to None, in which case all columns are used.
+        rename_columns: New name of columns. Defaults to None, in which case columns are not renamed. Does nothing if filter_colums is None.
+        **kwargs: Additional keyword arguments passed to the parent class.
     """
 
     def __init__(
         self,
-        *args,
-        gene_set_file: str,
+        path: str,
         pert_column: str,
         cell_line_column: str,
         cell_line: str,
@@ -1714,17 +2570,69 @@ class PertClassificationDataModule(DataInterface):
         train_frac: float = 0.7,
         val_frac: float = 0.15,
         test_frac: float = 0.15,
+        backbone_class_path: Optional[str] = None,
         filter_columns: Optional[list[str]] = None,
         rename_columns: Optional[list[str]] = None,
+        config_name: Optional[str] = None,
+        train_split_name: Optional[str] = "train",
+        test_split_name: Optional[str] = "test",
+        valid_split_name: Optional[str] = None,
+        train_split_files: Optional[Union[str, List[str]]] = None,
+        test_split_files: Optional[Union[str, List[str]]] = None,
+        valid_split_files: Optional[Union[str, List[str]]] = None,
+        test_split_size: float = 0.2,
+        valid_split_size: float = 0.1,
+        random_seed: int = 42,
+        extra_reader_kwargs: Optional[dict] = None,
+        batch_size: int = 128,
+        shuffle: bool = True,
+        sampler: Optional[torch.utils.data.Sampler] = None,
+        num_workers: int = 0,
+        collate_fn: Optional[callable] = None,
+        pin_memory: bool = True,
+        persistent_workers: bool = False,
+        cv_num_folds: int = 1,
+        cv_test_fold_id: int = 0,
+        cv_enable_val_fold: bool = True,
+        cv_replace_val_fold_as_test_fold: bool = False,
+        cv_fold_id_col: Optional[str] = None,
+        cv_val_offset: int = 1,
         **kwargs,
     ):
-        super().__init__(*args, **kwargs)
+        super().__init__(
+            path=path,
+            config_name=config_name,
+            train_split_name=train_split_name,
+            test_split_name=test_split_name,
+            valid_split_name=valid_split_name,
+            train_split_files=train_split_files,
+            test_split_files=test_split_files,
+            valid_split_files=valid_split_files,
+            test_split_size=test_split_size,
+            valid_split_size=valid_split_size,
+            random_seed=random_seed,
+            extra_reader_kwargs=extra_reader_kwargs,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            sampler=sampler,
+            num_workers=num_workers,
+            collate_fn=collate_fn,
+            pin_memory=pin_memory,
+            persistent_workers=persistent_workers,
+            cv_num_folds=cv_num_folds,
+            cv_test_fold_id=cv_test_fold_id,
+            cv_enable_val_fold=cv_enable_val_fold,
+            cv_replace_val_fold_as_test_fold=cv_replace_val_fold_as_test_fold,
+            cv_fold_id_col=cv_fold_id_col,
+            cv_val_offset=cv_val_offset,
+            **kwargs,
+        )
+        self.backbone_gene_list = cell_utils.load_backbone_gene_list(backbone_class_path)
         if len(self.train_split_files) != 1:
             raise NotImplementedError("Multiple files not yet supported.")
         if (self.valid_split_files is not None) or (self.test_split_files is not None):
             raise NotImplementedError("Data should live in a single file with splits defined by a column of <obs>.")
         self.file = self.train_split_files[0]
-        self.gene_set_file = gene_set_file
         self.pert_column = pert_column
         self.cell_line_column = cell_line_column
         self.cell_line = cell_line
@@ -1740,6 +2648,8 @@ class PertClassificationDataModule(DataInterface):
         rank_zero_info('***')
         rank_zero_info(f'loading {self.file}')
         adata = ad.read_h5ad(os.path.join(self.path, self.file))
+        adata = cell_utils.map_gene_symbols(adata, symbol_field='index')
+        adata = cell_utils.align_genes(adata, self.backbone_gene_list)
         rank_zero_info(f'loaded {adata.shape[0]} cells')
 
         # Filter to cell line of interest:
@@ -1751,29 +2661,15 @@ class PertClassificationDataModule(DataInterface):
         pert_name_to_id = {pert_set[i]: i for i in range(len(pert_set))}
         adata.obs['drug'] = adata.obs['drug'].map(pert_name_to_id)
 
-        # align genes (assumes gene symbols live in adata.var.index)
-        model_genes = pd.read_csv(self.gene_set_file, sep='\t')['gene_name'].to_numpy()
-        data_genes = adata.var.index
-        common_genes = np.intersect1d(model_genes, data_genes)
-        if len(common_genes) == 0:
-            raise ValueError(f'Gene alignment failed, no common genes found. Are the gene names in the same format? (model: {model_genes[:5]}, data: {data_genes[:5]})')
-        missing_genes = np.setdiff1d(model_genes, data_genes)
-        adata_missing = ad.AnnData(np.zeros((adata.shape[0], len(missing_genes))))
-        adata_missing.var.index = missing_genes
-        adata_missing.obs = adata.obs
-        adata_aligned = ad.concat((adata, adata_missing), axis=1, join='inner', merge='same')
-        adata_aligned = adata_aligned[:, model_genes]
-        rank_zero_info(f'\n***\ngene alignment results: {len(common_genes)} common genes; {len(missing_genes)} missing genes filled with zeros\n***\n')
-
         # IID split:
         rng = np.random.default_rng(self.split_seed)
-        idx_rand = rng.permutation(adata_aligned.shape[0])
+        idx_rand = rng.permutation(adata.shape[0])
         num_train = int(np.round(self.train_frac * len(idx_rand)))
         num_val = int(np.round(self.val_frac * len(idx_rand)))
 
-        adata_train = adata_aligned[idx_rand[:num_train], :]
-        adata_val = adata_aligned[idx_rand[num_train:(num_train+num_val)], :]
-        adata_test = adata_aligned[idx_rand[(num_train+num_val):], :]
+        adata_train = adata[idx_rand[:num_train], :]
+        adata_val = adata[idx_rand[num_train:(num_train+num_val)], :]
+        adata_test = adata[idx_rand[(num_train+num_val):], :]
         rank_zero_info(f'split sizes: {adata_train.shape[0]} / {adata_val.shape[0]} / {adata_test.shape[0]}')
         rank_zero_info('***')
 
