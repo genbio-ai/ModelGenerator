@@ -72,6 +72,7 @@ class aido_rna_650m_cds(GenBioBERT):
     """
     model_path = "genbio-ai/AIDO.RNA-650M-CDS"
 
+
 class aido_rna_1b600m(GenBioBERT):
     """SOTA AIDO.RNA model with 1.6B parameters pretrained on 42M ncRNAs in the RNACentral database.
     
@@ -83,6 +84,7 @@ class aido_rna_1b600m(GenBioBERT):
     Attributes:
         model_path (str): genbio-ai/AIDO.RNA-1.6B
     """
+    model_path = "genbio-ai/AIDO.RNA-1.6B"
 
 
 class aido_rna_1b600m_cds(GenBioBERT):
