@@ -1,4 +1,5 @@
 from modelgenerator.tasks import *
+from modelgenerator.backbones import *
 from typing import Mapping, Any
 from modelgenerator.rna_ss.rna_ss_utils import *
 from collections import defaultdict
