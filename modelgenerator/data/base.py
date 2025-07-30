@@ -83,9 +83,7 @@ class KFoldMixin:
         kfold_split_idx = []
         for fold_id in fold_ids:
             kfold_split_idx.append(
-                np.where(np.array(dataset[self.cv_fold_id_col], dtype=int) == fold_id)[
-                    0
-                ]
+                np.where(np.array(dataset[self.cv_fold_id_col], dtype=int) == fold_id)[0].tolist()
             )
         self.cv_splits = kfold_split_idx
         return kfold_split_idx
