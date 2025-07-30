@@ -26,7 +26,7 @@ dependencies = [
     "torch",
     "torchvision",
     "transformers==4.38.0",
-    "datasets>=2.14.5",  # Py312 issue with 2.14.4
+    "datasets>=2.14.6",  # fsspec issue fixed in 2.14.6
     "numpy<2",
     "packaging",
     "bitsandbytes",
