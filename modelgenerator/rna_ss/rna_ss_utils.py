@@ -55,6 +55,7 @@ def parse_ct_file(ct_file_path: Path):
 
 
 def save_to_ct(ct_file_path: Path, sec_struct: np.array, seq: str):
+    np.save(ct_file_path.replace('.ct', '.npy'), sec_struct)
     with open(ct_file_path, "w") as f:
         f.write(f"{len(seq)}\t{ct_file_path.stem}\n")
 

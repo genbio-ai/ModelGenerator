@@ -45,16 +45,17 @@ class RNASSPairwiseTokenClassification(DataInterface):
 
     def __init__(
         self,
-        *args,
+        path: str,
         num_workers: int = 0,
         pin_memory: bool = True,
         persistent_workers: bool = True,
         min_seq_len: int = 0,
         max_seq_len: int = 999_999_999,
         dataset: str = "bpRNA",
+        *args,
         **kwargs,
     ):
-        super().__init__(*args, **kwargs)
+        super().__init__(path, *args, **kwargs)
 
         self.dataset = dataset
         self.data_root = Path(self.path)
@@ -79,9 +80,10 @@ class RNASSPairwiseTokenClassification(DataInterface):
             self.val_dir = f"archiveII/{test_rna_family}/{self.VAL_DIR_NAME}"
             self.test_dir = f"archiveII/{test_rna_family}/{self.TEST_DIR_NAME}"
         else:
-            raise NotImplementedError(
-                f"Dataset '{dataset}' is currently not supported! Please use one of the following: {self.SUPPORTED_DATASETS}"
-            )
+            # Use user custom dataset
+            self.train_dir = f"{self.path}/{self.dataset}/{self.TRAIN_DIR_NAME}"
+            self.val_dir = f"{self.path}/{self.dataset}/{self.VAL_DIR_NAME}"
+            self.test_dir = f"{self.path}/{self.dataset}/{self.TEST_DIR_NAME}"
 
     def prepare_dataset(
         self,
@@ -100,15 +102,6 @@ class RNASSPairwiseTokenClassification(DataInterface):
         for ss_file_ext in ss_file_extensions:
             for ss_file_path in list(data_dir.glob(f"**/*.{ss_file_ext}")):
                 seq, sec_struct = parse_sec_struct_file(ss_file_path)
-
-                if self.dataset == "bpRNA":
-                    assert (
-                        len(seq) <= 500
-                    ), "[DEBUG only] bpRNA dataset does not have sequences longer than 500 tokens."
-                elif self.dataset.startswith("archiveII"):
-                    assert (
-                        len(seq) <= 600
-                    ), "[DEBUG only] archiveII dataset does not have sequences longer than 600 tokens."
 
                 if len(seq) >= min_seq_len and len(seq) <= max_seq_len:
                     seq = seq.upper().replace("T", "U")
