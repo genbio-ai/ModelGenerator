@@ -553,18 +553,30 @@ class BertSelfFlashAttention(Bert2SelfAttention):
         my_cu_seqlens_q = _get_full_cu_seqlens(bz, sq, my_query_states.device)
         my_cu_seqlens_kv = _get_full_cu_seqlens(bz, sq, my_query_states.device)
 
-        attn_output = flash_attn_varlen_func(
-            my_query_states,
-            my_key_states,
-            my_value_states,
-            my_cu_seqlens_q,
-            my_cu_seqlens_kv,
-            sq,
-            sq,
-            self.dropout.p,
-            softmax_scale=1.0 / math.sqrt(hd),
-            causal=False,
-        )
+        if "flash_attn_varlen_func" in globals():
+            # Use FlashAttention if available (CUDA only)
+            attn_output = flash_attn_varlen_func(
+                my_query_states,
+                my_key_states,
+                my_value_states,
+                my_cu_seqlens_q,
+                my_cu_seqlens_kv,
+                sq,
+                sq,
+                self.dropout.p,
+                softmax_scale=1.0 / math.sqrt(hd),
+                causal=False,
+            )
+        else:
+            # Fallback: PyTorch scaled dot-product attention (CPU/MPS compatible)
+            attn_output = torch.nn.functional.scaled_dot_product_attention(
+                my_query_states,
+                my_key_states,
+                my_value_states,
+                attn_mask=None,
+                dropout_p=self.dropout.p,
+                is_causal=False,
+            )
 
         attn_output = attn_output.reshape(bsz, q_len, -1)
         return (attn_output,)
