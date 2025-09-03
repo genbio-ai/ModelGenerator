@@ -1,7 +1,7 @@
 # [AIDO](https://github.com/genbio-ai/AIDO).ModelGenerator
 
 ![License](https://img.shields.io/badge/license-GenBio_AI_Community_License-orange)
-![python](https://img.shields.io/badge/python-3.9%20|%203.10%20|%203.11%20|%203.12-blue)
+![python](https://img.shields.io/badge/python-3.10%20|%203.11%20|%203.12-blue)
 [![PyPI version](https://badge.fury.io/py/modelgenerator.svg)](https://badge.fury.io/py/modelgenerator)
 ![Maintenance](https://img.shields.io/maintenance/yes/2025?style=flat-square)
 [![Downloads](https://pepy.tech/badge/modelgenerator)](https://pepy.tech/project/modelgenerator)
