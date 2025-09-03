@@ -1,0 +1,1723 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="AIDO.ModelGenerator is a software stack powering the development of an AI-driven Digital Organism by enabling researchers to adapt pretrained models and generate finetuned models for downstream tasks.">
+      
+      
+        <meta name="author" content="GenBio AI">
+      
+      
+        <link rel="canonical" href="https://genbio-ai.github.io/ModelGenerator/tutorials/structure_tokenizer/">
+      
+      
+        <link rel="prev" href="../zeroshot/">
+      
+      
+        <link rel="next" href="../protein_inverse_folding/">
+      
+      
+      <link rel="icon" href="../../assets/images/icon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.44">
+    
+    
+      
+        <title>Protein Structure Tokenizer - AIDO.ModelGenerator</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.0253249f.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="lime">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#protein-structure-tokenizer" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="AIDO.ModelGenerator" class="md-header__button md-logo" aria-label="AIDO.ModelGenerator" data-md-component="logo">
+      
+  <img src="../../assets/images/logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            AIDO.ModelGenerator
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Protein Structure Tokenizer
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="lime"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="lime"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/genbio-ai/ModelGenerator" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.6.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    AIDO.ModelGenerator
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+    
+  
+  Introduction
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../quick_start/" class="md-tabs__link">
+        
+  
+    
+  
+  Quick Start
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../usage/" class="md-tabs__link">
+          
+  
+    
+  
+  Basic Usage
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../kfold_cross_validation/" class="md-tabs__link">
+          
+  
+    
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../experiment_design/" class="md-tabs__link">
+          
+  
+    
+  
+  Experiment Design
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../api_reference/backbones/" class="md-tabs__link">
+          
+  
+    
+  
+  API Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="AIDO.ModelGenerator" class="md-nav__button md-logo" aria-label="AIDO.ModelGenerator" data-md-component="logo">
+      
+  <img src="../../assets/images/logo.png" alt="logo">
+
+    </a>
+    AIDO.ModelGenerator
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/genbio-ai/ModelGenerator" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.6.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    AIDO.ModelGenerator
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Introduction
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quick_start/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quick Start
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    <li class="md-nav__item md-nav__item--pruned md-nav__item--nested">
+      
+        
+  
+  
+    <a href="../../usage/" class="md-nav__link">
+      
+  
+  <span class="md-ellipsis">
+    Basic Usage
+  </span>
+  
+
+      
+        <span class="md-nav__icon md-icon"></span>
+      
+    </a>
+  
+
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+      
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Tutorials
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Tutorials
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kfold_cross_validation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    K-fold cross validation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../finetuning_scheduler/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Finetuning scheduler
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dependency_mapping/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Dependency Mapping
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../zeroshot/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Zeroshot Variant Effect Prediction
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Protein Structure Tokenizer
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Protein Structure Tokenizer
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#table-of-contents" class="md-nav__link">
+    <span class="md-ellipsis">
+      Table of Contents
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#models" class="md-nav__link">
+    <span class="md-ellipsis">
+      Models
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Models">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#structure-tokenizer" class="md-nav__link">
+    <span class="md-ellipsis">
+      Structure Tokenizer
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#structure-prediction-model-16b-language-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      Structure Prediction Model (16B Language Model)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tasks" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tasks
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tasks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      Quick Start
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#encoding-structures-into-tokens" class="md-nav__link">
+    <span class="md-ellipsis">
+      Encoding Structures into Tokens
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Encoding Structures into Tokens">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#preparing-sample-dataset" class="md-nav__link">
+    <span class="md-ellipsis">
+      Preparing Sample Dataset
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#preparing-your-own-dataset" class="md-nav__link">
+    <span class="md-ellipsis">
+      Preparing Your Own Dataset
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#running-encoding-task" class="md-nav__link">
+    <span class="md-ellipsis">
+      Running Encoding Task
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#decoding-tokens-into-structures" class="md-nav__link">
+    <span class="md-ellipsis">
+      Decoding Tokens into Structures
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Decoding Tokens into Structures">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#decoding-the-sample-dataset" class="md-nav__link">
+    <span class="md-ellipsis">
+      Decoding the Sample Dataset
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#decoding-your-structure-tokens" class="md-nav__link">
+    <span class="md-ellipsis">
+      Decoding Your Structure Tokens
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#combining-encode-and-decode" class="md-nav__link">
+    <span class="md-ellipsis">
+      Combining Encode and Decode
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Combining Encode and Decode">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#data-preparation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Data Preparation
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#running-combined-encoding-and-decoding-task" class="md-nav__link">
+    <span class="md-ellipsis">
+      Running Combined Encoding and Decoding Task
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#visualizing-the-reconstructed-structures" class="md-nav__link">
+    <span class="md-ellipsis">
+      Visualizing the Reconstructed Structures
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#structure-prediction" class="md-nav__link">
+    <span class="md-ellipsis">
+      Structure Prediction
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Structure Prediction">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#predicting-structure-tokens-on-casp14-casp15-and-cameo-datasets" class="md-nav__link">
+    <span class="md-ellipsis">
+      Predicting Structure Tokens On CASP14, CASP15, and CAMEO Datasets
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#predicting-structure-tokens-on-your-own-dataset" class="md-nav__link">
+    <span class="md-ellipsis">
+      Predicting Structure Tokens On Your Own Dataset
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#decoding-predicted-structure-tokens" class="md-nav__link">
+    <span class="md-ellipsis">
+      Decoding Predicted Structure Tokens
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../protein_inverse_folding/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Protein Inverse Folding
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rna_inverse_folding/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    RNA Inverse Folding
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rna_secondary_structure_prediction/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    RNA Secondary Structure Prediction
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    <li class="md-nav__item md-nav__item--pruned md-nav__item--nested">
+      
+        
+  
+  
+    <a href="../../experiment_design/" class="md-nav__link">
+      
+  
+  <span class="md-ellipsis">
+    Experiment Design
+  </span>
+  
+
+      
+        <span class="md-nav__icon md-icon"></span>
+      
+    </a>
+  
+
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    <li class="md-nav__item md-nav__item--pruned md-nav__item--nested">
+      
+        
+  
+  
+    <a href="../../api_reference/backbones/" class="md-nav__link">
+      
+  
+  <span class="md-ellipsis">
+    API Reference
+  </span>
+  
+
+      
+        <span class="md-nav__icon md-icon"></span>
+      
+    </a>
+  
+
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#table-of-contents" class="md-nav__link">
+    <span class="md-ellipsis">
+      Table of Contents
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#models" class="md-nav__link">
+    <span class="md-ellipsis">
+      Models
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Models">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#structure-tokenizer" class="md-nav__link">
+    <span class="md-ellipsis">
+      Structure Tokenizer
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#structure-prediction-model-16b-language-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      Structure Prediction Model (16B Language Model)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tasks" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tasks
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tasks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      Quick Start
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#encoding-structures-into-tokens" class="md-nav__link">
+    <span class="md-ellipsis">
+      Encoding Structures into Tokens
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Encoding Structures into Tokens">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#preparing-sample-dataset" class="md-nav__link">
+    <span class="md-ellipsis">
+      Preparing Sample Dataset
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#preparing-your-own-dataset" class="md-nav__link">
+    <span class="md-ellipsis">
+      Preparing Your Own Dataset
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#running-encoding-task" class="md-nav__link">
+    <span class="md-ellipsis">
+      Running Encoding Task
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#decoding-tokens-into-structures" class="md-nav__link">
+    <span class="md-ellipsis">
+      Decoding Tokens into Structures
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Decoding Tokens into Structures">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#decoding-the-sample-dataset" class="md-nav__link">
+    <span class="md-ellipsis">
+      Decoding the Sample Dataset
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#decoding-your-structure-tokens" class="md-nav__link">
+    <span class="md-ellipsis">
+      Decoding Your Structure Tokens
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#combining-encode-and-decode" class="md-nav__link">
+    <span class="md-ellipsis">
+      Combining Encode and Decode
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Combining Encode and Decode">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#data-preparation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Data Preparation
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#running-combined-encoding-and-decoding-task" class="md-nav__link">
+    <span class="md-ellipsis">
+      Running Combined Encoding and Decoding Task
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#visualizing-the-reconstructed-structures" class="md-nav__link">
+    <span class="md-ellipsis">
+      Visualizing the Reconstructed Structures
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#structure-prediction" class="md-nav__link">
+    <span class="md-ellipsis">
+      Structure Prediction
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Structure Prediction">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#predicting-structure-tokens-on-casp14-casp15-and-cameo-datasets" class="md-nav__link">
+    <span class="md-ellipsis">
+      Predicting Structure Tokens On CASP14, CASP15, and CAMEO Datasets
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#predicting-structure-tokens-on-your-own-dataset" class="md-nav__link">
+    <span class="md-ellipsis">
+      Predicting Structure Tokens On Your Own Dataset
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#decoding-predicted-structure-tokens" class="md-nav__link">
+    <span class="md-ellipsis">
+      Decoding Predicted Structure Tokens
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="protein-structure-tokenizer">Protein Structure Tokenizer</h1>
+<p>This repository provides tools for working with protein structures, including encoding protein structures into tokens, decoding tokens back into structures, and performing structure prediction tasks. Currently, we only support single-chain protein structures, but we plan to extend this to multi-chain structures in the future.</p>
+<p><strong>Notes:</strong>
+The below contents only support inference. Training is not included. Training the structure tokenizer and the structure prediction model requires a large amount of data and computational resources (hundreds of GPU-days), which is beyond the scope of the current repository.</p>
+<h2 id="table-of-contents">Table of Contents</h2>
+<ol>
+<li><a href="#models">Models</a></li>
+<li><a href="#structure-tokenizer">Structure Tokenizer</a></li>
+<li><a href="#structure-prediction-model">Structure Prediction Model (16B Language Model)</a></li>
+<li><a href="#tasks">Tasks</a></li>
+<li><a href="#quick-start">Quick Start</a></li>
+<li><a href="#encoding-structures-into-tokens">Encoding Structures into Tokens</a></li>
+<li><a href="#decoding-tokens-into-structures">Decoding Tokens into Structures</a></li>
+<li><a href="#combining-encode-and-decode">Combining Encode and Decode</a></li>
+<li><a href="#structure-prediction">Structure Prediction</a></li>
+</ol>
+<hr />
+<h2 id="models">Models</h2>
+<p>This repository includes two key models used for working with protein structures:</p>
+<h3 id="structure-tokenizer">Structure Tokenizer</h3>
+<p>The <strong>Structure Tokenizer</strong> model is designed to encode protein structures into discrete structure tokens and decode these tokens back into protein structures. It provides an efficient way to represent complex structural information in a compact, tokenized form.<br />
+Key Features:
+- <strong>Encoding</strong>: Converts protein structures into discrete tokens.
+- <strong>Decoding</strong>: Reconstructs protein structures from tokens.
+- <strong>Combined Encoding &amp; Decoding</strong>: Supports running both processes in a single pipeline.</p>
+<p><img alt="Structure Tokenizer" src="../../assets/images/structure_tokenizer/structure_tokenizer.png" /></p>
+<p>Relevant configuration files:
+- <code>encode.yaml</code> for encoding tasks.
+- <code>decode.yaml</code> for decoding tasks.
+- <code>encode_decode.yaml</code> for combined encoding and decoding.</p>
+<p>Relevant huggingface models:
+- <code>genbio-ai/AIDO.StructureEncoder</code> is the model for encoding protein structures into tokens.
+- <code>genbio-ai/AIDO.StructureDecoder</code> is the model for decoding tokens back into protein structures.
+- <code>genbio-ai/AIDO.StructureTokenizer</code> is the combined model for encoding and decoding protein structures.</p>
+<h3 id="structure-prediction-model-16b-language-model">Structure Prediction Model (16B Language Model)</h3>
+<p>The <strong>Structure Prediction Model</strong> uses a pre-trained 16B language model to predict protein structure tokens directly from amino acid sequences. This allows for end-to-end prediction of protein structures.</p>
+<p>Workflow:
+1. Input amino acid sequences.
+2. Predict structure tokens using the language model.
+3. Decode the predicted tokens into protein structures using the Structure Tokenizer.
+<img alt="Structure Prediction Model" src="../../assets/images/structure_tokenizer/structure_prediction_model.png" /></p>
+<p>Relevant configuration files:
+- <code>protein2structoken_16b.yaml</code> for predicting structure tokens from amino acid sequences.
+- <code>decode.yaml</code> for decoding predicted tokens into structures.</p>
+<p>Relevant huggingface models:
+- <code>genbio-ai/AIDO.Protein2StructureToken-16B</code> is the model for predicting protein structure tokens from amino acid sequences.
+- <code>genbio-ai/AIDO.StructureDecoder</code> is the model for decoding predicted tokens back into protein structures.</p>
+<!-- ## Setup
+
+Make sure all dependencies are installed, including the ModelGenerator (`mgen`) framework.
+For pulling dataset from huggingface, you need `huggingface-hub` installed. -->
+
+<h2 id="tasks">Tasks</h2>
+<h3 id="quick-start">Quick Start</h3>
+<p>If you want to have a quick try of the features without reading the detailed instructions in the following sections,
+you could run the following scripts that pack the commands for encoding, decoding, and structure prediction tasks.
+- <code>experiments/AIDO.StructureTokenizer/structure_encoding.sh</code>: Packs the commands for encoding and decoding tasks.
+- <code>experiments/AIDO.StructureTokenizer/structure_prediction.sh</code>: Packs the commands for structure prediction and decoding tasks.
+The outputs are under the <code>logs/</code> directory.</p>
+<p><strong>Notes:</strong>
+- The above scripts are designed for the sample dataset. If you want to use your own dataset, please go through the detailed instructions in the following sections.
+- The 16B language model is quite large. You need to have enough storage in your HF cache directory and downloading the model could take a long time. Loading the checkpoint from the disk could take 4 minutes or more depending on your hardware.</p>
+<h3 id="encoding-structures-into-tokens">Encoding Structures into Tokens</h3>
+<p>We can use the structure tokenizer to convert protein structures into structure tokens. First, we need to prepare the dataset for encoding. You could either use the sample dataset provided or prepare your own dataset.</p>
+<h4 id="preparing-sample-dataset">Preparing Sample Dataset</h4>
+<p>You can download the sample dataset from the Hugging Face hub. Run the following command to download the dataset to the <code>data/protstruct_sample_data/</code> directory (run this command in the root directory of the repository):</p>
+<pre><code class="language-bash">huggingface-cli download genbio-ai/sample-structure-dataset --repo-type dataset --local-dir ./data/protstruct_sample_data/
+</code></pre>
+<p>This dataset is based on the CASP15 dataset, which can be referenced at:
+- <a href="https://predictioncenter.org/casp15/">CASP15 Prediction Center</a>
+- <a href="https://github.com/Bhattacharya-Lab/CASP15">Bhattacharya-Lab/CASP15</a></p>
+<p>The downloaded directory includes:
+- A <code>registries</code> folder containing a CSV file with metadata such as filenames and PDB IDs.
+- A <code>CASP15_merged</code> folder containing PDB files, where domains are merged in the same way as described in <a href="https://github.com/Bhattacharya-Lab/CASP15">Bhattacharya-Lab/CASP15</a>.</p>
+<h4 id="preparing-your-own-dataset">Preparing Your Own Dataset</h4>
+<p>If you want to use your own dataset for testing the structure tokenizer model, you can prepare a dataset with the following structure:
+- A folder containing PDB files (supported formats: <code>cif.gz</code>, <code>cif</code>, <code>ent.gz</code>, <code>pdb</code>).</p>
+<p>Then, you need to prepare a registry file in CSV format using the following command:</p>
+<pre><code class="language-bash">python experiments/AIDO.StructureTokenizer/register_dataset.py \
+    --folder_path /path/to/folder_path \
+    --format cif.gz \
+    --output_file /path/to/output_file.csv
+</code></pre>
+<p>Example (if you have a folder with PDB files in <code>data/protstruct_sample_data/CASP15_merged/</code>):</p>
+<pre><code class="language-bash">python experiments/AIDO.StructureTokenizer/register_dataset.py \
+    --folder_path data/protstruct_sample_data/CASP15_merged/ \
+    --format pdb \
+    --output_file data/protstruct_sample_data/registries/casp15_merged_copy.csv
+</code></pre>
+<h4 id="running-encoding-task">Running Encoding Task</h4>
+<p>If you use the sample dataset, you can run the encoding task using the following command:</p>
+<pre><code class="language-bash">CUDA_VISIBLE_DEVICES=0 mgen predict --config experiments/AIDO.StructureTokenizer/encode.yaml
+</code></pre>
+<p>If you use your own dataset, you need to update the <code>folder_path</code> and the <code>registry_path</code> in the <code>encode.yaml</code> configuration file to point to your dataset folder and registry file. Alternatively, you can override these parameters when running the command:</p>
+<pre><code class="language-bash">CUDA_VISIBLE_DEVICES=0 mgen predict --config experiments/AIDO.StructureTokenizer/encode.yaml \
+    --data.init_args.config.proteins_datasets_configs.name=&quot;your_dataset_name&quot; \
+    --data.init_args.config.proteins_datasets_configs.registry_path=&quot;your_dataset_folder_path&quot; \
+    --data.init_args.config.proteins_datasets_configs.folder_path=&quot;your_dataset_registry_path&quot; \
+    --trainer.callbacks.dict_kwargs.output_dir=&quot;your_output_dir&quot;
+</code></pre>
+<p><strong>Input:</strong>
+- The PDB files in the dataset folder.
+- The registry file in CSV format indicating the metadata of the dataset.</p>
+<p><strong>Output:</strong>
+- The encoded tokens will be saved in the output directory specified in the configuration file. By default it is saved in <code>logs/protstruct_encode/</code>.
+- The encoded tokens are saved as a <code>.pt</code> file, which can be loaded using PyTorch. Inside the file, it's a dictionary that maps the name of the protein to the encoded tokens (<code>struct_tokens</code>) and other auxiliary information (<code>aatype</code>, <code>residue_index</code>) for reconstruction.
+  The structure of the dictionary is as follows:
+  <code>python
+  {
+      'T1137s5_nan': { # the nan here is the chain id and CASP15 doesn't have chain id
+          'struct_tokens': tensor([449, 313, 207, 129, ...]),
+          'aatype': tensor([ 4,  7,  5, 17, ...]),
+          'residue_index': tensor([ 33,  34,  35,  36, ...]),
+      },
+      ...
+  }</code>
+- A codebook file (<code>codebook.pt</code>) that contains the embedding of each token. The shape is <code>(num_tokens, embedding_dim)</code>.</p>
+<p><strong>Notes:</strong>
+- Currently, this function only supports single GPU inference due to the file saving mechanism. We plan to support multi-GPU inference in the future.
+- The auxiliary information (<code>aatype</code> and <code>residue_index</code>) can be substituted with placeholder values if not required.
+    - <code>aatype</code>: This parameter is used to reconstruct the protein sidechains. If sidechain reconstruction is not needed, you can assign dummy values (e.g., all zeros).
+    - <code>residue_index</code>: This parameter helps the model identify gaps in residue numbering, which can influence structural predictions. If gaps are present, the model may introduce holes in the structure. For structures without gaps, you can use a continuous sequence of integers (e.g., 0 to n-1).
+- You may need to adjust the <code>max_nb_res</code> parameter in the configuration file based on the maximum number of residues in your dataset. For those proteins with more residues than <code>max_nb_res</code>, the model will truncate the residues. The default value is set to 1024.</p>
+<h3 id="decoding-tokens-into-structures">Decoding Tokens into Structures</h3>
+<p>We can use the decoder from the structure tokenizer to convert the encoded tokens back into protein structures. The decoder requires the encoded tokens and the codebook file. The decoded structures are saved as PDB files. Both backbone and sidechain atoms are reconstructed.</p>
+<h4 id="decoding-the-sample-dataset">Decoding the Sample Dataset</h4>
+<p>If you have run the encoding task above on the sample dataset, the default <code>decode.yaml</code> configuration file is already set up to decode the encoded tokens. You don't need to change anything in the configuration file. You can directly run the decoding task using the following command:</p>
+<pre><code class="language-bash">CUDA_VISIBLE_DEVICES=0 mgen predict --config=experiments/AIDO.StructureTokenizer/decode.yaml
+</code></pre>
+<h4 id="decoding-your-structure-tokens">Decoding Your Structure Tokens</h4>
+<p>To decode protein structures, you will need the structure tokens in <code>.pt</code> format and a corresponding codebook file (<code>codebook.pt</code>). For ease of use, we recommend preparing the structure tokens in TSV format and then converting them to <code>.pt</code> format using the provided script. </p>
+<p>The TSV file should include the following columns (an example file is available at <code>experiments/AIDO.StructureTokenizer/decode_example_input.tsv</code>):
+- <code>uid</code>: A unique identifier for the protein sequence.
+- <code>sequences</code>: The amino acid sequence (e.g., "LRTPTT").
+- <code>predictions</code>: The structure tokens to be decoded, provided as a list (e.g., "[164, 287, 119, ...]"). The list length must match the length of the amino acid sequence.</p>
+<p>After preparing the TSV file, you need to convert the TSV file to the <code>.pt</code> format using the following command:</p>
+<pre><code class="language-bash">python experiments/AIDO.StructureTokenizer/struct_token_format_conversion.py your_tsv_file.tsv your_output_pt_file.pt
+</code></pre>
+<p>You also need to prepare a codebook file (<code>codebook.pt</code>) that contains the embedding of each token. The codebook could be extracted using this command:</p>
+<pre><code class="language-bash">python experiments/AIDO.StructureTokenizer/extract_structure_tokenizer_codebook.py --output_path your_output_codebook.pt
+</code></pre>
+<p>Then you need to update the <code>struct_tokens_path</code> and <code>codebook_path</code> in the <code>decode.yaml</code> configuration file to point to your structure tokens and codebook file. Alternatively, you can override these parameters when running the command:</p>
+<pre><code class="language-bash">CUDA_VISIBLE_DEVICES=0 mgen predict --config experiments/AIDO.StructureTokenizer/decode.yaml \
+ --data.init_args.config.struct_tokens_datasets_configs.name=&quot;your_dataset_name&quot; \
+ --data.init_args.config.struct_tokens_datasets_configs.struct_tokens_path=&quot;your_structure_tokens.pt&quot; \
+ --data.init_args.config.struct_tokens_datasets_configs.codebook_path=&quot;your_codebook.pt&quot; \
+ --trainer.callbacks.dict_kwargs.dirpath=&quot;your_output_dir&quot;
+</code></pre>
+<p><strong>Input:</strong>
+- The encoded tokens saved in <code>.pt</code> format.
+- The codebook file (<code>codebook.pt</code>) that contains the embedding of each token.</p>
+<p><strong>Output:</strong>
+- The decoded protein structures will be saved in the output directory specified in the configuration file. By default it is saved in <code>logs/protstruct_decode/</code>.
+- The decoded structures are saved as PDB files.</p>
+<p><strong>Notes:</strong>
+- Decoding the structures could take a long time even when using a GPU.
+- Currently, this function only supports single GPU inference due to the file saving mechanism. We plan to support multi-GPU inference in the future.
+- Currently, we don't support specifying the residue index in TSV format. If you need to specify the residue index, you need to modify the 
+<code>struct_token_format_conversion.py</code> script to include the residue index in the TSV file (we may support this feature in the future), or you could provide the <code>.pt</code> file directly with the desired residue index.</p>
+<h3 id="combining-encode-and-decode">Combining Encode and Decode</h3>
+<p>We can combine the encoding and decoding tasks into a single pipeline. This will output the original structure and the reconstructed structure in the same directory. Each reconstruction is aligned to the original structure using the Kabsch algorithm.</p>
+<h4 id="data-preparation">Data Preparation</h4>
+<p>The data preparation is the same as <a href="#encoding-structures-into-tokens">Encoding Structures into Tokens</a>.</p>
+<h4 id="running-combined-encoding-and-decoding-task">Running Combined Encoding and Decoding Task</h4>
+<p>If you use the sample dataset, you can run the combined encoding and decoding task using the following command:</p>
+<pre><code class="language-bash">CUDA_VISIBLE_DEVICES=0 mgen predict --config=experiments/AIDO.StructureTokenizer/encode_decode.yaml
+</code></pre>
+<p>If you use your own dataset, you need to update the <code>folder_path</code> and the <code>registry_path</code> in the <code>encode_decode.yaml</code> configuration file or override them when running the command as described in <a href="#encoding-structures-into-tokens">Encoding Structures into Tokens</a>. </p>
+<p>Example:</p>
+<pre><code class="language-bash">CUDA_VISIBLE_DEVICES=0 mgen predict --config experiments/AIDO.StructuctureTokenizer/encode_decode.yaml \
+    --data.init_args.config.proteins_datasets_configs.name=&quot;your_dataset_name&quot; \
+    --data.init_args.config.proteins_datasets_configs.registry_path=&quot;your_dataset_folder_path&quot; \
+    --data.init_args.config.proteins_datasets_configs.folder_path=&quot;your_dataset_registry_path&quot; \
+    --trainer.callbacks.dict_kwargs.output_dir=&quot;your_output_dir&quot;
+</code></pre>
+<p><strong>Input:</strong>
+- The PDB files in the dataset folder.
+- The registry file in CSV format indicating the metadata of the dataset.</p>
+<p><strong>Output:</strong>
+- The decoded structures and their corresponding original structures will be saved in the output directory specified in the configuration file. By default it is saved in <code>logs/protstruct_model/</code>. 
+- The decoded structures end with <code>output.pdb</code>.
+- The original structures end with <code>input.pdb</code>.</p>
+<p><strong>Notes:</strong>
+- Decoding the structures could take a long time even when using a GPU.
+- Currently, this function only supports single GPU inference due to the file saving mechanism. We plan to support multi-GPU inference in the future.
+- The reconstructed structures are aligned to the original structures using the Kabsch algorithm. This makes it easier to visualize and compare the structures.</p>
+<h4 id="visualizing-the-reconstructed-structures">Visualizing the Reconstructed Structures</h4>
+<p>We use VS Code + <a href="https://marketplace.visualstudio.com/items?itemName=ArianJamasb.protein-viewer">Protein Viewer Extension</a> to visualize the protein structures. It's a beginner-friendly tool for VS Code users. You could also use your preferred protein structure viewer to visualize the structures (e.g., PyMOL, ChimeraX, etc.), but here we focus on this extension.</p>
+<p>If you have run the <a href="#combining-encode-and-decode">Combined Encoding and Decoding Task</a>, you could find the decoded structures and their corresponding original structures in the output directory. You could visualize them as follows.
+- Find the desired <code>output.pdb</code> and <code>input.pdb</code> pair in the side panel. Select both files when holding the <code>Ctrl</code> key (for Mac users, hold the <code>Cmd</code> key). <img alt="Select Files" src="../../assets/images/structure_tokenizer/select_files.png" />
+- Right-click on the selected files and choose "Launch Protein Viewer". <img alt="Launch Protein Viewer from File(s)" src="../../assets/images/structure_tokenizer/launch_protein_viewer.png" />
+- A new tab will open with the protein structures displayed. You can interact with the structures using the Protein Viewer extension. Wwe have aligned the reconstructed structures to the original structures using the Kabsch algorithm, the displayed structures should be like this, where different colors mean different files. <img alt="Visualize Reconstruction" src="../../assets/images/structure_tokenizer/visualize_reconstruction.png" /></p>
+<h3 id="structure-prediction">Structure Prediction</h3>
+<p>We can use the structure prediction model to predict protein structure tokens directly from amino acid sequences. The predicted tokens can then be decoded into protein structures using the structure tokenizer.</p>
+<h4 id="predicting-structure-tokens-on-casp14-casp15-and-cameo-datasets">Predicting Structure Tokens On CASP14, CASP15, and CAMEO Datasets</h4>
+<!-- # 1. run the 16b language model to predict the structure tokens from protein sequences (amino acids)
+# the input is the casp14, casp15, and cameo amino acid sequences (specified in the config file)
+# the output is logs/protein2structoken_16b/predict_predictions.tsv
+mgen predict --config experiments/AIDO.StructureTokenizer/protein2structoken_16b.yaml -->
+
+<p>We've provided a sample configuration file <code>protein2structoken_16b.yaml</code> that is set up to predict structure tokens from amino acid sequences in the CASP14, CASP15, and CAMEO datasets. You can run the structure prediction task using the following command:</p>
+<pre><code class="language-bash">mgen predict --config experiments/AIDO.StructureTokenizer/protein2structoken_16b.yaml
+</code></pre>
+<p>This will automatically download the preprocessed files from the Hugging Face hub and predict the structure tokens from the amino acid sequences. The predicted tokens will be saved in the <code>logs/protein2structoken_16b/predict_predictions.tsv</code> file.</p>
+<h4 id="predicting-structure-tokens-on-your-own-dataset">Predicting Structure Tokens On Your Own Dataset</h4>
+<p>Alternatively, if you want to predict structure tokens from your own amino acid sequences, you can prepare a CSV file with the following structure:</p>
+<table>
+<thead>
+<tr>
+<th>idx</th>
+<th>aa_seq</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>example</td>
+<td>KEFWNLDKNLQLRLGIVFLG</td>
+</tr>
+</tbody>
+</table>
+<p>We've provided an example input file at <code>experiments/AIDO.StructureTokenizer/protein2structoken_example_input.csv</code> that you can use to test the structure prediction model. You can run the following command to predict the structure tokens from the amino acid sequences in the input file:</p>
+<pre><code class="language-bash">mgen predict --config experiments/AIDO.StructureTokenizer/protein2structoken_16b.yaml \
+    --data.init_args.path=experiments/AIDO.StructureTokenizer/ \
+    --data.init_args.test_split_files=[protein2structoken_example_input.csv]
+</code></pre>
+<h4 id="decoding-predicted-structure-tokens">Decoding Predicted Structure Tokens</h4>
+<p>We need to decode the predicted structure tokens into protein structures using the decoder. If you run the above configurations without changing the output path, you could follow the below commands to decode the predicted structure tokens.</p>
+<pre><code class="language-bash"># 2. convert the predicted structures in tsv into one pt file
+python experiments/AIDO.StructureTokenizer/struct_token_format_conversion.py logs/protein2structoken_16b/predict_predictions.tsv logs/protein2structoken_16b/predict_predictions.pt
+
+# 3. extract the codebook of the structure tokenizer
+# the output is logs/protein2structoken_16b/codebook.pt
+python experiments/AIDO.StructureTokenizer/extract_structure_tokenizer_codebook.py --output_path logs/protein2structoken_16b/codebook.pt
+
+# 4. run the decode model to convert the structure tokens into pdb files
+# currently this script doesn't support multi-gpu, so only use one gpu
+# the command line overrides the name, input structure tokens, and codebook path
+# the output is logs/protein2structoken_16b/predict_predictions.pdb
+CUDA_VISIBLE_DEVICES=0 mgen predict --config experiments/AIDO.StructureTokenizer/decode.yaml \
+ --data.init_args.config.struct_tokens_datasets_configs.name=protein2structoken_16b \
+ --data.init_args.config.struct_tokens_datasets_configs.struct_tokens_path=logs/protein2structoken_16b/predict_predictions.pt \
+ --data.init_args.config.struct_tokens_datasets_configs.codebook_path=logs/protein2structoken_16b/codebook.pt
+</code></pre>
+<p>Here is an example visualization of <code>logs/protstruct_decode/protein2structoken_16b_pdb_files/cameo:0__output.pdb</code>.
+<img alt="CAMEO:0" src="../../assets/images/structure_tokenizer/cameo_0.png" /></p>
+<p><strong>Notes:</strong>
+- While the language model part (amino acid sequence to structure tokens) is relatively fast and support multi-GPU, the decoding part (structure tokens to protein structures) is slower and currently only supports single GPU inference due to the file saving mechanism. We plan to support multi-GPU inference in the future.
+- For CASP14, CASP15, and CAMEO datasets, you could find the corresponding ground truth structures in <code>genbio-ai/casp14-casp15-cameo-test-proteins</code>. You could use <code>huggingface-cli download genbio-ai/casp14-casp15-cameo-test-proteins --repo-type dataset --local-dir ./data/casp14-casp15-cameo-test-proteins/</code> to download the dataset.
+- The TSV format doesn't support specifying the residue index in TSV format. Specifying the residue index will make the prediction more accurate.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../zeroshot/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Zeroshot Variant Effect Prediction">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Zeroshot Variant Effect Prediction
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../protein_inverse_folding/" class="md-footer__link md-footer__link--next" aria-label="Next: Protein Inverse Folding">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Protein Inverse Folding
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      All rights reserved &copy; 2024-Present, GenBio AI
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+      <div class="md-progress" data-md-component="progress" role="progressbar"></div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../..", "features": ["announce.dismiss", "content.code.annotate", "content.code.copy", "content.code.select", "content.tooltips", "content.tabs.link", "content.tooltips", "header.autohide", "navigation.expand", "navigation.footer", "navigation.indexes", "navigation.instant", "navigation.instant.prefetch", "navigation.instant.progress", "navigation.prune", "navigation.sections", "navigation.tabs", "navigation.tabs.sticky", "navigation.top", "navigation.tracking", "search.highlight", "search.share", "search.suggest", "toc.follow"], "search": "../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.83f73b43.min.js"></script>
+      
+    
+  </body>
+</html>
