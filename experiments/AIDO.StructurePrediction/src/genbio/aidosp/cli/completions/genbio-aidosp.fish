@@ -15,4 +15,3 @@ function _genbio_aidosp_completion;
 end;
 
 complete --no-files --command genbio-aidosp --arguments "(_genbio_aidosp_completion)";
-

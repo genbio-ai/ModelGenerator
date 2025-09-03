@@ -1,3 +1,17 @@
+# Copyright 2025 GenBio AI
+# Copyright 2024 ByteDance and/or its affiliates.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import logging
 import os, sys
@@ -200,7 +214,7 @@ def infer_predict(runner: InferenceRunner, configs: Any) -> None:
                         )
                         new_configs = update_inference_configs(configs, data["N_token"].item())
                         runner.update_model_configs(new_configs)
-                        
+
                         prediction = runner.predict(data)
                         runner.dumper.dump(
                             dataset_name=dataset_name,
@@ -219,7 +233,7 @@ def infer_predict(runner: InferenceRunner, configs: Any) -> None:
                     else:
                         logger.info(f"skip {sample_name}... ")
                 ##################################
-                
+
             except Exception as e:
                 error_message = f"[Rank {DIST_WRAPPER.rank}]{data['sample_name']} {e}:\n{traceback.format_exc()}"
                 logger.info(error_message)

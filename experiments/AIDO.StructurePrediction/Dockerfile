@@ -13,7 +13,7 @@ RUN apt-get update && \
     git git-lfs expect zsh vim wget curl unzip zip cmake cmake-curses-gui libgdbm-dev libnss3-dev libssl-dev libreadline-dev libffi-dev \
     net-tools \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* 
+    && rm -rf /var/lib/apt/lists/*
 
 RUN apt update && apt -y install postgresql
 
@@ -41,8 +41,8 @@ RUN pip3 --no-cache-dir install \
 # Add openfold dependency
 RUN pip3 --no-cache-dir install \
     biopython==1.83 \
-    modelcif==0.7 
-  
+    modelcif==0.7
+
 # Add datapipeline dependency
 RUN pip3 --no-cache-dir install \
     biotite==1.0.1 \

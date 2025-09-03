@@ -47,7 +47,7 @@ __inline__ __device__ float WarpAllReduceSum(float val) {
 
 template<typename T>
 __global__ void attn_softmax_inplace_(
-    T *input, 
+    T *input,
     long long rows, int cols
 ) {
     int threadidx_x = threadIdx.x / 32;
@@ -105,7 +105,7 @@ __global__ void attn_softmax_inplace_(
 
 
 void attn_softmax_inplace_forward_(
-    at::Tensor input, 
+    at::Tensor input,
     long long rows, int cols
 ) {
     CHECK_INPUT(input);
@@ -119,10 +119,10 @@ void attn_softmax_inplace_forward_(
             (float *)input.data_ptr(),
             rows, cols
         );
-    } 
+    }
     else {
         attn_softmax_inplace_<at::BFloat16><<<grid, block>>>(
-            (at::BFloat16 *)input.data_ptr(), 
+            (at::BFloat16 *)input.data_ptr(),
             rows, cols
         );
     }
@@ -134,7 +134,7 @@ __global__ void attn_softmax_inplace_grad_(
     T *output,
     T *d_ov,
     T *values,
-    long long rows, 
+    long long rows,
     int cols_output,
     int cols_values
 ) {
@@ -144,7 +144,7 @@ __global__ void attn_softmax_inplace_grad_(
     int cols_per_thread = (cols_output + 31) / 32;
     int cols_this_thread = cols_per_thread;
     int rows_values = cols_output;
-    // values are set to the beginning of the current 
+    // values are set to the beginning of the current
     // rows_values x cols_values leaf matrix
     long long value_row_offset = row_offset - row_offset % rows_values;
     int last_y = (cols_output / cols_per_thread);
@@ -209,9 +209,9 @@ __global__ void attn_softmax_inplace_grad_(
 
 void attn_softmax_inplace_backward_(
     at::Tensor output,
-    at::Tensor d_ov, 
+    at::Tensor d_ov,
     at::Tensor values,
-    long long rows, 
+    long long rows,
     int cols_output,
     int cols_values
 ) {
@@ -226,14 +226,14 @@ void attn_softmax_inplace_backward_(
     if (output.dtype() == torch::kFloat32) {
         attn_softmax_inplace_grad_<float><<<grid, block>>>(
             (float *)output.data_ptr(),
-            (float *)d_ov.data_ptr(), 
+            (float *)d_ov.data_ptr(),
             (float *)values.data_ptr(),
             rows, cols_output, cols_values
         );
     } else {
         attn_softmax_inplace_grad_<at::BFloat16><<<grid, block>>>(
             (at::BFloat16 *)output.data_ptr(),
-            (at::BFloat16 *)d_ov.data_ptr(), 
+            (at::BFloat16 *)d_ov.data_ptr(),
             (at::BFloat16 *)values.data_ptr(),
             rows, cols_output, cols_values
         );
