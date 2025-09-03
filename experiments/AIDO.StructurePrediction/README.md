@@ -112,7 +112,7 @@ genbio-aidosp util download-ccd -o <ccd_download_dir>
 
 ### Retrieve MSA
 
-Before running inference, you need to prepare the local MSA database for your target sequences. 
+Before running inference, you need to prepare the local MSA database for your target sequences.
 Compile all of the protein sequences you want to predict on into a single fasta file,
 then run the following command:
 
@@ -126,7 +126,7 @@ genbio-aidosp util retrieve-msa -i <input_fasta_path> -o <msa_output_dir> -c con
 
 ### Prepare input JSON file
 
-We strongly recommend that users get started with the provided [default example](examples/example.json) for their first run. 
+We strongly recommend that users get started with the provided [default example](examples/example.json) for their first run.
 
 > [!warning]
 > Currently, we do not provide a tool to generate the input JSON file.
@@ -179,7 +179,7 @@ Finally, you can visualize the results using the provided notebook [`visualize.i
 
 ## Local MSA Database
 
-AIDO.StructurePrediction uses the MMseqs2 API to retrieve MSA data. 
+AIDO.StructurePrediction uses the MMseqs2 API to retrieve MSA data.
 This is a great option for one-off predictions, but it can be slow and unreliable for benchmarking or frequent use.
 
 If you plan to use AIDO.StructurePrediction regularly, we recommend downloading and creating your MSA databses locally.

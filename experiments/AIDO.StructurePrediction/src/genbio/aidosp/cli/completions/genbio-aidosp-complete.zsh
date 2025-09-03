@@ -38,4 +38,3 @@ else
     # eval/source/. command, register function for later
     compdef _genbio_aidosp_completion genbio-aidosp
 fi
-
