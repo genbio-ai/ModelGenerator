@@ -1,3 +1,5 @@
+<img src="docs/docs/assets/images/genbio_logo.png" alt="GenBio AI" width="150"/>
+
 # [AIDO](https://github.com/genbio-ai/AIDO).ModelGenerator
 
 ![License](https://img.shields.io/badge/license-GenBio_AI_Community_License-orange)
