@@ -1,4 +1,4 @@
-![https://genbio.ai/](docs/docs/assets/images/genbio_header.png)
+[![GenBio AI](docs/docs/assets/images/genbio_header.png)](https://genbio.ai/)
 
 # [AIDO](https://github.com/genbio-ai/AIDO).ModelGenerator
 
