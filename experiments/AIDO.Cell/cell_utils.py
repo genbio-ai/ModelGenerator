@@ -28,7 +28,8 @@ def align_adata(adata: ad.AnnData) -> Tuple[ad.AnnData, np.ndarray]:
     print(f'{len(new_missing_genes)} in your data that cannot be used by AIDO.Cell. Removing these.')
     print(new_missing_genes)
     print(f'{len(missing_genes)} genes in the AIDO.Cell pretraining set missing in your data.')
-    print('AIDO.Cell is trained with zero-masking. Setting these to zero for AIDO.Cell to ignore.')
+    print('Setting unknown genes to 0.')
+    # Todo: AIDO.Cell is trained with -1 as mask token, but read depth features don't work with -1 sum for read counts
     print(missing_genes)
     adata_missing = ad.AnnData(np.zeros((adata.shape[0], len(missing_genes))))
     adata_missing.var.index = missing_genes
