@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "modelgenerator"
-version = "0.1.2"
+version = "0.1.3"
 description = "AIDO.ModelGenerator is a software stack powering the development of an AI-driven Digital Organism by enabling researchers to adapt pretrained models and generate finetuned models for downstream tasks."
 readme = "README.md"
 authors = [
@@ -38,8 +38,8 @@ dependencies = [
     "torchmetrics>=1.5.0",
     "lightning>=2.4.0",
     "jsonargparse[signatures]>=4.37.0",
-    "openfold @ git+https://github.com/genbio-ai/openfold.git@c4aa2fd0d920c06d3fd80b177284a22573528442",
-    "dllogger @ git+https://github.com/NVIDIA/dllogger.git@0540a43971f4a8a16693a9de9de73c1072020769",
+#     "openfold @ git+https://github.com/genbio-ai/openfold.git@c4aa2fd0d920c06d3fd80b177284a22573528442",
+#     "dllogger @ git+https://github.com/NVIDIA/dllogger.git@0540a43971f4a8a16693a9de9de73c1072020769",
     "biotite>=1.0.1",
     "einops>=0.8.0",
     "ml-collections>=1.0.0",
