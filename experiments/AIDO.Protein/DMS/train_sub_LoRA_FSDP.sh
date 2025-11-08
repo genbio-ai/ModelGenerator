@@ -14,5 +14,3 @@ srun mgen fit --config experiments/AIDO.Protein/DMS/configs/substitution_LoRA_FS
     --trainer.callbacks.patience 1 \
     &> output_logs/protein/${RUN_NAME}.log
 done
-
-

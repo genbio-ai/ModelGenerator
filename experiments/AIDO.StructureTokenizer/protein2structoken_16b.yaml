@@ -1,6 +1,6 @@
 # Jiayou Zhang
 # Usage: mgen predict --config experiments/AIDO.StructureTokenizer/protein2structoken_16b.yaml
-# The input amino acid sequences are specified in the test_split_files. 
+# The input amino acid sequences are specified in the test_split_files.
 # The model will predict the structure tokens of the input sequences.
 # The predictions will be saved in `callbacks.init_args.output_dir` using tsv format.
 seed_everything: 42

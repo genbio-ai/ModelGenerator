@@ -2,13 +2,13 @@
 Protein inverse folding represents a computational technique aimed at generating protein sequences that will fold into specific three-dimensional structures. The central challenge in protein inverse folding involves identifying sequences capable of reliably adopting the intended structure. In our research, we concentrate on designing sequences based on the known backbone structure of a protein, represented with 3D coordinates of the atoms of the backbone (without any information about what the individual amino-acids are). Specifically. we finetune the [AIDO.Protein-16B](https://huggingface.co/genbio-ai/AIDO.Protein-16B) model with LoRA on the [CATH 4.2](https://pubmed.ncbi.nlm.nih.gov/9309224/) benchmark dataset. We use the same train, validation, and test splits used by the previous studies, such as [LM-Design](https://arxiv.org/abs/2302.01649), and [DPLM](https://arxiv.org/abs/2402.18567). Current version of ModelGenerator contains the inference pipeline for protein inverse folding. Experimental pipeline on other datasets (both training and testing) will be included in the future.
 
 ##### Experimental Results
-We present an evaluation of various inverse folding techniques using the [CATH-4.2 dataset](https://pubmed.ncbi.nlm.nih.gov/9309224/). 
-AIDO.Protein is compared against current state-of-the-art models across three experiment settings inspired by LM-Design: 
-(a) sequences with fewer than 100 residues (short chains), 
-(b) single-chain proteins (those represented by a single entry in CATH 4.2), and 
-(c) the full CATH 4.2 dataset. 
+We present an evaluation of various inverse folding techniques using the [CATH-4.2 dataset](https://pubmed.ncbi.nlm.nih.gov/9309224/).
+AIDO.Protein is compared against current state-of-the-art models across three experiment settings inspired by LM-Design:
+(a) sequences with fewer than 100 residues (short chains),
+(b) single-chain proteins (those represented by a single entry in CATH 4.2), and
+(c) the full CATH 4.2 dataset.
 We take DPLM's scores from [their paper](https://arxiv.org/abs/2402.18567) and the other scores (except AIDO.ProteinIF) were taken from [LM-Design's paper](https://arxiv.org/abs/2302.01649).
-The highest and second-highest scores are highlighted in bold and italic, respectively. 
+The highest and second-highest scores are highlighted in bold and italic, respectively.
 A dash (-) indicates that the corresponding score was not available in the original source.
 
 | **Models**            | **Short-chains - PPL ↓**        |  **Short-chains - MSRR ↓** | **Single-chains - PPL ↓**        |  **Single-chains - MSRR ↓** | **Full - PPL ↓**        |  **Full - MSRR ↓** |
@@ -28,9 +28,9 @@ A dash (-) indicates that the corresponding score was not available in the origi
 In the following sections, we discuss how to use AIDO.ProteinIF for inference and testing on CATH 4.2 using ModelGenerator.
 
 #### Setup
-Install [ModelGenerator](https://github.com/genbio-ai/modelgenerator). 
+Install [ModelGenerator](https://github.com/genbio-ai/modelgenerator).
 - It is **required** to use [docker](https://www.docker.com/101-tutorial/) to run our inverse folding pipeline.
-- Please set up a docker image using our provided [Dockerfile](https://github.com/genbio-ai/ModelGenerator/blob/main/Dockerfile) and run the inverse folding inference from within the docker container. 
+- Please set up a docker image using our provided [Dockerfile](https://github.com/genbio-ai/ModelGenerator/blob/main/Dockerfile) and run the inverse folding inference from within the docker container.
 
 Here is an example bash script to set up and access a docker container:
 ```
@@ -56,7 +56,7 @@ nvidia-smi # this should print the GPUs' details
 
 #### Download and merge model checkpoint chunks
 
-Download all the 15 model checkpoint chunks (named as `chunk_<chunk_ID>.bin`) from [here](https://huggingface.co/genbio-ai/AIDO.ProteinIF-16B/tree/main). Place them inside the directory `${MGEN_DATA_DIR}/modelgenerator/huggingface_models/protein_inv_fold/AIDO.ProteinIF-16B/model_chunks` and merge them. 
+Download all the 15 model checkpoint chunks (named as `chunk_<chunk_ID>.bin`) from [here](https://huggingface.co/genbio-ai/AIDO.ProteinIF-16B/tree/main). Place them inside the directory `${MGEN_DATA_DIR}/modelgenerator/huggingface_models/protein_inv_fold/AIDO.ProteinIF-16B/model_chunks` and merge them.
 
 You can do this by simply running the following script:
 ```
@@ -73,7 +73,7 @@ python merge_ckpt.py ${MGEN_DATA_DIR}/modelgenerator/huggingface_models/protein_
 #### Download data
 ##### For inference on CATH 4.2:
 Download the preprocessed CATH 4.2 dataset from [here](https://huggingface.co/datasets/genbio-ai/protein-inverse-folding/tree/main/cath-4.2).  You should find two files named [chain_set_map.pkl](https://huggingface.co/datasets/genbio-ai/protein-inverse-folding/blob/main/cath-4.2/chain_set_map.pkl) and [chain_set_splits.json](https://huggingface.co/datasets/genbio-ai/protein-inverse-folding/blob/main/cath-4.2/chain_set_splits.json). Place them inside the directory `${MGEN_DATA_DIR}/modelgenerator/datasets/protein_inv_fold/cath_4.2/`. (Note that it was originally preprocessed by [Generative Models for Graph-Based Protein Design (Ingraham et al, NeurIPS'19)](https://papers.nips.cc/paper_files/paper/2019/file/f3a4ff4839c56a5f460c88cce3666a2b-Paper.pdf), and we further preprocessed it to suit our pipeline.)
-  
+
 **Alternatively**, you can do it by simply running the following script:
 ```
 DATA_DIR=${MGEN_DATA_DIR}/modelgenerator/datasets/protein_inv_fold/cath_4.2
@@ -111,9 +111,9 @@ mgen test --config protein_inv_fold_test.yaml \
 ```
 
 #### Outputs
-- The evaluation score will be printed on the console. 
-- The generated sequences will be stored in the folder `./proteinIF_outputs/`. There will be two output files: 
-  1. **`designed_sequences.pkl`**, 
+- The evaluation score will be printed on the console.
+- The generated sequences will be stored in the folder `./proteinIF_outputs/`. There will be two output files:
+  1. **`designed_sequences.pkl`**,
   2. **`results_acc_<median_accuracy>.txt`** (where median accuracy is the median accuracy calculated over all the test samples)
 
 The contents of the files are described below:

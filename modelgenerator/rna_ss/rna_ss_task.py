@@ -28,17 +28,19 @@ class RNASSPairwiseTokenClassification(TaskInterface):
 
     def __init__(
         self,
-        backbone_fn: BackboneCallable = aido_dna_dummy,
-        adapter_fn: Optional[Callable[[int, int], SequenceAdapter]] = ResNet2DAdapter,
+        backbone: BackboneCallable,
+        adapter: Optional[Callable[[int, int], SequenceAdapter]] = ResNet2DAdapter,
         tune_threshold_every_n_epoch: int = 1,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.save_hyperparameters()
         self.tune_threshold_every_n_epoch = tune_threshold_every_n_epoch
-        self.backbone_fn = backbone_fn
-        self.adapter_fn = adapter_fn
-        self.backbone = None
+        if self.use_legacy_adapter:
+            raise NotImplementedError()
+        else:
+            self.backbone = backbone(None, None)
+        self.adapter_fn = adapter
         self.adapter = None
         self.loss = nn.BCEWithLogitsLoss()
         self._eval_step_outputs = None
@@ -47,12 +49,10 @@ class RNASSPairwiseTokenClassification(TaskInterface):
         self.THRESHOLD_CANDIDATES = [i / 100 for i in range(1, 30, 1)]
 
     def configure_model(self) -> None:
-        if self.backbone is not None:
-            return
+        self.backbone.setup()
         if self.use_legacy_adapter:
             raise NotImplementedError()
         else:
-            self.backbone = self.backbone_fn(None, None)
             self.adapter = self.adapter_fn(
                 self.backbone.get_embedding_size() * 2,
             )
@@ -69,20 +69,27 @@ class RNASSPairwiseTokenClassification(TaskInterface):
         Returns:
             dict[str, Union[list, Tensor]]: The collated batch containing sample ids, sequences, secondary structures (labels), input_ids, and attention_mask
         """
-        tokenized_result = self.backbone.tokenize(batch["sequences"])
-        input_ids = tokenized_result.pop("input_ids", None)
-        attention_mask = tokenized_result.pop("attention_mask", None)
-        input_ids = torch.tensor(input_ids, dtype=torch.long).to(self.device)
-        attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(self.device)
-        labels = batch["sec_structures"].half().to(self.device)
+        processed_batch = self.backbone.process_batch(batch, device=self.device)
+        if batch.get("labels") is not None:
+            labels = batch["labels"].to(self.device, dtype=torch.long)
+        else:
+            labels = None
         return {
             "ss_ids": batch["ss_ids"],
             "sequences": batch["sequences"],
             "labels": labels,
-            "input_ids": input_ids,
-            "attention_mask": attention_mask,
-            **tokenized_result,
+            **processed_batch,
         }
+
+    def required_data_columns(self, stage: str) -> list[str]:
+        """The required data columns for the task.
+
+        Returns:
+            list[str]: The required data columns
+        """
+        if stage == "predict":
+            return []
+        return ["labels"]
 
     def outer_concat(self, x):
         """Taken directly from FM4BioContactHead"""
@@ -133,12 +140,18 @@ class RNASSPairwiseTokenClassification(TaskInterface):
         Returns:
             Tensor: The classifier logits
         """
-        encoder_hidden = self.backbone(**collated_batch)
+        inputs = {k: v for k, v in collated_batch.items() if k != "labels"}
+        outputs = self.backbone(**inputs)
+        encoder_hidden = outputs.last_hidden_state
+        # remove special tokens
+        if collated_batch["special_tokens_mask"] is not None:
+            special_tokens_mask = torch.logical_not(torch.tensor(collated_batch["special_tokens_mask"]))  # (bs, seq_len)
+            encoder_hidden = encoder_hidden[special_tokens_mask].unsqueeze(0)   # (bs, seq_len1, dim)
         if self.use_legacy_adapter:
             raise NotImplementedError()
         else:
             x = self.outer_concat(encoder_hidden)
-            cls_logits = self.adapter(x[:, 1:-1, 1:-1])
+            cls_logits = self.adapter(x)
         return cls_logits
 
     def evaluate(

@@ -13,7 +13,7 @@ This section is a pocket guide on developing each of these types of experiments,
 
 ## Experiment Types
 
-AIDO.ModelGenerator interfaces hide boilerplate and standardize training, evaluation, and prediction to enable a few common development goals. 
+AIDO.ModelGenerator interfaces hide boilerplate and standardize training, evaluation, and prediction to enable a few common development goals.
 If you want to
 
 3. Use a new dataset for finetuning or inference.

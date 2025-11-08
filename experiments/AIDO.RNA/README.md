@@ -14,8 +14,8 @@ For access of our model and task datasets, please visit our Hugging Face collect
 Note: All the following scripts should be run under `ModelGenerator/`.
 
 ## Sequence-level regression tasks
-### Translation efficiency prediction 
-We fully finetune AIDO.RNA-1.6B for mRNA translation efficiency predition using 10-fold cross validation on each of the cell line datasets, including 'Muscle', 'HEK', and 'pc3'. See `configs/translation_efficiency.yaml` for detailed hyperparameter settings. 
+### Translation efficiency prediction
+We fully finetune AIDO.RNA-1.6B for mRNA translation efficiency predition using 10-fold cross validation on each of the cell line datasets, including 'Muscle', 'HEK', and 'pc3'. See `configs/translation_efficiency.yaml` for detailed hyperparameter settings.
 
 #### Finetuning script
 ```shell
@@ -38,7 +38,7 @@ Or simply launch finetuning using
 bash experiments/AIDO.RNA/translation_efficiency_prediction.sh
 ```
 
-Note: 
+Note:
 1. The `data.cv_test_fold_id` defines which fold is used as test set.
 2. The global batch size for 'Muscle', 'HEK', 'pc3' are 8, 32, 32, respectively.
 3. It is run on 1 NVIDIA A100-80G GPU.
@@ -73,9 +73,9 @@ bash experiments/AIDO.RNA/expression_level_prediction.sh
 
 
 ### Transcript abundance prediction
-We finetune AIDO.RNA-1.6B/AIDO.RNA-1.6B-CDS for transcript abundance prediction using LoRA and 5-fold cross validation on each of the organism datasets, including 'athaliana', 'dmelanogaster', 'ecoli', 'hsapiens', 'scerevisiae', 'ppastoris', 'hvolcanii'. See `configs/transcript_abundance.yaml` for detailed hyperparameter settings. 
+We finetune AIDO.RNA-1.6B/AIDO.RNA-1.6B-CDS for transcript abundance prediction using LoRA and 5-fold cross validation on each of the organism datasets, including 'athaliana', 'dmelanogaster', 'ecoli', 'hsapiens', 'scerevisiae', 'ppastoris', 'hvolcanii'. See `configs/transcript_abundance.yaml` for detailed hyperparameter settings.
 
-#### Finetuning script 
+#### Finetuning script
 ```shell
 ORGANISM=ecoli
 PROJECT=rna_tasks
@@ -97,7 +97,7 @@ Or simply launch finetuning using
 bash experiments/AIDO.RNA/transcript_abundance_prediction.sh
 ```
 
-Note: 
+Note:
 1. We can also use AIDO.RNA-1.6B-CDS as backbone for this task by setting `model.backbone` to `modelgenerator.backbones.aido_rna_1b600m_cds`.
 2. The global batch sizes are all set to 16 for each tasks.
 3. For LoRA finetuning, it will save lora weights and the prediction head weights only, making it light in disk space.
@@ -133,13 +133,39 @@ Simply launch finetuning using
 bash experiments/AIDO.RNA/protein_abundance_prediction.sh
 ```
 
+# Mean Ribosome Load Prediction
+Ribosomes are cellular structures responsible for protein synthesis, and the ribosome load on an mRNA molecule can influence the rate and efficiency of protein production, and the success of genetic engineering. Predicting ribosome load can provide valuable insights into gene expression regulation, translation efficiency, and cellular processes. We fully finetune AIDO.RNA-1.6B for mean ribosome load prediction using the dataset by [Sample _et al._](https://www.nature.com/articles/s41587-019-0164-5). We use the same train, test, and validation split used in a previous study [RiNALMo](https://arxiv.org/abs/2403.00043). See the [config file](https://github.com/genbio-ai/ModelGenerator/tree/main/experiments/AIDO.RNA/mean_ribosome_load_prediction/mean_ribosome_load_prediction.yaml) for detailed hyperparameter settings.
+
+#### Finetuning script
+```shell
+RUN_NAME=rna_mrl
+CKPT_SAVE_DIR=logs/${RUN_NAME}
+mgen fit --config experiments/AIDO.RNA/mean_ribosome_load_prediction/mean_ribosome_load_prediction.yaml \
+           --trainer.default_root_dir ${CKPT_SAVE_DIR} \
+           --trainer.callbacks.ft_schedule_path experiments/AIDO.RNA/mean_ribosome_load_prediction/ft_schedules/two_step.yaml \
+           --trainer.devices 0,
+```
+
+Note that here we are using finetuning scheduler. See [this tutorial](https://github.com/genbio-ai/ModelGenerator/blob/main/docs/docs/tutorials/finetuning_scheduler.md) for details.
+
+#### Evaluation script
+```shell
+RUN_NAME=rna_mrl
+CKPT_SAVE_DIR=logs/${RUN_NAME}
+CKPT_PATH=/path/to/checkpoint ## NOTE: Replace `/path/to/checkpoint` with the actual finetuned checkpoint path.
+mgen test --config experiments/AIDO.RNA/mean_ribosome_load_prediction/mean_ribosome_load_prediction.yaml \
+           --trainer.default_root_dir ${CKPT_SAVE_DIR}/test \
+           --trainer.callbacks.ft_schedule_path experiments/AIDO.RNA/mean_ribosome_load_prediction/ft_schedules/two_step.yaml \
+           --trainer.devices 0, \
+           --ckpt_path ${CKPT_PATH}
+```
 
 ## Sequence-level classification tasks
 
 ### Cross-species splice site prediction
-We finetune AIDO.RNA-1.6B for splice site prediction on 'accecptor' and 'donor' datasets using LoRA. See `configs/splice_site_prediction.yaml` for detailed hyperparameter settings. 
+We finetune AIDO.RNA-1.6B for splice site prediction on 'accecptor' and 'donor' datasets using LoRA. See `configs/splice_site_prediction.yaml` for detailed hyperparameter settings.
 
-#### Finetuning script 
+#### Finetuning script
 ```shell
 SPLICE_SITE=acceptor
 RUN_NAME=csp_${SPLICE_SITE}_aido_rna_1b600m
@@ -156,7 +182,7 @@ Or simply launch finetuning using
 bash experiments/AIDO.RNA/splice_site_prediction.sh
 ```
 
-Note: 
+Note:
 1. The global batch sizes are set to 32 for both tasks.
 2. It is run on 2 NVIDIA A100-80G GPUs.
 
@@ -182,9 +208,9 @@ done
 ```
 
 ### ncRNA family classification
-We finetune AIDO.RNA-1.6B for ncRNA family classification on 'bnoise0' and 'bnoise200' datasets using LoRA. See `configs/ncrna_family_classification.yaml` for detailed hyperparameter settings. 
+We finetune AIDO.RNA-1.6B for ncRNA family classification on 'bnoise0' and 'bnoise200' datasets using LoRA. See `configs/ncrna_family_classification.yaml` for detailed hyperparameter settings.
 
-#### Finetuning script 
+#### Finetuning script
 ```shell
 BOUNDARY_NOISE=bnoise0
 RUN_NAME=nfc_${BOUNDARY_NOISE}_aido_rna_1b600m
@@ -200,7 +226,7 @@ Or simply launch finetuning using
 bash experiments/AIDO.RNA/ncrna_family_classification.sh
 ```
 
-Note: 
+Note:
 1. The global batch sizes are set to 64 for both tasks.
 2. It is run on 2 NVIDIA A100-80G GPUs.
 
@@ -227,9 +253,9 @@ done
 
 
 ### RNA modification site prediction
-We finetune AIDO.RNA-1.6B for RNA modification site prediction using LoRA. See `configs/ncrna_family_classification.yaml` for detailed hyperparameter settings. 
+We finetune AIDO.RNA-1.6B for RNA modification site prediction using LoRA. See `configs/ncrna_family_classification.yaml` for detailed hyperparameter settings.
 
-#### Finetuning script 
+#### Finetuning script
 ```shell
 RUN_NAME=msp_aido_rna_1b600m
 PROJECT=rna_tasks
@@ -242,7 +268,7 @@ srun mgen fit --config $CONFIG_FILE \
   --trainer.callbacks.dirpath $CKPT_SAVE_DIR \
   --trainer.num_nodes 4
 ```
-Note: 
+Note:
 1. The global batch size is set to 64.
 2. It is run on 4*4 NVIDIA A100-80G GPUs using slurm system.
 

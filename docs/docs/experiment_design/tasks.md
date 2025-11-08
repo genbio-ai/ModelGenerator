@@ -10,17 +10,17 @@ AIDO.ModelGenerator `tasks` enable rapid prototyping and experimentation through
 All of this is made possible by the PyTorch Lightning framework, which provides the [LightningModule](https://lightning.ai/docs/pytorch/stable/cli/lightning_cli.html) interface for hardware-agnostic training, evaluation, and prediction, as well as configified experiment management and extensive [CLI](https://lightning.ai/docs/pytorch/stable/cli/lightning_cli.html) support.
 
 
-Available Tasks: 
+Available Tasks:
 Inference, MLM, SequenceClassification, TokenClassification, PairwiseTokenClassification, Diffusion, ConditionalDiffusion, SequenceRegression, Embed
 
 
 > Note: Adapters and Backbones are typed as [`Callables`](https://jsonargparse.readthedocs.io/en/stable/index.html#callable-type), since some args are reserved to automatically configure the adapter with the backbone.
 Create an `AdapterCallable` signature for a task to specify which arguments are configurable, and which are reserved.
-> 
+>
 
 ## Adding Adapters
 
-Adapters serve as a linker between a backbone's output and a task's objective function. 
+Adapters serve as a linker between a backbone's output and a task's objective function.
 
 They are simple [`nn.Module`](https://pytorch.org/docs/stable/generated/torch.nn.Module.html) objects that use the backbone interface to configure their weights and forward pass.
 Their construction is handled within the task's `configure_model` method.

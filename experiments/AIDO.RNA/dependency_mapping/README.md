@@ -15,7 +15,7 @@ python experiments/AIDO.RNA/dependency_mapping/plot_dependency_maps.py \
     -i depmap_predictions \
     -o depmap_plots \
     -v experiments/AIDO.RNA/dependency_mapping/DNA.txt \
-    -t modelgenerator/huggingface_models/rnabert/vocab.txt 
+    -t modelgenerator/huggingface_models/rnabert/vocab.txt
 ```
 
 To create new dependency maps,
@@ -25,13 +25,13 @@ To create new dependency maps,
 ```
 model:
   class_path: Inference
-  init_args: 
+  init_args:
     backbone: <you-choose>
 data:
   class_path: DependencyMappingDataModule
   init_args:
     path: <path/to/your/seq/dir>  # Note: this errors for ., use ../dependency_mapping if necessary
-    test_split_files: 
+    test_split_files:
       - <my_sequences.tsv>
     vocab_file: <vocab>.txt  # E.g. experiments/AIDO.RNA/dependency_mapping/DNA.txt
 trainer:
@@ -48,7 +48,7 @@ python experiments/AIDO.RNA/dependency_mapping/plot_dependency_maps.py \
     -i <prediction_dir> \
     -o <output_dir> \
     -v <vocab.txt> \
-    -t <tokenizer_vocab.txt>  
+    -t <tokenizer_vocab.txt>
 ```
 
 The output will be files of the name `<id>.png` in the output directory, with heatmaps of dependencies and logos with sequence information content.

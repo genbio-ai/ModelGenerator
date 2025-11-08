@@ -1,12 +1,10 @@
 import os
 from lightning.pytorch.cli import LightningCLI, SaveConfigCallback
 from lightning.pytorch.loggers import WandbLogger
-import modelgenerator.tasks
-import modelgenerator.data
-import modelgenerator.backbones
-import modelgenerator.adapters
-import modelgenerator.structure_tokenizer.models
-import modelgenerator.structure_tokenizer.datasets
+from modelgenerator.tasks import *
+from modelgenerator.backbones import *
+from modelgenerator.adapters import *
+from modelgenerator.data import *
 
 
 class MyLightningCLI(LightningCLI):
@@ -24,6 +22,20 @@ class MyLightningCLI(LightningCLI):
             "model.init_args.backbone.init_args.use_peft",
             "trainer.strategy.init_args.auto_wrap_policy.init_args.use_peft",
         )
+        parser.link_arguments(
+            "data",
+            "model.init_args.data_module",
+            apply_on="instantiate",
+        )
+
+    def after_instantiate_classes(self):
+        super().after_instantiate_classes()
+        # First data compatibility check.
+        # It is the earliest point to perform this check, avoiding
+        # overheads such as `datamodule.setup` and spawning of distributed training processes.
+        # The check is only performed when using the `mgen` CLI. To ensure compatibility is always
+        # verified, a second compatibility check is implemented as a callback in the tasks.
+        self.model.check_data_compatibility(self.subcommand)
 
 
 class LoggerSaveConfigCallback(SaveConfigCallback):
@@ -36,6 +48,7 @@ class LoggerSaveConfigCallback(SaveConfigCallback):
                 overwrite=self.overwrite,
                 multifile=self.multifile,
             )
+            trainer.logger.experiment.config.update(self.config.as_dict())
 
 
 def cli_main():
@@ -52,8 +65,9 @@ def cli_main():
             save_config_callback=LoggerSaveConfigCallback,
         )
     except (IndexError, StopIteration) as e:
-        from importlib_metadata import version as get_version
+        from importlib.metadata import version as get_version
         from packaging.version import Version
+
         parser_version = Version(get_version("jsonargparse"))
         if parser_version <= Version("4.36.0"):
             print(

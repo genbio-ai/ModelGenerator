@@ -26,7 +26,7 @@ This repository includes two key models used for working with protein structures
 ### Structure Tokenizer
 
 
-The **Structure Tokenizer** model is designed to encode protein structures into discrete structure tokens and decode these tokens back into protein structures. It provides an efficient way to represent complex structural information in a compact, tokenized form.  
+The **Structure Tokenizer** model is designed to encode protein structures into discrete structure tokens and decode these tokens back into protein structures. It provides an efficient way to represent complex structural information in a compact, tokenized form.
 Key Features:
 - **Encoding**: Converts protein structures into discrete tokens.
 - **Decoding**: Reconstructs protein structures from tokens.
@@ -176,7 +176,7 @@ CUDA_VISIBLE_DEVICES=0 mgen predict --config=experiments/AIDO.StructureTokenizer
 ```
 
 #### Decoding Your Structure Tokens
-To decode protein structures, you will need the structure tokens in `.pt` format and a corresponding codebook file (`codebook.pt`). For ease of use, we recommend preparing the structure tokens in TSV format and then converting them to `.pt` format using the provided script. 
+To decode protein structures, you will need the structure tokens in `.pt` format and a corresponding codebook file (`codebook.pt`). For ease of use, we recommend preparing the structure tokens in TSV format and then converting them to `.pt` format using the provided script.
 
 The TSV file should include the following columns (an example file is available at `experiments/AIDO.StructureTokenizer/decode_example_input.tsv`):
 - `uid`: A unique identifier for the protein sequence.
@@ -214,7 +214,7 @@ CUDA_VISIBLE_DEVICES=0 mgen predict --config experiments/AIDO.StructureTokenizer
 **Notes:**
 - Decoding the structures could take a long time even when using a GPU.
 - Currently, this function only supports single GPU inference due to the file saving mechanism. We plan to support multi-GPU inference in the future.
-- Currently, we don't support specifying the residue index in TSV format. If you need to specify the residue index, you need to modify the 
+- Currently, we don't support specifying the residue index in TSV format. If you need to specify the residue index, you need to modify the
 `struct_token_format_conversion.py` script to include the residue index in the TSV file (we may support this feature in the future), or you could provide the `.pt` file directly with the desired residue index.
 
 ### Combining Encode and Decode
@@ -231,7 +231,7 @@ If you use the sample dataset, you can run the combined encoding and decoding ta
 CUDA_VISIBLE_DEVICES=0 mgen predict --config=experiments/AIDO.StructureTokenizer/encode_decode.yaml
 ```
 
-If you use your own dataset, you need to update the `folder_path` and the `registry_path` in the `encode_decode.yaml` configuration file or override them when running the command as described in [Encoding Structures into Tokens](#encoding-structures-into-tokens). 
+If you use your own dataset, you need to update the `folder_path` and the `registry_path` in the `encode_decode.yaml` configuration file or override them when running the command as described in [Encoding Structures into Tokens](#encoding-structures-into-tokens).
 
 Example:
 ```bash
@@ -247,7 +247,7 @@ CUDA_VISIBLE_DEVICES=0 mgen predict --config experiments/AIDO.StructuctureTokeni
 - The registry file in CSV format indicating the metadata of the dataset.
 
 **Output:**
-- The decoded structures and their corresponding original structures will be saved in the output directory specified in the configuration file. By default it is saved in `logs/protstruct_model/`. 
+- The decoded structures and their corresponding original structures will be saved in the output directory specified in the configuration file. By default it is saved in `logs/protstruct_model/`.
 - The decoded structures end with `output.pdb`.
 - The original structures end with `input.pdb`.
 

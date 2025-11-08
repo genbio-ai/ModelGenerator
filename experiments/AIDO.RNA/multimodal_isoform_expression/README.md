@@ -1,6 +1,6 @@
 # A Modular Framework for Multi-Modal Learning with Foundation Models
- 
-This task combines DNA and RNA foundation models to predict the expression of an RNA isoform across 30 tissues. 
+
+This task combines DNA and RNA foundation models to predict the expression of an RNA isoform across 30 tissues.
 The original task was proposed by [Garau-Luis et al.](https://arxiv.org/html/2406.14150v1)
 We implemented this task in ModelGenerator as the `MMSequenceRegression` task, which allows up to 3 foundation models to be combined toward a supervised objective.
 
@@ -25,7 +25,7 @@ mgen test --model SequenceRegression \
     --data IsoformExpression \
     --model.strict_loading False \
     --ckpt_path <your-ckpt-path>.ckpt
-  
+
 # Spearman: 0.56
 ```
 
@@ -96,7 +96,7 @@ This is a multi-modal, multi-label regression task. The input consists of any co
 * RNA sequence
 * Protein sequence
 
-The target is the RNA expression level across 30 human tissues. 
+The target is the RNA expression level across 30 human tissues.
 
 ### Fusion of DNA and RNA FMs
 We take DNA and RNA sequences as input. We use Enformer for DNA sequences and AIDO.RNA for RNA sequences. The fusion method here is cross-attention fusion. We fully finetune Enformer and AIDO.RNA during the training.
@@ -192,9 +192,9 @@ model:
       class_path: modelgenerator.backbones.aido_rna_1b600m_cds
       init_args:
         max_length: 1024
-        frozen: false 
-        use_peft: true  
-        save_peft_only: true 
+        frozen: false
+        use_peft: true
+        save_peft_only: true
         lora_r: 32
         lora_alpha: 64
         lora_dropout: 0.1
@@ -206,8 +206,8 @@ model:
       init_args:
         max_length: 1024
         frozen: false
-        use_peft: true  
-        save_peft_only: true 
+        use_peft: true
+        save_peft_only: true
         lora_r: 32
         lora_alpha: 64
         lora_dropout: 0.1

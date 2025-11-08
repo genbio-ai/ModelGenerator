@@ -22,4 +22,3 @@ else
     --trainer.logger null \
     --ckpt_path $CKPT_PATH
 fi
-

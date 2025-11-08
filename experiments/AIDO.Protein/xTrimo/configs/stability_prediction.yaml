@@ -1,0 +1,93 @@
+seed_everything: 42
+trainer:
+  accelerator: auto
+  strategy:
+    class_path: lightning.pytorch.strategies.DDPStrategy
+  devices: auto
+  num_nodes: 1
+  precision: bf16
+  logger:
+    class_path: lightning.pytorch.loggers.WandbLogger
+    init_args:
+      name: stability_AIDO.Protein_16B
+      save_dir: logs
+      project: xtrimo_benchmark
+  callbacks:
+  - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+    init_args:
+      dirpath: logs/xtrimo_benchmark/stability_AIDO.Protein_16B
+      filename: best_val:{epoch}-{val_spearman:.3f}
+      monitor: val_spearman
+      save_top_k: 1
+      mode: max
+      every_n_epochs: 1
+  max_epochs: 15
+  max_steps: -1
+  log_every_n_steps: 50
+  accumulate_grad_batches: 1
+  gradient_clip_val: 0.1
+  default_root_dir: null
+model:
+  class_path: modelgenerator.tasks.SequenceRegression
+  init_args:
+    backbone:
+      class_path: modelgenerator.backbones.aido_protein_debug
+      init_args:
+        max_length: 512
+        use_peft: true
+        save_peft_only: true
+        lora_r: 16
+        lora_alpha: 16
+        lora_dropout: 0.0
+        lora_target_modules:
+        - query
+        - value
+        - key
+        - dense
+        - router
+        lora_use_rslora: false
+        # config_overwrites: null
+        # config_overwrites:
+        #   dict_kwargs:
+        #     hidden_dropout_prob: 0
+        #     attention_probs_dropout_prob: 0
+        model_init_args: null
+    adapter:
+      class_path: modelgenerator.adapters.MLPPoolAdapter
+      init_args:
+        pooling: mean_pooling
+        hidden_sizes:
+        - 1152
+        activation_layer:
+          class_path: torch.nn.Tanh
+        bias: true
+        dropout: 0.1
+        dropout_in_middle: true
+    num_outputs: 1
+    optimizer:
+      class_path: torch.optim.AdamW
+      init_args:
+        lr: 0.0001
+        betas:
+        - 0.9
+        - 0.95
+        eps: 1.0e-08
+        weight_decay: 0.0
+    lr_scheduler:
+      class_path: modelgenerator.lr_schedulers.CosineWithWarmup
+      init_args:
+        warmup_ratio: 0.05
+    strict_loading: true
+    reset_optimizer_states: false
+data:
+  class_path: modelgenerator.data.StabilityPrediction
+  init_args:
+    path: proteinglm/stability_prediction
+    normalize: true
+    train_split_name: train
+    test_split_name: test
+    valid_split_name: valid
+    random_seed: 42
+    batch_size: 32
+    shuffle: true
+ckpt_path: null

@@ -6,7 +6,7 @@ We also provide a few tools to make data management more convenient, and work wi
 AIDO.ModelGenerator provides a `DataInterface` class that hides boilerplate, along with a `HFDatasetLoaderMixin` that combines Lightning DataModule structure and [HuggingFace Datasets](https://huggingface.co/docs/datasets) convenience together to quickly load data from HuggingFace or common file formats (e.g. tsv, csv, json, etc).
 More convenient mixins and example usage are outlined below.
 
-Many common tasks and data loaders are already implemented in AIDO.ModelGenerator, and only require setting new paths to run with new data. 
+Many common tasks and data loaders are already implemented in AIDO.ModelGenerator, and only require setting new paths to run with new data.
 See the [Data API Reference](../api_reference/data.md) for all types of available data modules.
 
 ::: modelgenerator.data.DataInterface

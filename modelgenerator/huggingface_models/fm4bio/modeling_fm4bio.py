@@ -341,7 +341,7 @@ class FM4BioSelfAttention(nn.Module):
                     if torch.allclose(attention_mask, torch.zeros_like(attention_mask)):
                         attention_mask = None
 
-            context_layer = torch.nn.functional.scaled_dot_product_attention(query_layer, key_layer, value_layer, attn_mask=attention_mask, dropout_p=self.dropout.p, is_causal=False, scale=None, enable_gqa=False)
+            context_layer = torch.nn.functional.scaled_dot_product_attention(query_layer, key_layer, value_layer, attn_mask=attention_mask, dropout_p=(self.dropout.p if self.training else 0.0), is_causal=False, scale=None, enable_gqa=False)
 
         context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
         new_context_layer_shape = context_layer.size()[:-2] + (self.all_head_size,)

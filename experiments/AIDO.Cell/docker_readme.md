@@ -17,7 +17,7 @@ cd /path/to/ModelGenerator
 docker build -t finetune -f Dockerfile .
 ```
 
-You should only need to do this once. 
+You should only need to do this once.
 
 # Hugging Face authentication
 
@@ -55,7 +55,7 @@ finetune bash -c "mgen test --config experiments/AIDO.Cell/cell_type_classificat
 
 # Other usage examples
 
-The example above fine-tunes and evaluates a model for cell type classification. Other usage examples are described below. 
+The example above fine-tunes and evaluates a model for cell type classification. Other usage examples are described below.
 
 ## Transcriptomic Clock Task
 Simply replace the `config` argument of `mgen fit` with  `experiments/AIDO.Cell/transcriptomic_clock.yaml`.

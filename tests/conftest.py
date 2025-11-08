@@ -12,6 +12,7 @@ from modelgenerator.backbones.backbones import (
     Borzoi,
     ESM,
     Geneformer,
+    SCimilarity,
     LegacyAdapterType,
 )
 
@@ -19,6 +20,7 @@ from modelgenerator.backbones.backbones import (
 if torch.cuda.is_available():
     # Multi GPUs are causing tests to hang
     import os
+
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 
@@ -29,6 +31,7 @@ def flash_attn_available():
     """
     try:
         import flash_attn  # noqa: F401
+
         return torch.cuda.is_available()
     except ImportError:
         return False
@@ -54,7 +57,9 @@ def genbiobert_cls():
 
 @pytest.fixture
 def genbiobert(genbiobert_cls):
-    return genbiobert_cls(None, None)
+    backbone = genbiobert_cls(None, None)
+    backbone.setup()
+    return backbone
 
 
 @pytest.fixture
@@ -78,7 +83,9 @@ def genbiofm_cls():
 
 @pytest.fixture
 def genbiofm(genbiofm_cls):
-    return genbiofm_cls(None, None)
+    backbone = genbiofm_cls(None, None)
+    backbone.setup()
+    return backbone
 
 
 @pytest.fixture
@@ -97,7 +104,9 @@ def genbiocellfoundation(flash_attn_available):
             super().__init__(
                 *args, from_scratch=True, config_overwrites=config_overwrites, **kwargs
             )
+
     tiny_model = TinyModel(None, None)
+    tiny_model.setup()
     if not flash_attn_available:
         warnings.warn(
             "Flash attention is not available. Using a mocked encoder for CellFoundation."
@@ -122,12 +131,14 @@ def genbiocellspatialfoundation(flash_attn_available):
                 "intermediate_size": 16,
                 "max_position_embeddings": 128,
                 "_use_flash_attention_2": True,
-                'bf16': True,
+                "bf16": True,
             }
             super().__init__(
                 *args, from_scratch=True, config_overwrites=config_overwrites, **kwargs
             )
+
     tiny_model = TinyModel(None, None)
+    tiny_model.setup()
     if not flash_attn_available:
         warnings.warn(
             "Flash attention is not available. Using a mocked encoder for CellSpatialFoundation."
@@ -166,7 +177,9 @@ def enformer_cls():
 
 @pytest.fixture
 def enformer(enformer_cls):
-    return enformer_cls(None, None)
+    backbone = enformer_cls(None, None)
+    backbone.setup()
+    return backbone
 
 
 @pytest.fixture
@@ -191,9 +204,13 @@ def borzoi_cls():
 
     return TinyModel
 
+
 @pytest.fixture
 def borzoi(borzoi_cls):
-    return borzoi_cls(None, None)
+    backbone = borzoi_cls(None, None)
+    backbone.setup()
+    return backbone
+
 
 @pytest.fixture
 def esm():
@@ -214,6 +231,7 @@ def esm():
             default_config=None,
             max_length=128,
         )
+        model.setup()
     return model
 
 
@@ -254,10 +272,35 @@ def geneformer_cls():
 @pytest.fixture
 def geneformer(geneformer_cls):
     # simple (non-MLM) tiny Geneformer
-    return geneformer_cls(None, None)
+    backbone = geneformer_cls(None, None)
+    backbone.setup()
+    return backbone
 
 
 @pytest.fixture
 def geneformer_mlm(geneformer_cls):
     # masked-LM tiny Geneformer
-    return geneformer_cls(LegacyAdapterType.MASKED_LM, None)
+    backbone = geneformer_cls(LegacyAdapterType.MASKED_LM, None)
+    backbone.setup()
+    return backbone
+
+
+@pytest.fixture
+def scimilarity():
+    """SCimilarity with tiny feed-forward encoder."""
+
+    class TinySCimilarity(SCimilarity):
+        def setup(self):
+            self.latent_dim = 4
+            self.encoder = nn.Linear(self.num_genes, self.latent_dim, bias=False)
+            self.decoder = None
+            self.input_dim = self.output_dim = self.num_genes
+
+    model = TinySCimilarity(
+        legacy_adapter_type=None,
+        default_config=None,
+        num_genes=10,
+    )
+
+    model.setup()
+    return model

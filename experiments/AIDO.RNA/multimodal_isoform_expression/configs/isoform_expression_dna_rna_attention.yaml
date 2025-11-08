@@ -12,7 +12,7 @@ trainer:
   logger:
     class_path: lightning.pytorch.loggers.WandbLogger
     init_args:
-      name: 
+      name:
       save_dir: logs
       project: rna_tasks
   callbacks:
@@ -48,9 +48,9 @@ model:
       class_path: modelgenerator.backbones.aido_rna_650m
       init_args:
         max_length: 1024
-        frozen: false 
-        use_peft: true  
-        save_peft_only: true 
+        frozen: false
+        use_peft: true
+        save_peft_only: true
         lora_r: 32
         lora_alpha: 64
         lora_dropout: 0.1
@@ -121,6 +121,9 @@ data:
     x_col:
     - rna_seq
     - dna_seq
+    rename_cols:
+      rna_seq: rna_seq_sequences
+      dna_seq: dna_seq_sequences
     normalize: true
     random_seed: 42
     batch_size: 2

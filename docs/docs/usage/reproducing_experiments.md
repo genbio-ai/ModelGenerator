@@ -7,7 +7,7 @@ Many pre-packaged experiments are available in the [experiments](https://github.
 ## Experiment Configs
 
 When you start a run, AIDO.ModelGenerator saves a full `config.yaml` file for every experiment run which includes all user-specified and default args.
-To reproduce a training run 
+To reproduce a training run
 
 ```
 mgen fit --config config.yaml
@@ -45,7 +45,7 @@ For more details on each study, see the [Studies](../studies/index.md) page.
 To reproduce a training run with a saved config, simply run
 ```
 mgen fit --config config.yaml
-``` 
+```
 
 > Note: If you are using a full frozen config, some machine-specific parameters like `trainer.num_nodes` may need to be adjusted.
 

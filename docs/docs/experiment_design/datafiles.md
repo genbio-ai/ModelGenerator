@@ -29,6 +29,8 @@ data:
     test_split_files: test.tsv
     x_col: sequence
     y_col: label
+    rename_cols:
+      sequence: sequences
     val_split_size: 0.1
 ```
 To re-run with your data, just override the necessary args
@@ -41,6 +43,8 @@ data:
     test_split_files: my_test.tsv
     x_col: dna_sequence
     y_col: expression
+    rename_cols:
+      dna_sequences: sequences
     val_split_size: 0.1
 ```
 
@@ -58,5 +62,7 @@ data:
     test_split_files: my_test.tsv
     x_col: dna_sequence
     y_col: expression
+    rename_cols:
+      dna_sequence: sequences
     val_split_size: 0.1
 ```

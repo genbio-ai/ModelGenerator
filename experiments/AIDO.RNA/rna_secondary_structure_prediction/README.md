@@ -3,7 +3,7 @@ As with proteins, structure determines RNA function. RNA secondary structure, fo
 1. [bpRNA](https://doi.org/10.1093/nar/gky285)
 2. [Archive-II](http://www.rnajournal.org/cgi/doi/10.1261/rna.053694.115)
 
-We preprocessed and split the datasets (into train, test, and validation splits) in the same way as done in a previous study [RiNALMo](https://doi.org/10.48550/arXiv.2403.00043). 
+We preprocessed and split the datasets (into train, test, and validation splits) in the same way as done in a previous study [RiNALMo](https://doi.org/10.48550/arXiv.2403.00043).
 
 ##### Experimental Results
 
@@ -42,8 +42,8 @@ We also demonstrate inter-family generalization for secondary structure predicti
 export MGEN_DATA_DIR=~/mgen_data # or any other local directory of your choice
 `
 
-- Download the preprocessed data (provided as zip file named `rna_ss_data.zip`) from [here](https://huggingface.co/datasets/genbio-ai/rna-secondary-structure-prediction/blob/main/rna_ss_data.zip). Unzip `rna_ss_data.zip` inside the directory `${MGEN_DATA_DIR}/modelgenerator/datasets/`. 
-    
+- Download the preprocessed data (provided as zip file named `rna_ss_data.zip`) from [here](https://huggingface.co/datasets/genbio-ai/rna-secondary-structure-prediction/blob/main/rna_ss_data.zip). Unzip `rna_ss_data.zip` inside the directory `${MGEN_DATA_DIR}/modelgenerator/datasets/`.
+
 **Alternatively**, you can simply run the following script to do this:
 ```
 export MGEN_DATA_DIR=~/mgen_data # or any other local directory of your choice
@@ -51,7 +51,7 @@ mkdir -p ${MGEN_DATA_DIR}/modelgenerator/datasets/
 wget -P ${MGEN_DATA_DIR}/modelgenerator/datasets/ https://huggingface.co/datasets/genbio-ai/rna-secondary-structure-prediction/resolve/main/rna_ss_data.zip
 unzip ${MGEN_DATA_DIR}/modelgenerator/datasets/rna_ss_data.zip -d ${MGEN_DATA_DIR}/modelgenerator/datasets/
 ```
-    
+
 You should find two sub-folders containing the preprocessed datasets:
 1. bpRNA: `${MGEN_DATA_DIR}/modelgenerator/datasets/rna_ss_data/bpRNA`
 2. Archive-II: `${MGEN_DATA_DIR}/modelgenerator/datasets/rna_ss_data/archiveII`
@@ -86,4 +86,3 @@ See the previous section for details on `<FamilyName>`.
 
 #### Outputs:
 The evaluation scores will be printed on the console.
-

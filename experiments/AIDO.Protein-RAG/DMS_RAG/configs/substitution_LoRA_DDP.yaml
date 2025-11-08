@@ -3,7 +3,7 @@ trainer:
   devices: auto
   logger: true
   callbacks:
-  - class_path: lightning.pytorch.callbacks.ModelCheckpoint 
+  - class_path: lightning.pytorch.callbacks.ModelCheckpoint
     init_args:
       filename: epoch_{epoch}-val_mcc:{val_spearman:.3f}
       monitor: val_spearman
@@ -33,6 +33,7 @@ model:
       class_path: modelgenerator.backbones.aido_protein_rag_16b
       init_args:
         use_peft: true
+        enable_rag: true
         max_length: 6400
         lora_r: 16
         lora_alpha: 16
@@ -68,11 +69,8 @@ data:
     is_rag_dataset: true
     train_split_files: null
     config_name: NCAP_I34A1_Doud_2015
-    x_col: sequences
-    extra_cols:
-    - msa
-    - str_emb
-    extra_col_aliases:
+    x_col:
+    - sequences
     - msa
     - str_emb
     train_split_name: 'train'

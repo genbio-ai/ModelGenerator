@@ -1,4 +1,5 @@
 # tasks.py
+import functools
 from typing import Callable, Literal, Optional, Union
 import numpy as np
 
@@ -38,6 +39,19 @@ from modelgenerator.metrics import (
 from modelgenerator.tasks.base import *
 
 
+def once_only(method):
+    attr_name = f"__{method.__name__}_called"
+
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        if getattr(self, attr_name, False):
+            return
+        setattr(self, attr_name, True)
+        return method(self, *args, **kwargs)
+
+    return wrapper
+
+
 class MLM(TaskInterface):
     """Task for performing masked language modeling (MLM) with a pretrained backbone.
     Can be used to train from scratch or for domain adaptation.
@@ -59,9 +73,8 @@ class MLM(TaskInterface):
         super().__init__(use_legacy_adapter=True, **kwargs)
         if self.__class__ is MLM:
             self.save_hyperparameters()
-        self.backbone = None
+        self.backbone = backbone(LegacyAdapterType.MASKED_LM, None)
         self.adapter = None
-        self.backbone_fn = backbone
         self.loss = nn.CrossEntropyLoss()
         for stage in ["train", "val", "test"]:
             self.metrics[f"{stage}_metrics"] = nn.ModuleDict(
@@ -71,10 +84,9 @@ class MLM(TaskInterface):
             )
         self.metrics_to_pbar = {"accuracy"}
 
+    @once_only
     def configure_model(self) -> None:
-        if self.backbone is not None:
-            return
-        self.backbone = self.backbone_fn(LegacyAdapterType.MASKED_LM, None)
+        self.backbone.setup()
         self.adapter = self.backbone.get_decoder()
 
     def transform(
@@ -83,40 +95,36 @@ class MLM(TaskInterface):
         """Collates a batch of data for forward and evaluate.
 
         Args:
-            batch (dict[str, Union[list, Tensor]]): A batch of data from the DataLoader containing sequences and target_sequences
+            batch (dict[str, Union[list, Tensor]]): A batch of data from the DataLoader containing target_sequences
             batch_idx (int, optional): The index of the current batch in the DataLoader
 
         Returns:
-            dict[str, Union[list, Tensor]]: The collated batch with input_ids, attention_mask, and target_ids
+            dict[str, Union[list, Tensor]]: The collated batch with target_ids and backbone inputs
         """
-        tokenized_result = self.backbone.tokenize(batch["sequences"])
-        input_ids = tokenized_result.pop("input_ids", None)
-        attention_mask = tokenized_result.pop("attention_mask", None)
-        special_tokens_mask = tokenized_result.pop("special_tokens_mask", None)
+        processed_batch = self.backbone.process_batch(batch, device=self.device)
         target_ids = None
         if batch.get("target_sequences", None) is not None:
             target_ids = self.backbone.tokenize(batch["target_sequences"])["input_ids"]
-            target_ids = torch.tensor(target_ids, dtype=torch.long).to(self.device)
-        input_ids = torch.tensor(input_ids, dtype=torch.long).to(self.device)
-        attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(self.device)
+            if torch.is_tensor(target_ids):
+                target_ids = target_ids.to(dtype=torch.long, device=self.device)
+            else:
+                target_ids = torch.tensor(target_ids, dtype=torch.long, device=self.device)
         return {
-            "input_ids": input_ids,
-            "attention_mask": attention_mask,
             "target_ids": target_ids,
-            "special_tokens_mask": special_tokens_mask,
-            **tokenized_result,
+            **processed_batch,
         }
 
     def forward(self, collated_batch: dict[str, Union[list, Tensor]]) -> Tensor:
         """Runs a forward pass of the model.
 
         Args:
-            collated_batch (dict[str, Union[list, Tensor]]): The collated batch of data from collate
+            collated_batch (dict[str, Union[list, Tensor]]): The collated batch of data from transform
 
         Returns:
             Tensor: The decoder logits
         """
-        encoder_hidden = self.backbone(**collated_batch)
+        backbone_inputs = {k: v for k, v in collated_batch.items() if k != "target_ids"}
+        encoder_hidden = self.backbone(**backbone_inputs).last_hidden_state
         decoder_logits = self.adapter(encoder_hidden)
         return decoder_logits
 
@@ -133,7 +141,7 @@ class MLM(TaskInterface):
             logits (Tensor): The token-wise predicted logits
             collated_batch (dict[str, Union[list, Tensor]]): The collated batch of data containing target_ids
             stage (Optional[str], optional): The stage of training (train, val, test). Required if loss_only is False.
-            loss_only (bool, optional): Whether to only return the loss. Defaults to False.
+            loss_only (bool, optional): Whether to only return the loss.
 
         Returns:
             Tensor: The loss.
@@ -144,17 +152,25 @@ class MLM(TaskInterface):
             return {"loss": loss}
         preds = logits.argmax(-1)
         metrics = self.get_metrics_by_stage(stage)
-        self.call_or_update_metric(
-            stage, metrics["accuracy"], (preds == target_ids).float().mean()
-        )
+        self.call_or_update_metric(stage, metrics["accuracy"], (preds == target_ids).float().mean())
         return {"loss": loss}
+
+    def required_data_columns(self, stage: str) -> list[str]:
+        """The required data columns for the task.
+
+        Returns:
+            list[str]: The required data columns
+        """
+        if stage == "predict":
+            return []
+        return ["target_sequences"]
 
 
 class Inference(MLM):
     """Task for performing inference with a pretrained backbone end-to-end, including the backbone's original adapter.
-    
+
     Note:
-        Must be used with [PredictionWriter](../callbacks/#modelgenerator.callbacks.PredictionWriter). 
+        Must be used with [PredictionWriter](../callbacks/#modelgenerator.callbacks.PredictionWriter).
         Model outputs are stored under "predictions".
 
     Args:
@@ -173,23 +189,8 @@ class Inference(MLM):
         Returns:
             dict[str, Union[list, Tensor]]: The collated batch with input_ids, attention_mask, and target_ids
         """
-        sequences = batch.pop("sequences")
-        tokenized_result = self.backbone.tokenize(sequences, **batch)
-        input_ids = tokenized_result.pop("input_ids", None)
-        attention_mask = tokenized_result.pop("attention_mask", None)
-        special_tokens_mask = tokenized_result.pop("special_tokens_mask", None)
-        input_ids = torch.tensor(input_ids, dtype=torch.long).to(self.device)
-        if attention_mask is not None:
-            attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(self.device)
-        batch.update(
-            {
-                "sequences": sequences,
-                "input_ids": input_ids,
-                "attention_mask": attention_mask,
-                "special_tokens_mask": special_tokens_mask,
-                **tokenized_result,
-            }
-        )
+        processed_batch = self.backbone.process_batch(batch, device=self.device)
+        batch.update(processed_batch)
         return batch
 
 
@@ -215,6 +216,7 @@ class SequenceClassification(TaskInterface):
         adapter: Optional[Callable[[int, int], SequenceAdapter]] = LinearCLSAdapter,
         n_classes: int = 2,
         multilabel: bool = False,
+        weighted_loss: bool = False,
         **kwargs,
     ):
         if n_classes < 2:
@@ -224,20 +226,25 @@ class SequenceClassification(TaskInterface):
         super().__init__(**kwargs)
         if self.__class__ is SequenceClassification:
             self.save_hyperparameters()
-        self.backbone_fn = backbone
-        self.backbone = None
+        if self.use_legacy_adapter:
+            self.backbone = backbone(
+                self.legacy_adapter_type,
+                DefaultConfig(config_overwrites={"num_labels": self.n_classes}),
+            )
+        else:
+            self.backbone = backbone(None, None)
         self.adapter = None
         self.adapter_fn = adapter
         self.n_classes = n_classes
         self.multilabel = multilabel
-
-        if not multilabel:
-            # input: (bs, C), target: (bs,)
-            self.loss = nn.CrossEntropyLoss()
-        else:
-            # input: (bs, C), target: (bs, C)
-            self.loss = nn.BCEWithLogitsLoss()
-
+        self.weighted_loss = weighted_loss
+        if self.weighted_loss:
+            # Check if data module has class_weight property
+            if not hasattr(type(self.data_module), "class_weight"):
+                raise ValueError(
+                    "Data module does not have property 'class_weight', "
+                    "which is required by weighted loss."
+                )
         for stage in ["train", "val", "test"]:
             if not multilabel:
                 task = "binary" if n_classes == 2 else "multiclass"
@@ -245,9 +252,7 @@ class SequenceClassification(TaskInterface):
                     {
                         # Note: `average` need to be set explicitly for accuracy and f1
                         # see https://github.com/Lightning-AI/torchmetrics/issues/2280
-                        "accuracy": tm.Accuracy(
-                            task, num_classes=n_classes, average="micro"
-                        ),
+                        "accuracy": tm.Accuracy(task, num_classes=n_classes, average="micro"),
                         "f1": tm.F1Score(task, num_classes=n_classes, average="macro"),
                         "mcc": tm.MatthewsCorrCoef(task, num_classes=n_classes),
                         "auroc": tm.AUROC(task, num_classes=n_classes),
@@ -259,37 +264,24 @@ class SequenceClassification(TaskInterface):
                         "accuracy": tm.Accuracy(
                             "multilabel", num_labels=n_classes, average="macro"
                         ),
-                        "f1": tm.F1Score(
-                            "multilabel", num_labels=n_classes, average="macro"
-                        ),
+                        "f1": tm.F1Score("multilabel", num_labels=n_classes, average="macro"),
                         "mcc": tm.MatthewsCorrCoef("multilabel", num_labels=n_classes),
-                        "auroc": tm.AUROC(
-                            "multilabel", num_labels=n_classes, average="macro"
-                        ),
+                        "auroc": tm.AUROC("multilabel", num_labels=n_classes, average="macro"),
                     }
                 )
                 if stage == "test":
                     # calculates score for each label
                     label_wise_acc = nn.ModuleDict(
-                        {
-                            "accuracy_" + str(i): tm.Accuracy("binary")
-                            for i in range(n_classes)
-                        }
+                        {"accuracy_" + str(i): tm.Accuracy("binary") for i in range(n_classes)}
                     )
                     label_wise_f1 = nn.ModuleDict(
                         {"f1_" + str(i): tm.F1Score("binary") for i in range(n_classes)}
                     )
                     label_wise_mcc = nn.ModuleDict(
-                        {
-                            "mcc_" + str(i): tm.MatthewsCorrCoef("binary")
-                            for i in range(n_classes)
-                        }
+                        {"mcc_" + str(i): tm.MatthewsCorrCoef("binary") for i in range(n_classes)}
                     )
                     label_wise_auroc = nn.ModuleDict(
-                        {
-                            "auroc_" + str(i): tm.AUROC("binary")
-                            for i in range(n_classes)
-                        }
+                        {"auroc_" + str(i): tm.AUROC("binary") for i in range(n_classes)}
                     )
                     self.metrics[f"{stage}_metrics"].update(label_wise_acc)
                     self.metrics[f"{stage}_metrics"].update(label_wise_f1)
@@ -298,20 +290,23 @@ class SequenceClassification(TaskInterface):
 
         self.metrics_to_pbar = set(self.metrics["train_metrics"].keys())
 
+    @once_only
     def configure_model(self) -> None:
-        if self.backbone is not None:
-            return
-        if self.use_legacy_adapter:
-            self.backbone = self.backbone_fn(
-                self.legacy_adapter_type,
-                DefaultConfig(config_overwrites={"num_labels": self.n_classes}),
+        self.backbone.setup()
+        if not self.multilabel:
+            # input: (bs, C), target: (bs,)
+            self.loss = nn.CrossEntropyLoss(
+                weight=self.data_module.class_weight if self.weighted_loss else None
             )
+        else:
+            # input: (bs, C), target: (bs, C)
+            self.loss = nn.BCEWithLogitsLoss(
+                weight=self.data_module.class_weight if self.weighted_loss else None
+            )
+        if self.use_legacy_adapter:
             self.adapter = self.backbone.get_decoder()
         else:
-            self.backbone = self.backbone_fn(None, None)
-            self.adapter = self.adapter_fn(
-                self.backbone.get_embedding_size(), self.n_classes
-            )
+            self.adapter = self.adapter_fn(self.backbone.get_embedding_size(), self.n_classes)
 
     def transform(
         self, batch: dict[str, Union[list, Tensor]], batch_idx: Optional[int] = None
@@ -326,29 +321,18 @@ class SequenceClassification(TaskInterface):
             dict[str, Union[list, Tensor]]: The collated batch containing input_ids, attention_mask, and labels
         """
 
-        sequences = batch.pop("sequences")
-        tokenized_result = self.backbone.tokenize(sequences, **batch)
-        input_ids = tokenized_result.pop("input_ids", None)
-        attention_mask = tokenized_result.pop("attention_mask", None)
-        special_tokens_mask = tokenized_result.pop("special_tokens_mask", None)
-        input_ids = torch.tensor(input_ids, dtype=torch.long).to(self.device)
-        if attention_mask is not None:
-            attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(self.device)
+        processed_batch = self.backbone.process_batch(batch, device=self.device)
 
         if batch.get("labels") is not None:
             if torch.is_tensor(batch["labels"]):
                 labels = batch["labels"].to(self.device, dtype=torch.long)
             else:
-                labels = torch.as_tensor(batch["labels"]).to(self.device, dtype=torch.long)
+                labels = torch.tensor(batch["labels"]).to(self.device, dtype=torch.long)
         else:
             labels = None
         return {
-            "sequences": sequences,
-            "input_ids": input_ids,
-            "attention_mask": attention_mask,
-            "special_tokens_mask": special_tokens_mask,
             "labels": labels,
-            **tokenized_result,
+            **processed_batch,
         }
 
     def forward(self, collated_batch: dict[str, Union[list, Tensor]]) -> Tensor:
@@ -361,8 +345,9 @@ class SequenceClassification(TaskInterface):
             Tensor: The classifier logits
         """
 
-        hidden_states = self.backbone(**collated_batch)
-        logits = self.adapter(hidden_states, collated_batch["attention_mask"])
+        inputs = {k: v for k, v in collated_batch.items() if k != "labels"}
+        outputs = self.backbone(**inputs)
+        logits = self.adapter(outputs.last_hidden_state, outputs.attention_mask)
         return logits
 
     def evaluate(
@@ -378,7 +363,7 @@ class SequenceClassification(TaskInterface):
             logits (Tensor): The sequence-level model predictions
             collated_batch (dict[str, Union[list, Tensor]]): The collated batch of data containing labels
             stage (Optional[str], optional): The stage of training (train, val, test). Required if loss_only is False.
-            loss_only (bool, optional): Whether to only return the loss. Defaults to False.
+            loss_only (bool, optional): Whether to only return the loss.
 
         Returns:
             Tensor: The loss.
@@ -413,6 +398,16 @@ class SequenceClassification(TaskInterface):
                 self.call_or_update_metric(stage, metric, preds, labels)
 
         return {"loss": loss}
+
+    def required_data_columns(self, stage: str) -> list[str]:
+        """The required data columns for the task.
+
+        Returns:
+            list[str]: The required data columns
+        """
+        if stage == "predict":
+            return []
+        return ["labels"]
 
 
 class TokenClassification(SequenceClassification):
@@ -451,8 +446,10 @@ class TokenClassification(SequenceClassification):
         Returns:
             Tensor: The classifier logits
         """
-        hidden_states = self.backbone(**collated_batch)
-        logits = self.adapter(hidden_states)
+        inputs = {k: v for k, v in collated_batch.items() if k != "labels"}
+        outputs = self.backbone(**inputs)
+        collated_batch["special_tokens_mask"] = outputs.special_tokens_mask
+        logits = self.adapter(outputs.last_hidden_state, outputs.attention_mask)
         return logits
 
     def evaluate(
@@ -465,10 +462,10 @@ class TokenClassification(SequenceClassification):
         """Evaluates the model predictions against the ground truth labels.
 
         Args:
-            logits (Tensor): The sequence-level model predictions
+            logits (Tensor): The token-level model predictions
             collated_batch (dict[str, Union[list, Tensor]]): The collated batch of data containing labels
             stage (Optional[str], optional): The stage of training (train, val, test). Required if loss_only is False.
-            loss_only (bool, optional): Whether to only return the loss. Defaults to False.
+            loss_only (bool, optional): Whether to only return the loss.
 
         Returns:
             Tensor: The loss.
@@ -476,7 +473,9 @@ class TokenClassification(SequenceClassification):
         padded_labels = collated_batch["labels"]
         collated_batch["labels"] = padded_labels[padded_labels != -100].view(-1)
         if collated_batch["special_tokens_mask"] is not None:
-            special_tokens_mask = torch.logical_not(torch.tensor(collated_batch["special_tokens_mask"]))
+            special_tokens_mask = torch.logical_not(
+                torch.as_tensor(collated_batch["special_tokens_mask"])
+            )
             logits = logits[special_tokens_mask].view(-1, self.n_classes)
         else:
             logits = logits.view(-1, self.n_classes)
@@ -492,7 +491,7 @@ class PairwiseTokenClassification(SequenceClassification):
 
     Args:
         adapter: A TokenAdapter for the model.
-        adapter_dim_multiplier (int, optional): The multiplier for the adapter dimension. Defaults to 2.
+        adapter_dim_multiplier (int, optional): The multiplier for the adapter dimension.
         **kwargs: Additional keyword arguments for the parent class. `n_classes=2` and `multilabel=False` are always overridden.
     """
 
@@ -513,31 +512,25 @@ class PairwiseTokenClassification(SequenceClassification):
         self.adapter_dim_multiplier = adapter_dim_multiplier
         kwargs["n_classes"] = 2
         kwargs["multilabel"] = False
-        super().__init__(
-            backbone, adapter=adapter, **kwargs
-        )
+        super().__init__(backbone, adapter=adapter, **kwargs)
         if self.__class__ is PairwiseTokenClassification:
             self.save_hyperparameters()
         for stage in ["train", "val", "test"]:
-            self.metrics[f"{stage}_metrics"] = nn.ModuleDict(
-                {"top_L_acc": TopLAcc(k=1)}
-            )
+            self.metrics[f"{stage}_metrics"] = nn.ModuleDict({"top_L_acc": TopLAcc(k=1)})
             self.metrics[f"{stage}_metrics"].update(
                 {f"top_L{k}_acc": TopLAcc(k=k) for k in [2, 5, 10]}
             )
         self.metrics_to_pbar = {"top_L5_acc"}
 
+    @once_only
     def configure_model(self) -> None:
-        if self.backbone is not None:
-            return
+        self.loss = nn.BCEWithLogitsLoss(
+            weight=self.data_module.class_weight if self.weighted_loss else None
+        )
+        self.backbone.setup()
         if self.use_legacy_adapter:
-            self.backbone = self.backbone_fn(
-                self.legacy_adapter_type,
-                DefaultConfig(config_overwrites={"num_labels": self.n_classes}),
-            )
             self.adapter = self.backbone.get_decoder()
         else:
-            self.backbone = self.backbone_fn(None, None)
             self.adapter = self.adapter_fn(
                 self.backbone.get_embedding_size() * self.adapter_dim_multiplier,
                 self.n_classes,
@@ -552,7 +545,8 @@ class PairwiseTokenClassification(SequenceClassification):
         Returns:
             Tensor: The classifier logits
         """
-        hidden_states = self.backbone(**collated_batch)
+        inputs = {k: v for k, v in collated_batch.items() if k != "labels"}
+        hidden_states = self.backbone(**inputs).last_hidden_state
 
         if self.use_legacy_adapter:
             logits = self.adapter(hidden_states)
@@ -575,12 +569,8 @@ class PairwiseTokenClassification(SequenceClassification):
         x_2 = x[:, None, :, None, :]  # [batch_size, 1, features, 1, seq_len]
 
         # Repeat along new dimensions
-        x_1 = x_1.repeat(
-            1, 1, 1, 1, seq_len
-        )  # [batch_size, 1, features, seq_len, seq_len]
-        x_2 = x_2.repeat(
-            1, 1, 1, seq_len, 1
-        )  # [batch_size, 1, features, seq_len, seq_len]
+        x_1 = x_1.repeat(1, 1, 1, 1, seq_len)  # [batch_size, 1, features, seq_len, seq_len]
+        x_2 = x_2.repeat(1, 1, 1, seq_len, 1)  # [batch_size, 1, features, seq_len, seq_len]
 
         # Concatenate along the second dimension
         x = torch.cat((x_1, x_2), dim=1)  # [batch_size, 2, features, seq_len, seq_len]
@@ -592,9 +582,7 @@ class PairwiseTokenClassification(SequenceClassification):
         x[:, :, :, I, J] = x[:, :, :, J, I]
 
         # Permute to desired shape and make contiguous
-        x = x.permute(
-            0, 3, 4, 2, 1
-        ).contiguous()  # [batch_size, seq_len, seq_len, features, 2]
+        x = x.permute(0, 3, 4, 2, 1).contiguous()  # [batch_size, seq_len, seq_len, features, 2]
 
         # Reshape to combine the last two dimensions
         x = x.view(
@@ -616,28 +604,31 @@ class PairwiseTokenClassification(SequenceClassification):
             logits (Tensor): The sequence-level model predictions
             collated_batch (dict[str, Union[list, Tensor]]): The collated batch of data containing labels
             stage (Optional[str], optional): The stage of training (train, val, test). Required if loss_only is False.
-            loss_only (bool, optional): Whether to only return the loss. Defaults to False.
+            loss_only (bool, optional): Whether to only return the loss.
 
         Returns:
             Tensor: The loss.
         """
         padded_labels = collated_batch["labels"]  # (1, seq_len-1, seq_len-1)
-        labels = padded_labels[
-            padded_labels != -100
-        ]  # vector: (seq_len-1) * (seq_len-1)
+        labels = padded_labels[padded_labels != -100]  # vector: (seq_len-1) * (seq_len-1)
         if collated_batch["special_tokens_mask"] is not None:
-            special_tokens_mask = torch.logical_not(torch.tensor(collated_batch["special_tokens_mask"]).to(logits.device))
+            special_tokens_mask = torch.logical_not(
+                torch.as_tensor(collated_batch["special_tokens_mask"]).to(logits.device)
+            )
             # (bs, seq_len) -> (bs, seq_len, seq_len) by batch wise outer product
             special_tokens_mask_expanded = torch.einsum(
                 "bp, bq -> bpq", special_tokens_mask, special_tokens_mask
             )
             logits = logits[special_tokens_mask_expanded]  # (labels.shape[0], n_classes)
 
-        loss = self.loss(logits, labels)
+        logits = logits[..., -1]  # Use the second column which represents P(class=1)
+        labels_float = (
+            labels.float()
+        )  # Convert labels to float for compatibility with BCEWithLogitsLoss
+        loss = self.loss(logits, labels_float)
         if loss_only:
             return {"loss": loss}
         metrics = self.get_metrics_by_stage(stage)
-        logits = logits[..., -1]  # P(x=1)
         indices = torch.argsort(-logits)
         L = special_tokens_mask.sum().item()
         for acc in metrics.values():
@@ -651,7 +642,7 @@ class Diffusion(TaskInterface):
 
     Args:
         backbone: A pretrained backbone from the modelgenerator library.
-        adapter: A TokenAdapter for the model. 
+        adapter: A TokenAdapter for the model.
         sample_seq: Whether to sample tokens during denoising, instead of always using the most likely token.
         num_denoise_steps: Granularity of the denoising process. Less steps makes fewer forward passes and denoises more aggressively.
         sampling_temperature: The temperature for sampling tokens, if sample_seq is True.
@@ -674,10 +665,11 @@ class Diffusion(TaskInterface):
         super().__init__(use_legacy_adapter=use_legacy_adapter, **kwargs)
         if self.__class__ is Diffusion:
             self.save_hyperparameters()
-        self.backbone = None
+        if self.use_legacy_adapter:
+            self.backbone = backbone(LegacyAdapterType.MASKED_LM, None)
+        else:
+            self.backbone = backbone(None, None)
         self.adapter = None
-        self.mask_id = None
-        self.backbone_fn = backbone
         self.adapter_fn = adapter
         self.sample_seq = sample_seq
         self.num_denoise_steps = num_denoise_steps
@@ -696,14 +688,12 @@ class Diffusion(TaskInterface):
             )
         self.metrics_to_pbar = {"accuracy"}
 
+    @once_only
     def configure_model(self) -> None:
-        if self.backbone is not None:
-            return
+        self.backbone.setup()
         if self.use_legacy_adapter:
-            self.backbone = self.backbone_fn(LegacyAdapterType.MASKED_LM, None)
             self.adapter = self.backbone.get_decoder()
         else:
-            self.backbone = self.backbone_fn(None, None)
             self.adapter = self.adapter_fn(
                 self.backbone.get_embedding_size(), self.backbone.get_vocab_size()
             )
@@ -722,15 +712,10 @@ class Diffusion(TaskInterface):
             dict[str, Union[list, Tensor]]: The collated batch with input_ids, input_seqs, input_masks, attention_mask, target_ids, target_masks, target_seqs, and posterior_weights
         """
         # Each sample in a batch is a list of noised sequences at various noise levels. Stack them for easy training.
-        input_seqs = [seq for seqs in batch["sequences"] for seq in seqs]
-        tokenized_result = self.backbone.tokenize(input_seqs)
-        input_ids = tokenized_result.pop("input_ids", None)
-        attention_mask = tokenized_result.pop("attention_mask", None)
-        special_tokens_mask = tokenized_result.pop("special_tokens_mask", None)
-        input_ids = torch.tensor(input_ids, dtype=torch.long).to(self.device)
+        batch["sequences"] = [seq for seqs in batch["sequences"] for seq in seqs]
+        processed_batch = self.backbone.process_batch(batch, device=self.device)
+        input_ids = processed_batch["input_ids"]
         input_mask = torch.where(input_ids == self.mask_id, 1, 0)
-        if attention_mask is not None:
-            attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(self.device)
         target_seqs = None
         target_ids = None
         target_mask = None
@@ -749,16 +734,12 @@ class Diffusion(TaskInterface):
                 posterior_weights = posterior_weights / posterior_weights.sum()
                 posterior_weights = posterior_weights.view(-1)
         return {
-            "input_ids": input_ids,
             "input_masks": input_mask,
-            "input_seqs": input_seqs,
-            "attention_mask": attention_mask,
-            "special_tokens_mask": special_tokens_mask,
             "target_ids": target_ids,
             "target_masks": target_mask,
             "target_seqs": target_seqs,
             "posterior_weights": posterior_weights,
-            **tokenized_result,
+            **processed_batch,
         }
 
     def forward(self, collated_batch: dict[str, Union[list, Tensor]]) -> Tensor:
@@ -770,8 +751,13 @@ class Diffusion(TaskInterface):
         Returns:
             Tensor: The decoder logits
         """
-        encoder_hidden = self.backbone(**collated_batch)
-        decoder_logits = self.adapter(encoder_hidden)
+        inputs = {
+            k: v
+            for k, v in collated_batch.items()
+            if k not in ["target_ids", "target_masks", "posterior_weights"]
+        }
+        outputs = self.backbone(**inputs)
+        decoder_logits = self.adapter(outputs.last_hidden_state)
         return decoder_logits
 
     def evaluate(
@@ -787,7 +773,7 @@ class Diffusion(TaskInterface):
             logits (Tensor): The token-wise predicted logits
             collated_batch (dict[str, Union[list, Tensor]]): The collated batch of data containing target_ids, posterior_weights, input_masks, and target_masks
             stage (Optional[str], optional): The stage of training (train, val, test). Required if loss_only is False.
-            loss_only (bool, optional): Whether to only return the loss. Defaults to False.
+            loss_only (bool, optional): Whether to only return the loss.
 
         Returns:
             Tensor: The loss on tokens with input mask and not target mask
@@ -838,17 +824,12 @@ class Diffusion(TaskInterface):
         # Keep track of original target masks since we use target masks to specify loss evaluation
         target_masks_init = collated_batch["target_masks"].clone()
         # Do denoise on all input masks. Only evaluate loss where input is mask and target is not
-        unmask_counts = (
-            collated_batch["input_masks"].sum(-1) // self.num_denoise_steps + 1
-        )
+        unmask_counts = collated_batch["input_masks"].sum(-1) // self.num_denoise_steps + 1
         # Run reverse process of diffusion
         denoise_step = 0
         denoise_loss = 0
         while True:
-            if (
-                collated_batch["input_masks"].sum() == 0
-                or denoise_step == self.num_denoise_steps
-            ):
+            if collated_batch["input_masks"].sum() == 0 or denoise_step == self.num_denoise_steps:
                 # Check if we're finished denoising
                 break
             # Predict tokens
@@ -869,14 +850,10 @@ class Diffusion(TaskInterface):
             probs = probs * collated_batch["input_masks"].unsqueeze(-1)
             input_mask_new = collated_batch["input_masks"].clone()
             for i in range(len(collated_batch["input_ids"])):
-                unmask_count = min(
-                    unmask_counts[i], collated_batch["input_masks"][i].sum().item()
-                )
+                unmask_count = min(unmask_counts[i], collated_batch["input_masks"][i].sum().item())
                 top_probs = probs[i].max(-1).values
                 unmask_indices = top_probs.argsort(descending=True)[:unmask_count]
-                collated_batch["input_ids"][i, unmask_indices] = pred_tokens[
-                    i, unmask_indices
-                ]
+                collated_batch["input_ids"][i, unmask_indices] = pred_tokens[i, unmask_indices]
                 input_mask_new[i, unmask_indices] = 0
                 # Specify target masks for loss evaluation
                 collated_batch["target_masks"][i] = torch.ones_like(
@@ -884,9 +861,7 @@ class Diffusion(TaskInterface):
                 )
                 collated_batch["target_masks"][i, unmask_indices] = 0
             # Still never evaluate loss where we have no labeled target, even though we denoise
-            collated_batch["target_masks"] = (
-                collated_batch["target_masks"] * target_masks_init
-            )
+            collated_batch["target_masks"] = collated_batch["target_masks"] * target_masks_init
             # Get metrics on unmasked tokens and update the mask to reflect unmasking
             loss = self.evaluate(logits, collated_batch, loss_only=True)
             collated_batch["input_masks"] = input_mask_new
@@ -894,13 +869,16 @@ class Diffusion(TaskInterface):
             denoise_loss += loss["loss"]
             denoise_step += 1
             if self.verbose:
-                clean = (
-                    lambda s: s.replace("[MASK]", ".")
-                    .replace("[CLS]", "")
-                    .replace("[SEP]", "")
-                    .replace("[PAD]", "")
-                    .replace(" ", "")
-                )
+
+                def clean(s):
+                    return (
+                        s.replace("[MASK]", ".")
+                        .replace("[CLS]", "")
+                        .replace("[SEP]", "")
+                        .replace("[PAD]", "")
+                        .replace(" ", "")
+                    )
+
                 pred_strings = self.backbone.decode_tokens(collated_batch["input_ids"])
                 pred_strings = [clean(s) for s in pred_strings]
                 print(pred_strings)
@@ -930,13 +908,27 @@ class Diffusion(TaskInterface):
         input_mask_init = collated_batch["input_masks"].clone()
         collated_batch, denoise_loss = self._iterative_denoise(collated_batch)
         eval_mask = input_mask_init * (1 - collated_batch["target_masks"])
-        acc = (
-            (collated_batch["input_ids"] == collated_batch["target_ids"]) * eval_mask
-        ).sum(-1) / eval_mask.sum(-1)
+        acc = ((collated_batch["input_ids"] == collated_batch["target_ids"]) * eval_mask).sum(
+            -1
+        ) / eval_mask.sum(-1)
         avg_acc = acc.mean().item()
         metrics = self.get_metrics_by_stage(split)
         metrics["accuracy"](avg_acc)
         return {"loss": denoise_loss}
+
+    def required_data_columns(self, stage: str) -> list[str]:
+        """The required data columns for the task.
+
+        Returns:
+            list[str]: The required data columns
+        """
+        if stage == "predict":
+            # TODO: should not require target_sequences
+            return ["sequences", "target_sequences"]
+        return ["sequences", "target_sequences", "posterior_weights"]
+
+    def provided_data_columns(self, stage):
+        return ["sequences"]
 
     def validation_step(
         self, batch: dict[str, Union[list, Tensor]], batch_idx: Optional[int] = None
@@ -985,13 +977,16 @@ class Diffusion(TaskInterface):
         collated_batch = self.transform(batch, batch_idx)
         collated_batch, _ = self._iterative_denoise(collated_batch)
         pred_strings = self.backbone.decode_tokens(collated_batch["input_ids"])
-        clean = (
-            lambda s: s.replace("[MASK]", ".")
-            .replace("[CLS]", "")
-            .replace("[SEP]", "")
-            .replace("[PAD]", "")
-            .replace(" ", "")
-        )
+
+        def clean(s):
+            return (
+                s.replace("[MASK]", ".")
+                .replace("[CLS]", "")
+                .replace("[SEP]", "")
+                .replace("[PAD]", "")
+                .replace(" ", "")
+            )
+
         collated_batch.update(
             {
                 "predictions": [clean(s) for s in pred_strings],
@@ -1012,7 +1007,7 @@ class Diffusion(TaskInterface):
         """
         norms = grad_norm(self.adapter, norm_type=2)
         if "grad_2.0_norm_total" in norms:
-            self.log(f"grad_norm", norms["grad_2.0_norm_total"], prog_bar=True)
+            self.log("grad_norm", norms["grad_2.0_norm_total"], prog_bar=True)
 
 
 class ConditionalMLM(TaskInterface):
@@ -1039,9 +1034,11 @@ class ConditionalMLM(TaskInterface):
         super().__init__(use_legacy_adapter=use_legacy_adapter, **kwargs)
         if self.__class__ is ConditionalMLM:
             self.save_hyperparameters()
-        self.backbone = None
+        if self.use_legacy_adapter:
+            self.backbone = backbone(LegacyAdapterType.MASKED_LM, None)
+        else:
+            self.backbone = backbone(None, None)
         self.adapter = None
-        self.backbone_fn = backbone
         self.adapter_fn = adapter
         self.condition_dim = condition_dim
         self.loss = nn.CrossEntropyLoss()
@@ -1053,13 +1050,9 @@ class ConditionalMLM(TaskInterface):
             )
         self.metrics_to_pbar = {"accuracy"}
 
+    @once_only
     def configure_model(self) -> None:
-        if self.backbone is not None:
-            return
-        if self.use_legacy_adapter:
-            self.backbone = self.backbone_fn(LegacyAdapterType.MASKED_LM, None)
-        else:
-            self.backbone = self.backbone_fn(None, None)
+        self.backbone.setup()
         self.adapter = self.adapter_fn(
             self.backbone.get_embedding_size(),
             self.condition_dim,
@@ -1080,27 +1073,21 @@ class ConditionalMLM(TaskInterface):
         Returns:
             dict[str, Union[list, Tensor]]: The collated batch with input_ids, attention_mask, target_ids, and labels
         """
-        tokenized_result = self.backbone.tokenize(batch["sequences"])
-        input_ids = tokenized_result.pop("input_ids", None)
-        attention_mask = tokenized_result.pop("attention_mask", None)
-        special_tokens_mask = tokenized_result.pop("special_tokens_mask", None)
-        input_ids = torch.tensor(input_ids, dtype=torch.long).to(self.device)
-        if attention_mask is not None:
-            attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(self.device)
+        processed_batch = self.backbone.process_batch(batch, device=self.device)
         target_ids = None
         if batch.get("target_sequences", None) is not None:
             target_ids = self.backbone.tokenize(batch["target_sequences"])["input_ids"]
-            target_ids = torch.tensor(target_ids, dtype=torch.long).to(self.device)
+            if torch.is_tensor(target_ids):
+                target_ids = target_ids.to(detype=torch.long, device=self.device)
+            else:
+                target_ids = torch.tensor(target_ids, dtype=torch.long, device=self.device)
         labels = batch["labels"].type(self.dtype)
         if len(batch["labels"].shape) == 1:
             labels = labels.unsqueeze(-1)
         return {
-            "input_ids": input_ids,
-            "attention_mask": attention_mask,
-            "special_tokens_mask": special_tokens_mask,
             "target_ids": target_ids,
             "labels": labels,
-            **tokenized_result,
+            **processed_batch,
         }
 
     def forward(self, collated_batch: dict[str, Union[list, Tensor]]) -> Tensor:
@@ -1112,8 +1099,9 @@ class ConditionalMLM(TaskInterface):
         Returns:
             Tensor: The decoder logits
         """
-        encoder_hidden = self.backbone(**collated_batch)
-        logits = self.adapter(encoder_hidden, collated_batch["labels"])
+        inputs = {k: v for k, v in collated_batch.items() if k not in ["labels", "target_ids"]}
+        outputs = self.backbone(**inputs)
+        logits = self.adapter(outputs.last_hidden_state, collated_batch["labels"])
         return logits
 
     def evaluate(
@@ -1129,7 +1117,7 @@ class ConditionalMLM(TaskInterface):
             logits (Tensor): The token-wise predicted logits
             collated_batch (dict[str, Union[list, Tensor]]): The collated batch of data containing target_ids
             stage (Optional[str], optional): The stage of training (train, val, test). Required if loss_only is False.
-            loss_only (bool, optional): Whether to only return the loss. Defaults to False.
+            loss_only (bool, optional): Whether to only return the loss.
 
         Returns:
             Tensor: The loss.
@@ -1140,10 +1128,20 @@ class ConditionalMLM(TaskInterface):
             return {"loss": loss}
         preds = logits.argmax(-1)
         metrics = self.get_metrics_by_stage(stage)
-        self.call_or_update_metric(
-            stage, metrics["accuracy"], (preds == target_ids).float().mean()
-        )
+        self.call_or_update_metric(stage, metrics["accuracy"], (preds == target_ids).float().mean())
         return {"loss": loss}
+
+    def required_data_columns(self, stage: str) -> list[str]:
+        """The required data columns for the task.
+        Args:
+            stage (str): The stage of training (train, val, test)
+
+        Returns:
+            list[str]: The required data columns
+        """
+        if stage == "predict":
+            return ["labels"]
+        return ["labels", "target_sequences"]
 
 
 class ConditionalDiffusion(Diffusion):
@@ -1174,13 +1172,9 @@ class ConditionalDiffusion(Diffusion):
         self.adapter_fn = adapter
         self.condition_dim = condition_dim
 
+    @once_only
     def configure_model(self) -> None:
-        if self.backbone is not None:
-            return
-        if self.use_legacy_adapter:
-            self.backbone = self.backbone_fn(LegacyAdapterType.MASKED_LM, None)
-        else:
-            self.backbone = self.backbone_fn(None, None)
+        self.backbone.setup()
         self.adapter = self.adapter_fn(
             self.backbone.get_embedding_size(),
             self.condition_dim,
@@ -1217,9 +1211,17 @@ class ConditionalDiffusion(Diffusion):
         Returns:
             Tensor: The decoder logits
         """
-        encoder_hidden = self.backbone(**collated_batch)
+        encoder_hidden = self.backbone(**collated_batch).last_hidden_state
         logits = self.adapter(encoder_hidden, collated_batch["labels"])
         return logits
+
+    def required_data_columns(self, stage: str) -> list[str]:
+        """The required data columns for the task.
+
+        Returns:
+            list[str]: The required data columns
+        """
+        return super().required_data_columns(stage) + ["labels"]
 
 
 class SequenceRegression(TaskInterface):
@@ -1246,10 +1248,20 @@ class SequenceRegression(TaskInterface):
         super().__init__(**kwargs)
         if self.__class__ is SequenceRegression:
             self.save_hyperparameters()
-        self.backbone_fn = backbone
         self.adapter_fn = adapter
         self.num_outputs = num_outputs
-        self.backbone = None
+        if self.use_legacy_adapter:
+            self.backbone = backbone(
+                LegacyAdapterType.SEQ_CLS,
+                DefaultConfig(
+                    config_overwrites={
+                        "problem_type": "regression",
+                        "num_labels": self.num_outputs,
+                    }
+                ),
+            )
+        else:
+            self.backbone = backbone(None, None)
         self.adapter = None
         self.loss = loss_func()
         self.log_grad_norm_step = log_grad_norm_step
@@ -1266,43 +1278,38 @@ class SequenceRegression(TaskInterface):
                         num_outputs=num_outputs, multioutput="uniform_average"
                     ),
                     "r2": tm.R2Score(multioutput="uniform_average"),
-                    "mse": MeanSquaredError(
-                        num_outputs=num_outputs, multioutput="uniform_average"
-                    ),
+                    "mse": MeanSquaredError(num_outputs=num_outputs, multioutput="uniform_average"),
                 }
             )
             if stage == "test" and self.num_outputs > 1:
                 # calculate scores for each task
                 label_wise_spearman = nn.ModuleDict(
-                        {
-                            "spearman_" + str(i): SpearmanCorrCoef(num_outputs=1)
-                            for i in range(self.num_outputs)
-                        }
-                    )
+                    {
+                        "spearman_" + str(i): SpearmanCorrCoef(num_outputs=1)
+                        for i in range(self.num_outputs)
+                    }
+                )
                 label_wise_pearson = nn.ModuleDict(
-                        {
-                            "pearson_" + str(i): PearsonCorrCoef(num_outputs=1)
-                            for i in range(self.num_outputs)
-                        }
-                    )
+                    {
+                        "pearson_" + str(i): PearsonCorrCoef(num_outputs=1)
+                        for i in range(self.num_outputs)
+                    }
+                )
                 label_wise_r2 = nn.ModuleDict(
-                        {
-                            "r2_" + str(i): tm.R2Score()
-                            for i in range(self.num_outputs)
-                        }
-                    )
+                    {"r2_" + str(i): tm.R2Score() for i in range(self.num_outputs)}
+                )
                 label_wise_mse = nn.ModuleDict(
-                        {
-                            "mse_" + str(i): MeanSquaredError(num_outputs=1)
-                            for i in range(self.num_outputs)
-                        }
-                    )
+                    {
+                        "mse_" + str(i): MeanSquaredError(num_outputs=1)
+                        for i in range(self.num_outputs)
+                    }
+                )
                 label_wise_mae = nn.ModuleDict(
-                        {
-                            "mae_" + str(i): MeanAbsoluteError(num_outputs=1)
-                            for i in range(self.num_outputs)
-                        }
-                    )
+                    {
+                        "mae_" + str(i): MeanAbsoluteError(num_outputs=1)
+                        for i in range(self.num_outputs)
+                    }
+                )
                 self.metrics[f"{stage}_metrics"].update(label_wise_spearman)
                 self.metrics[f"{stage}_metrics"].update(label_wise_pearson)
                 self.metrics[f"{stage}_metrics"].update(label_wise_r2)
@@ -1310,25 +1317,13 @@ class SequenceRegression(TaskInterface):
                 self.metrics[f"{stage}_metrics"].update(label_wise_mae)
         self.metrics_to_pbar = set(self.metrics["train_metrics"].keys())
 
+    @once_only
     def configure_model(self) -> None:
-        if self.backbone is not None:
-            return
+        self.backbone.setup()
         if self.use_legacy_adapter:
-            self.backbone = self.backbone_fn(
-                LegacyAdapterType.SEQ_CLS,
-                DefaultConfig(
-                    config_overwrites={
-                        "problem_type": "regression",
-                        "num_labels": self.num_outputs,
-                    }
-                ),
-            )
             self.adapter = self.backbone.get_decoder()
         else:
-            self.backbone = self.backbone_fn(None, None)
-            self.adapter = self.adapter_fn(
-                self.backbone.get_embedding_size(), self.num_outputs
-            )
+            self.adapter = self.adapter_fn(self.backbone.get_embedding_size(), self.num_outputs)
 
     def transform(
         self, batch: dict[str, Union[list, Tensor]], batch_idx: Optional[int] = None
@@ -1342,26 +1337,13 @@ class SequenceRegression(TaskInterface):
         Returns:
             dict[str, Union[list, Tensor]]: The collated batch containing sequences, input_ids, attention_mask, and labels
         """
-
-        sequences = batch.pop("sequences")
-        tokenized_result = self.backbone.tokenize(sequences, **batch)
-        input_ids = tokenized_result.pop("input_ids", None)
-        attention_mask = tokenized_result.pop("attention_mask", None)
-        special_tokens_mask = tokenized_result.pop("special_tokens_mask", None)
-
-        input_ids = torch.tensor(input_ids, dtype=torch.long).to(self.device)
-        if attention_mask is not None:
-            attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(self.device)
+        processed_batch = self.backbone.process_batch(batch, device=self.device)
         labels = None
         if batch.get("labels") is not None:
             labels = batch["labels"].to(self.device, dtype=self.dtype)
         return {
-            "sequences": sequences,
-            "input_ids": input_ids,
-            "attention_mask": attention_mask,
-            "special_tokens_mask": special_tokens_mask,
             "labels": labels,
-            **tokenized_result,
+            **processed_batch,
         }
 
     def forward(self, collated_batch: dict[str, Union[list, Tensor]]) -> Tensor:
@@ -1374,8 +1356,9 @@ class SequenceRegression(TaskInterface):
             Tensor: The regression predictions
         """
 
-        hidden_states = self.backbone(**collated_batch)  # (bs, seq_len, dim)
-        preds = self.adapter(hidden_states, collated_batch["attention_mask"])
+        inputs = {k: v for k, v in collated_batch.items() if k != "labels"}
+        outputs = self.backbone(**inputs)  # (bs, seq_len, dim)
+        preds = self.adapter(outputs.last_hidden_state, outputs.attention_mask)
         return preds
 
     def evaluate(
@@ -1390,7 +1373,7 @@ class SequenceRegression(TaskInterface):
         Args:
             logits (Tensor): The model predictions
             collated_batch (dict[str, Union[list, Tensor]]): The collated batch of data containing labels
-            loss_only (bool, optional): Whether to only return the loss. Defaults to False.
+            loss_only (bool, optional): Whether to only return the loss.
 
         Returns:
             dict[str, Union[Tensor, float]]: A dictionary of metrics containing loss and mse
@@ -1415,6 +1398,16 @@ class SequenceRegression(TaskInterface):
 
         return {"loss": loss}
 
+    def required_data_columns(self, stage: str) -> list[str]:
+        """The required data columns for the task.
+
+        Returns:
+            list[str]: The required data columns
+        """
+        if stage == "predict":
+            return []
+        return ["labels"]
+
     def log_grad_norm(self, optimizer):
         """
         Log the total total_norm, adaptor_param_norm and adaptor_grad_norm.
@@ -1433,15 +1426,11 @@ class SequenceRegression(TaskInterface):
                     torch.stack([vector_norm(p.grad, ord=2) for p in parameters]), ord=2
                 )
                 adaptor_param_norm = vector_norm(
-                    torch.stack(
-                        [vector_norm(p, ord=2) for p in self.adapter.parameters()]
-                    ),
+                    torch.stack([vector_norm(p, ord=2) for p in self.adapter.parameters()]),
                     ord=2,
                 )
                 adaptor_grad_norm = vector_norm(
-                    torch.stack(
-                        [vector_norm(p.grad, ord=2) for p in self.adapter.parameters()]
-                    ),
+                    torch.stack([vector_norm(p.grad, ord=2) for p in self.adapter.parameters()]),
                     ord=2,
                 )
 
@@ -1453,10 +1442,7 @@ class SequenceRegression(TaskInterface):
         """
         Log gradient norm of adaptor's parameters
         """
-        if (
-            self.log_grad_norm_step > 0
-            and self.trainer.global_step % self.log_grad_norm_step == 0
-        ):
+        if self.log_grad_norm_step > 0 and self.trainer.global_step % self.log_grad_norm_step == 0:
             self.log_grad_norm(optimizer)
 
 
@@ -1477,13 +1463,18 @@ class SequenceRegressionWithScaling(SequenceRegression):
         log_grad_norm_step: int = 0,
         **kwargs,
     ):
-        super().__init__(backbone, adapter=adapter, num_outputs=num_outputs, loss_func=loss_func, log_grad_norm_step=log_grad_norm_step, **kwargs)
+        super().__init__(
+            backbone,
+            adapter=adapter,
+            num_outputs=num_outputs,
+            loss_func=loss_func,
+            log_grad_norm_step=log_grad_norm_step,
+            **kwargs,
+        )
         if self.__class__ is SequenceRegressionWithScaling:
             self.save_hyperparameters()
         self.adapter_fn = adapter
         self.num_outputs = num_outputs
-        self.backbone = None
-        self.adapter = None
         self.loss = nn.MSELoss()
         self.scaler = (
             self.StandardScaler()
@@ -1511,13 +1502,13 @@ class SequenceRegressionWithScaling(SequenceRegression):
         """
         ## Adapted from https://github.com/lbcb-sci/RiNALMo/blob/main/train_ribosome_loading.py
 
-        hidden_states = self.backbone(**collated_batch)  # (bs, seq_len, dim)
+        inputs = {k: v for k, v in collated_batch.items() if k != "labels"}
+        outputs = self.backbone(**inputs)  # (bs, seq_len, dim)
+        hidden_states = outputs.last_hidden_state
 
         # Nullify padding token representations
-        if collated_batch["attention_mask"] is not None:
-            padding_mask = ~collated_batch[
-                "attention_mask"
-            ]  # padding_mask = tokens.eq(self.pad_idx)
+        if outputs.attention_mask is not None:
+            padding_mask = ~outputs.attention_mask
         else:
             padding_mask = torch.zeros(
                 hidden_states.shape[:-1], dtype=torch.bool, device=hidden_states.device
@@ -1541,7 +1532,7 @@ class SequenceRegressionWithScaling(SequenceRegression):
         Args:
             logits (Tensor): The model predictions
             collated_batch (dict[str, Union[list, Tensor]]): The collated batch of data containing labels
-            loss_only (bool, optional): Whether to only return the loss. Defaults to False.
+            loss_only (bool, optional): Whether to only return the loss.
 
         Returns:
             dict[str, Union[Tensor, float]]: A dictionary of metrics containing loss and mse
@@ -1550,9 +1541,7 @@ class SequenceRegressionWithScaling(SequenceRegression):
         scaled_labels = self.scaler.transform(labels)  # "Scale" labels
         loss = self.loss(preds, scaled_labels)
 
-        preds = self.scaler.inverse_transform(preds).clamp(
-            min=0.0
-        )  # "Unscale" predictions
+        preds = self.scaler.inverse_transform(preds).clamp(min=0.0)  # "Unscale" predictions
 
         if loss_only:
             return {"loss": loss}
@@ -1563,9 +1552,7 @@ class SequenceRegressionWithScaling(SequenceRegression):
 
     def training_step(self, collated_batch, batch_idx):
         if batch_idx == 0:
-            trainable_param = sum(
-                p.numel() for p in self.parameters() if p.requires_grad
-            )
+            trainable_param = sum(p.numel() for p in self.parameters() if p.requires_grad)
             self.log("TrPara", trainable_param, prog_bar=True)
         if self.current_epoch == 0:
             return self.scaler.partial_fit(collated_batch["labels"])
@@ -1606,12 +1593,12 @@ class Embed(TaskInterface):
     """Task for getting embeddings from a pretrained backbone. This task is used only for inference.
 
     Note:
-        Must be used with [PredictionWriter](../callbacks/#modelgenerator.callbacks.PredictionWriter). 
+        Must be used with [PredictionWriter](../callbacks/#modelgenerator.callbacks.PredictionWriter).
         Embeddings are stored under "predictions".
 
     Args:
         backbone: A pretrained backbone from the modelgenerator library.
-        **kwargs: Additional keyword arguments for the parent class. 
+        **kwargs: Additional keyword arguments for the parent class.
             `use_legacy_adapter=False` is always overridden.
     """
 
@@ -1619,14 +1606,12 @@ class Embed(TaskInterface):
         super().__init__(use_legacy_adapter=False, **kwargs)
         if self.__class__ is Embed:
             self.save_hyperparameters()
-        self.backbone = None
+        self.backbone = backbone(None, None)
         self.adapter = None
-        self.backbone_fn = backbone
 
+    @once_only
     def configure_model(self) -> None:
-        if self.backbone is not None:
-            return
-        self.backbone = self.backbone_fn(None, None)
+        self.backbone.setup()
 
     def transform(
         self, batch: dict[str, Union[list, Tensor]], batch_idx: Optional[int] = None
@@ -1640,21 +1625,8 @@ class Embed(TaskInterface):
         Returns:
             dict[str, Union[list, Tensor]]: The collated batch with sequences, input_ids, and attention_mask
         """
-        sequences = batch.pop("sequences")
-        tokenized_result = self.backbone.tokenize(sequences, **batch)
-        input_ids = tokenized_result.pop("input_ids", None)
-        attention_mask = tokenized_result.pop("attention_mask", None)
-        special_tokens_mask = tokenized_result.pop("special_tokens_mask", None)
-        input_ids = torch.tensor(input_ids, dtype=torch.long).to(self.device)
-        if attention_mask is not None:
-            attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(self.device)
-        return {
-            "sequences": sequences,
-            "input_ids": input_ids,
-            "attention_mask": attention_mask,
-            "special_tokens_mask": special_tokens_mask,
-            **tokenized_result,
-        }
+        processed_batch = self.backbone.process_batch(batch, device=self.device)
+        return processed_batch
 
     def forward(self, collated_batch: dict[str, Union[list, Tensor]]) -> Tensor:
         """Runs a forward pass of the model.
@@ -1668,6 +1640,14 @@ class Embed(TaskInterface):
         encoder_hidden = self.backbone(**collated_batch)  # (bs, seq_len, dim)
         return encoder_hidden
 
+    def required_data_columns(self, stage: str) -> list[str]:
+        """The required data columns for the task.
+
+        Returns:
+            list[str]: The required data columns
+        """
+        return []
+
 
 class ZeroshotPredictionDiff(TaskInterface):
     """Task for zero-shot prediction with a languange model that produces token logits.
@@ -1676,7 +1656,7 @@ class ZeroshotPredictionDiff(TaskInterface):
 
     Args:
         backbone: A pretrained backbone from the modelgenerator library.
-        **kwargs: Additional keyword arguments for the parent class. 
+        **kwargs: Additional keyword arguments for the parent class.
             `use_legacy_adapter=True` is always overridden.
     """
 
@@ -1688,18 +1668,14 @@ class ZeroshotPredictionDiff(TaskInterface):
         if self.__class__ is ZeroshotPredictionDiff:
             self.save_hyperparameters()
         super().__init__(use_legacy_adapter=True, **kwargs)
-        self.backbone = None
+        self.backbone = backbone(LegacyAdapterType.MASKED_LM, None)
         self.adapter = None
-        self.backbone_fn = backbone
-        self.metrics[f"test_metrics"] = nn.ModuleDict(
-            {"AUROC": AUROC(), "AUPRC": AUPRC()}
-        )
+        self.metrics["test_metrics"] = nn.ModuleDict({"AUROC": AUROC(), "AUPRC": AUPRC()})
         self.metrics_to_pbar = {"AUROC", "AUPRC"}
 
+    @once_only
     def configure_model(self) -> None:
-        if self.backbone is not None:
-            return
-        self.backbone = self.backbone_fn(LegacyAdapterType.MASKED_LM, None)
+        self.backbone.setup()
         self.adapter = self.backbone.get_decoder()
 
     def transform(
@@ -1714,35 +1690,25 @@ class ZeroshotPredictionDiff(TaskInterface):
         Returns:
             dict[str, Union[list, Tensor]]: The collated batch with input_ids, attention_mask, and target_ids
         """
-        tokenized_result = self.backbone.tokenize(batch["sequences"])
-        input_ids = tokenized_result.pop("input_ids", None)
-        tokenized_result.pop("attention_mask", None)
-        special_tokens_mask = tokenized_result.pop("special_tokens_mask", None)
+        processed_batch = self.backbone.process_batch(batch, device=self.device)
         labels = None
         ref_ids = None
         mutation_ids = None
         if batch.get("labels") is not None:
             labels = batch["labels"]
         if batch.get("refs") is not None:
-            ref_ids = self.backbone.tokenize(
-                batch["refs"], add_special_tokens=False
-            )["input_ids"]
+            ref_ids = self.backbone.tokenize(batch["refs"], add_special_tokens=False)["input_ids"]
             ref_ids = torch.tensor(ref_ids, dtype=torch.long, device=self.device)
         if batch.get("mutations") is not None:
-            mutation_ids = self.backbone.tokenize(
-                batch["mutations"], add_special_tokens=False
-            )["input_ids"]
-            mutation_ids = torch.tensor(
-                mutation_ids, dtype=torch.long, device=self.device
-            )
-        input_ids = torch.tensor(input_ids, dtype=torch.long).to(self.device)
+            mutation_ids = self.backbone.tokenize(batch["mutations"], add_special_tokens=False)[
+                "input_ids"
+            ]
+            mutation_ids = torch.tensor(mutation_ids, dtype=torch.long, device=self.device)
         return {
-            "input_ids": input_ids,
             "ref_ids": ref_ids,
             "mutation_ids": mutation_ids,
             "labels": labels,
-            "special_tokens_mask": special_tokens_mask,
-            **tokenized_result,
+            **processed_batch,
         }
 
     def forward(self, collated_batch: dict[str, Union[list, Tensor]]) -> Tensor:
@@ -1754,15 +1720,18 @@ class ZeroshotPredictionDiff(TaskInterface):
         Returns:
             Tensor: The decoder logits
         """
-        encoder_hidden = self.backbone(**collated_batch, attention_mask=None)
-        decoder_logits = self.adapter(encoder_hidden)
+        inputs = {
+            k: v
+            for k, v in collated_batch.items()
+            if k not in ["labels", "ref_ids", "mutation_ids"]
+        }
+        outputs = self.backbone(**inputs)
+        decoder_logits = self.adapter(outputs.last_hidden_state)
         b, l, d = decoder_logits.shape
-        if collated_batch["special_tokens_mask"] is not None:
+        if outputs.special_tokens_mask is not None:
             # remove special token before computing zeroshot score
-            special_tokens_mask = torch.tensor(collated_batch["special_tokens_mask"])
-            decoder_logits = decoder_logits[torch.logical_not(special_tokens_mask)].view(
-                b, -1, d
-            )
+            special_tokens_mask = torch.tensor(outputs.special_tokens_mask)
+            decoder_logits = decoder_logits[torch.logical_not(special_tokens_mask)].view(b, -1, d)
         else:
             decoder_logits = decoder_logits.view(b, -1, d)
         return decoder_logits
@@ -1780,7 +1749,7 @@ class ZeroshotPredictionDiff(TaskInterface):
             logits (Tensor): The token-wise predicted logits
             collated_batch (dict[str, Union[list, Tensor]]): The collated batch of data containing ref_ids, mutation_ids
             stage (Optional[str], optional): The stage of training (train, val, test). Required if loss_only is False.
-            loss_only (bool, optional): Whether to only return the loss. Defaults to False.
+            loss_only (bool, optional): Whether to only return the loss.
 
         """
         outputs = {}
@@ -1796,13 +1765,21 @@ class ZeroshotPredictionDiff(TaskInterface):
         log_ratios = torch.log(mutate_probs / ref_probs)
         metrics = self.get_metrics_by_stage(stage)
         for acc in metrics.values():
-            self.call_or_update_metric(
-                stage, acc, log_ratios.view(-1), collated_batch["labels"]
-            )
+            self.call_or_update_metric(stage, acc, log_ratios.view(-1), collated_batch["labels"])
         outputs["score"] = log_ratios.view(-1).cpu().tolist()
         outputs["label"] = collated_batch["labels"].cpu().tolist()
         outputs["loss"] = -1
         return outputs
+
+    def required_data_columns(self, stage: str) -> list[str]:
+        """The required data columns for the task.
+
+        Returns:
+            list[str]: The required data columns
+        """
+        if stage == "predict":
+            return []
+        return ["labels", "refs", "mutations"]
 
 
 class ZeroshotPredictionDistance(TaskInterface):
@@ -1812,10 +1789,10 @@ class ZeroshotPredictionDistance(TaskInterface):
 
     Args:
         backbone: A pretrained backbone from the modelgenerator library.
-        all_hidden_states: Whether to run the test on all available hidden layers. Defaults to False, only using the last layer.
+        all_hidden_states: Whether to run the test on all available hidden layers.
         shared_ref: Whether to use a shared reference sequence to accelerate zero-shot computation. Uses a separate reference sequence for each mutated sequence by default.
         **kwargs: Additional keyword arguments for the parent class.
-            `use_legacy_adapter=True` is always overridden.
+            `use_legacy_adapter=False` is always overridden.
     """
 
     def __init__(
@@ -1827,39 +1804,37 @@ class ZeroshotPredictionDistance(TaskInterface):
     ):
         if self.__class__ is ZeroshotPredictionDistance:
             self.save_hyperparameters()
-        super().__init__(use_legacy_adapter=True, **kwargs)
-        self.backbone = None
+        super().__init__(use_legacy_adapter=False, **kwargs)
+        self.backbone = backbone(None, None)
         self.adapter = None
-        self.backbone_fn = backbone
         self.ref_hidden_mean = None
         self.all_hidden_states = all_hidden_states
         self.shared_ref = shared_ref
 
+    @once_only
     def configure_model(self) -> None:
-        if self.backbone is not None:
-            return
-        self.backbone = self.backbone_fn(LegacyAdapterType.MASKED_LM, None)
+        self.backbone.setup()
         self.adapter = self.backbone.get_decoder()  # CE: Why does this require an adapter
         self.n_layers = self.backbone.get_num_layer() if self.all_hidden_states else 1
         metrics_dict = {}
         for i in range(self.n_layers):
             metrics_dict.update(
                 {
-                    f"L1_AUROC_layer_{i+1}": AUROC(),
-                    f"L1_AUPRC_layer_{i+1}": AUPRC(),
-                    f"L2_AUROC_layer_{i+1}": AUROC(),
-                    f"L2_AUPRC_layer_{i+1}": AUPRC(),
+                    f"L1_AUROC_layer_{i + 1}": AUROC(),
+                    f"L1_AUPRC_layer_{i + 1}": AUPRC(),
+                    f"L2_AUROC_layer_{i + 1}": AUROC(),
+                    f"L2_AUPRC_layer_{i + 1}": AUPRC(),
                 }
             )
-        self.metrics[f"test_metrics"] = nn.ModuleDict(metrics_dict)
+        self.metrics["test_metrics"] = nn.ModuleDict(metrics_dict)
         self.metrics_to_pbar = set()
         for i in range(self.n_layers):
             self.metrics_to_pbar.update(
                 {
-                    f"L1_AUROC_layer_{i+1}",
-                    f"L1_AUPRC_layer_{i+1}",
-                    f"L2_AUROC_layer_{i+1}",
-                    f"L2_AUPRC_layer_{i+1}",
+                    f"L1_AUROC_layer_{i + 1}",
+                    f"L1_AUPRC_layer_{i + 1}",
+                    f"L2_AUROC_layer_{i + 1}",
+                    f"L2_AUPRC_layer_{i + 1}",
                 }
             )
 
@@ -1875,25 +1850,18 @@ class ZeroshotPredictionDistance(TaskInterface):
         Returns:
             dict[str, Union[list, Tensor]]: The collated batch with ref_ids,mutation_id and labels
         """
-        processed_batch = {}
+        collated_batch = {}
         for key in batch.keys():
-            if "sequences" in key:  # tokenize sequence
+            if "sequences" in key:  # e.g. "mutation_sequences", "ref_sequences"
                 # Note: previous version, add_special_token = False
-                tokenized_result = self.backbone.tokenize(batch[key])
-                input_ids = tokenized_result.pop("input_ids", None)
-                attention_mask = tokenized_result.pop("attention_mask", None)
-                special_tokens_mask = tokenized_result.pop("special_tokens_mask", None)
-                input_ids = torch.tensor(input_ids, dtype=torch.long).to(self.device)
-                if attention_mask is not None:
-                    attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(
-                        self.device
-                    )
-                processed_batch[key.replace("sequences", "input_ids")] = input_ids
-                processed_batch[key.replace("sequences", "attention_mask")] = attention_mask
-                processed_batch[key.replace("sequences", "special_tokens_mask")] = special_tokens_mask
+                processed_batch = self.backbone.process_batch(
+                    {"sequences": batch[key]}, device=self.device
+                )
+                for k, v in processed_batch.items():
+                    collated_batch[key.replace("sequences", k)] = v
             else:
-                processed_batch[key] = batch[key]
-        return processed_batch
+                collated_batch[key] = batch[key]
+        return collated_batch
 
     def forward(self, collated_batch: dict[str, Union[list, Tensor]]) -> Tensor:
         """Runs a forward pass of the model.
@@ -1904,45 +1872,47 @@ class ZeroshotPredictionDistance(TaskInterface):
         Returns:
             Tensor: The decoder logits
         """
-        output = self.backbone(
-            collated_batch["mutation_input_ids"],
-            attention_mask=None,
-            all_hidden_states=self.all_hidden_states,
-        )
+        inputs = {
+            k.replace("mutation_", ""): v
+            for k, v in collated_batch.items()
+            if k.startswith("mutation_")
+        }
+        output = self.backbone(**inputs, all_hidden_states=self.all_hidden_states)
 
         if not self.all_hidden_states:
-            mutation_encoder_hidden = output.unsqueeze(0)
+            mutation_encoder_hidden = output.last_hidden_state.unsqueeze(0)
         else:
-            mutation_encoder_hidden = torch.stack(output)
+            mutation_encoder_hidden = torch.stack(output.hidden_states)
         n, b, s, d = mutation_encoder_hidden.shape
 
         if self.ref_hidden_mean is not None:
             ref_encoder_hidden = self.ref_hidden_mean.unsqueeze(1).repeat(1, b, 1)
         else:
-            ref_output = self.backbone(
-                collated_batch["ref_input_ids"],
-                attention_mask=None,
-                all_hidden_states=self.all_hidden_states
-            )
+            ref_inputs = {
+                k.replace("ref_", ""): v for k, v in collated_batch.items() if k.startswith("ref_")
+            }
+            ref_output = self.backbone(**ref_inputs, all_hidden_states=self.all_hidden_states)
             if not self.all_hidden_states:
-                ref_encoder_hidden = ref_output.unsqueeze(0)
+                ref_encoder_hidden = ref_output.last_hidden_state.unsqueeze(0)
             else:
-                ref_encoder_hidden = torch.stack(ref_output)
-            if collated_batch.get('special_tokens_mask') is not None:
-                ref_encoder_hidden = ref_encoder_hidden[
-                    :, torch.logical_not(collated_batch["special_tokens_mask"])
-                ].view(n, b, -1, d).mean(dim=-2)
+                ref_encoder_hidden = torch.stack(ref_output.hidden_states)
+            if ref_output.special_tokens_mask is not None:
+                ref_encoder_hidden = (
+                    ref_encoder_hidden[:, torch.logical_not(ref_output.special_tokens_mask)]
+                    .view(n, b, -1, d)
+                    .mean(dim=-2)
+                )
             else:
                 ref_encoder_hidden = ref_encoder_hidden.mean(dim=-2)
             if self.shared_ref:
-                self.ref_hidden_mean = ref_encoder_hidden[:,0,:]
+                self.ref_hidden_mean = ref_encoder_hidden[:, 0, :]
 
         # remove special token before computing zeroshot score
-        if collated_batch.get('special_tokens_mask') is not None:
+        if output.special_tokens_mask is not None:
             masked_hidden_list = []
             for i in range(b):
-                mask = torch.logical_not(collated_batch["special_tokens_mask"][i])
-                masked_hidden = mutation_encoder_hidden[:,i,mask,:].mean(dim=1)
+                mask = torch.logical_not(output.special_tokens_mask[i])
+                masked_hidden = mutation_encoder_hidden[:, i, mask, :].mean(dim=1)
                 masked_hidden_list.append(masked_hidden)
             mutation_encoder_hidden = torch.stack(masked_hidden_list, dim=1)
         else:
@@ -1962,13 +1932,15 @@ class ZeroshotPredictionDistance(TaskInterface):
             logits (Tensor): list of ref_hidden_states and mutation_hidden_states
             collated_batch (dict[str, Union[list, Tensor]]): The collated batch of data containing ref_ids, mutation_ids
             stage (Optional[str], optional): The stage of training (train, val, test). Required if loss_only is False.
-            loss_only (bool, optional): Whether to only return the loss. Defaults to False.
+            loss_only (bool, optional): Whether to only return the loss.
 
         """
         ref_hidden_states = logits[0]
         mutation_hidden_states = logits[1]
         prediction_dict = {
-            key: [] for key in collated_batch.keys() if ("mask" not in key) and ('input_id' not in key)
+            key: []
+            for key in collated_batch.keys()
+            if ("mask" not in key) and ("input_id" not in key)
         }
         # add score related keys
         prediction_dict["norm_type"] = []
@@ -1983,9 +1955,7 @@ class ZeroshotPredictionDistance(TaskInterface):
             score = self._compute_norm_score(
                 norm_type, ref_hidden_states[index], mutation_hidden_states[index]
             )
-            self.call_or_update_metric(
-                stage, metrics[key], score, collated_batch["labels"]
-            )
+            self.call_or_update_metric(stage, metrics[key], score, collated_batch["labels"])
         # prepare prediction score to be saved to a tsv file
         for index in range(ref_hidden_states.shape[0]):
             for norm_type in ["L1", "L2", "cosine"]:
@@ -1996,16 +1966,27 @@ class ZeroshotPredictionDistance(TaskInterface):
                 prediction_dict["norm_type"].extend([norm_type] * batch_size)
                 prediction_dict["num_layer"].extend([index] * batch_size)
                 for key in collated_batch.keys():
-                    if ("mask" not in key) and ('input_id' not in key):
-                        try:
-                            prediction_dict[key].extend(
-                                collated_batch[key].cpu().tolist()
-                            )
-                        except:
+                    if ("mask" not in key) and ("input_id" not in key):
+                        if torch.is_tensor(collated_batch[key]):
+                            prediction_dict[key].extend(collated_batch[key].cpu().tolist())
+                        else:
                             prediction_dict[key].extend(collated_batch[key])
         prediction_dict.update({"loss": -1})
         outputs = prediction_dict
         return outputs
+
+    def required_data_columns(self, stage: str) -> list[str]:
+        """The required data columns for the task.
+
+        Returns:
+            list[str]: The required data columns
+        """
+        if stage == "predict":
+            return []
+        return ["labels", "ref_sequences", "mutation_sequences"]
+
+    def provided_data_columns(self, stage):
+        return ["sequences"]
 
     def _compute_norm_score(self, norm_type, ref_hidden_state, mutation_hidden_state):
         """Compute norm score between reference and mutation embeddings from one layer
@@ -2019,11 +2000,11 @@ class ZeroshotPredictionDistance(TaskInterface):
 
         """
         if norm_type == "L1":
-            score = torch.abs(ref_hidden_state- mutation_hidden_state).sum(dim=1)
-        elif norm_type == 'L2':
+            score = torch.abs(ref_hidden_state - mutation_hidden_state).sum(dim=1)
+        elif norm_type == "L2":
             score = torch.norm(ref_hidden_state - mutation_hidden_state, p=2, dim=1)
         else:
-            score = 1 - F.cosine_similarity(ref_hidden_state,mutation_hidden_state,dim=1)
+            score = 1 - F.cosine_similarity(ref_hidden_state, mutation_hidden_state, dim=1)
         return score
 
 
@@ -2031,14 +2012,17 @@ class MMSequenceRegression(TaskInterface):
     """Task for fine-tuning multiple models on single-/multi-task regression.
     Evaluates in terms of mean absolute error, mean squared error, R2 score, Pearson correlation, and Spearman correlation.
 
-    Note: 
+    Note:
         Supports any combination of DNA, RNA and protein backbones
+        Requires data column names to be prefixed by `backbone_order` list.
+        For example, if `backbone_order` is ["dna_seq", "rna_seq"], the sequence columns should be named "dna_seq_sequences" and "rna_seq_sequences".
+        Please use `rename_cols` in the data module to rename the columns if necessary.
 
     Args:
         backbone: A pretrained backbone from the modelgenerator library.
         backbone1: A second pretrained backbone from the modelgenerator library.
         backbone2: An optional third pretrained backbone from the modelgenerator library.
-        backbone_order: A list of data columns in order of the backbones. Defaults to ["dna_seq", "rna_seq", "protein_seq"].
+        backbone_order: A list of data columns in order of the backbones.
         adapter: A callable that returns a FusionAdapter.
         num_outputs: The number of outputs for the regression task.
         loss_func: A callable that returns a loss function.
@@ -2050,9 +2034,7 @@ class MMSequenceRegression(TaskInterface):
         backbone1: BackboneCallable,
         backbone2: Optional[BackboneCallable] = None,
         backbone_order: list = ["dna_seq", "rna_seq"],
-        adapter: Optional[
-            Callable[[int, int, int, int], FusionAdapter]
-        ] = MMFusionTokenAdapter,
+        adapter: Optional[Callable[[int, int, int, int], FusionAdapter]] = MMFusionTokenAdapter,
         num_outputs: int = 1,
         loss_func: Callable[..., torch.nn.Module] = torch.nn.MSELoss,
         **kwargs,
@@ -2062,12 +2044,9 @@ class MMSequenceRegression(TaskInterface):
             self.save_hyperparameters()
         self.num_backbones = 2 + int(backbone2 is not None)
         self.backbone_order = backbone_order
-        self.backbone_fn = backbone
-        self.backbone = None
-        self.backbone_fn1 = backbone1
-        self.backbone1 = None
-        self.backbone_fn2 = backbone2
-        self.backbone2 = None
+        self.backbone = backbone(None, None)
+        self.backbone1 = backbone1(None, None)
+        self.backbone2 = backbone2(None, None) if backbone2 is not None else None
         self.adapter_fn = adapter
         self.adapter = None
         self.num_outputs = num_outputs
@@ -2085,43 +2064,38 @@ class MMSequenceRegression(TaskInterface):
                         num_outputs=num_outputs, multioutput="uniform_average"
                     ),
                     "r2": tm.R2Score(multioutput="uniform_average"),
-                    "mse": MeanSquaredError(
-                        num_outputs=num_outputs, multioutput="uniform_average"
-                    ),
+                    "mse": MeanSquaredError(num_outputs=num_outputs, multioutput="uniform_average"),
                 }
             )
             if stage == "test" and self.num_outputs > 1:
                 # calculate scores for each task
                 label_wise_spearman = nn.ModuleDict(
-                        {
-                            "spearman_" + str(i): SpearmanCorrCoef(num_outputs=1)
-                            for i in range(self.num_outputs)
-                        }
-                    )
+                    {
+                        "spearman_" + str(i): SpearmanCorrCoef(num_outputs=1)
+                        for i in range(self.num_outputs)
+                    }
+                )
                 label_wise_pearson = nn.ModuleDict(
-                        {
-                            "pearson_" + str(i): PearsonCorrCoef(num_outputs=1)
-                            for i in range(self.num_outputs)
-                        }
-                    )
+                    {
+                        "pearson_" + str(i): PearsonCorrCoef(num_outputs=1)
+                        for i in range(self.num_outputs)
+                    }
+                )
                 label_wise_r2 = nn.ModuleDict(
-                        {
-                            "r2_" + str(i): tm.R2Score()
-                            for i in range(self.num_outputs)
-                        }
-                    )
+                    {"r2_" + str(i): tm.R2Score() for i in range(self.num_outputs)}
+                )
                 label_wise_mse = nn.ModuleDict(
-                        {
-                            "mse_" + str(i): MeanSquaredError(num_outputs=1)
-                            for i in range(self.num_outputs)
-                        }
-                    )
+                    {
+                        "mse_" + str(i): MeanSquaredError(num_outputs=1)
+                        for i in range(self.num_outputs)
+                    }
+                )
                 label_wise_mae = nn.ModuleDict(
-                        {
-                            "mae_" + str(i): MeanAbsoluteError(num_outputs=1)
-                            for i in range(self.num_outputs)
-                        }
-                    )
+                    {
+                        "mae_" + str(i): MeanAbsoluteError(num_outputs=1)
+                        for i in range(self.num_outputs)
+                    }
+                )
                 self.metrics[f"{stage}_metrics"].update(label_wise_spearman)
                 self.metrics[f"{stage}_metrics"].update(label_wise_pearson)
                 self.metrics[f"{stage}_metrics"].update(label_wise_r2)
@@ -2129,18 +2103,18 @@ class MMSequenceRegression(TaskInterface):
                 self.metrics[f"{stage}_metrics"].update(label_wise_mae)
         self.metrics_to_pbar = set(self.metrics["train_metrics"].keys())
 
+    @once_only
     def configure_model(self) -> None:
         # backbones
-        self.backbone = self.backbone_fn(None, None)
-        self.backbone1 = self.backbone_fn1(None, None)
-        if self.backbone_fn2 is not None:
-            self.backbone2 = self.backbone_fn2(None, None)
-
+        self.backbone.setup()
+        self.backbone1.setup()
         # fusion adapter
         if self.backbone2 is not None:
+            self.backbone2.setup()
             context_input_size_2 = self.backbone2.get_embedding_size()
         else:
             context_input_size_2 = None
+
         self.adapter = self.adapter_fn(
             self.num_outputs,
             self.backbone.get_embedding_size(),
@@ -2171,63 +2145,34 @@ class MMSequenceRegression(TaskInterface):
         """
         labels = None
         if batch.get("labels") is not None:
-            labels = batch["labels"].to(self.device, dtype=self.dtype)
-
-        omic_name = self.backbone_order[0]
-        tokenized_result = self.backbone.tokenize(batch["sequences"][f"{omic_name}"])
-        input_ids = tokenized_result.pop("input_ids", None)
-        attention_mask = tokenized_result.pop("attention_mask", None)
-        special_tokens_mask = tokenized_result.pop("special_tokens_mask", None)
-        input_ids = torch.tensor(input_ids, dtype=torch.long).to(self.device)
-        if attention_mask is not None:
-            attention_mask = torch.tensor(attention_mask, dtype=torch.long).to(self.device)
-
-        omic_name1 = self.backbone_order[1]
-        tokenized_result1 = self.backbone1.tokenize(batch["sequences"][f"{omic_name1}"])
-        input_ids1 = tokenized_result1.pop("input_ids", None)
-        attention_mask1 = tokenized_result1.pop("attention_mask", None)
-        special_tokens_mask1 = tokenized_result1.pop("special_tokens_mask", None)
-        input_ids1 = torch.tensor(input_ids1, dtype=torch.long).to(self.device)
-        if attention_mask1 is not None:
-            attention_mask1 = torch.tensor(attention_mask1, dtype=torch.long).to(
-                self.device
-            )
-
+            if torch.is_tensor(batch["labels"]):
+                labels = batch["labels"].to(self.device, dtype=self.dtype)
+            else:
+                labels = torch.tensor(batch["labels"], dtype=self.dtype, device=self.device)
+        collated_batch = {"labels": labels}
+        omic_name = self.backbone_order[0] + "_"
+        omic_name1 = self.backbone_order[1] + "_"
+        input_batches = {
+            omic_name: {
+                k.removeprefix(omic_name): v for k, v in batch.items() if k.startswith(omic_name)
+            },
+            omic_name1: {
+                k.removeprefix(omic_name1): v for k, v in batch.items() if k.startswith(omic_name1)
+            },
+        }
         if self.num_backbones == 3:
-            omic_name2 = self.backbone_order[2]
-            tokenized_result2 = self.backbone2.tokenize(batch["sequences"][f"{omic_name2}"])
-            input_ids2 = tokenized_result2.pop("input_ids", None)
-            attention_mask2 = tokenized_result2.pop("attention_mask", None)
-            special_tokens_mask2 = tokenized_result2.pop("special_tokens_mask", None)
-            input_ids2 = torch.tensor(input_ids2, dtype=torch.long).to(self.device)
-            if attention_mask2 is not None:
-                attention_mask2 = torch.tensor(attention_mask2, dtype=torch.long).to(
-                    self.device
-                )
-            return {
-                "sequences": batch["sequences"][f"{omic_name}"],
-                "labels": labels,
-                "input_ids": input_ids,
-                "attention_mask": attention_mask,
-                "special_tokens_mask": special_tokens_mask,
-                "input_ids1": input_ids1,
-                "attention_mask1": attention_mask1,
-                "special_tokens_mask1": special_tokens_mask1,
-                "input_ids2": input_ids2,
-                "attention_mask2": attention_mask2,
-                "special_tokens_mask2": special_tokens_mask2,
+            omic_name2 = self.backbone_order[2] + "_"
+            input_batches[omic_name2] = {
+                k.removeprefix(omic_name2): v for k, v in batch.items() if k.startswith(omic_name2)
             }
-        else:
-            return {
-                "sequences": batch["sequences"][f"{omic_name}"],
-                "labels": labels,
-                "input_ids": input_ids,
-                "attention_mask": attention_mask,
-                "special_tokens_mask": special_tokens_mask,
-                "input_ids1": input_ids1,
-                "attention_mask1": attention_mask1,
-                "special_tokens_mask1": special_tokens_mask1,
-            }
+        for omic_name, backbone in zip(
+            self.backbone_order, (self.backbone, self.backbone1, self.backbone2)
+        ):
+            omic_name = omic_name + "_"
+            processed_batch = backbone.process_batch(input_batches[omic_name], device=self.device)
+            for k, v in processed_batch.items():
+                collated_batch[f"{omic_name}{k}"] = v
+        return collated_batch
 
     def forward(self, collated_batch: dict[str, Union[list, Tensor]]) -> Tensor:
         """Runs a forward pass of the model.
@@ -2238,25 +2183,38 @@ class MMSequenceRegression(TaskInterface):
         Returns:
             Tensor: The regression predictions
         """
-        hidden_states = self.backbone(
-            collated_batch["input_ids"], collated_batch["attention_mask"]
-        )  # (bs, seq_len, dim)
-        hidden_states1 = self.backbone1(
-            collated_batch["input_ids1"], collated_batch["attention_mask1"]
-        )
+        omic_name = self.backbone_order[0] + "_"
+        omic_name1 = self.backbone_order[1] + "_"
+        backbone_input = {
+            k.removeprefix(omic_name): v
+            for k, v in collated_batch.items()
+            if k.startswith(omic_name)
+        }
+        backbone1_input = {
+            k.removeprefix(omic_name1): v
+            for k, v in collated_batch.items()
+            if k.startswith(omic_name1)
+        }
+        backbone_output = self.backbone(**backbone_input)
+        backbone1_output = self.backbone1(**backbone1_input)
         if self.backbone2 is not None:
-            hidden_states2 = self.backbone2(
-                collated_batch["input_ids2"], collated_batch["attention_mask2"]
-            )
-            attention_mask2 = collated_batch["attention_mask2"]
+            omic_name2 = self.backbone_order[2] + "_"
+            backbone2_input = {
+                k.removeprefix(omic_name2): v
+                for k, v in collated_batch.items()
+                if k.startswith(omic_name2)
+            }
+            backbone2_output = self.backbone2(**backbone2_input)
+            hidden_states2 = backbone2_output.last_hidden_state
+            attention_mask2 = backbone2_output.attention_mask
         else:
             hidden_states2 = None
             attention_mask2 = None
         preds = self.adapter(
-            hidden_states,
-            collated_batch["attention_mask"],
-            hidden_states1,
-            collated_batch["attention_mask1"],
+            backbone_output.last_hidden_state,
+            backbone_output.attention_mask,
+            backbone1_output.last_hidden_state,
+            backbone1_output.attention_mask,
             hidden_states2,
             attention_mask2,
         )
@@ -2274,7 +2232,7 @@ class MMSequenceRegression(TaskInterface):
         Args:
             logits (Tensor): The model predictions
             collated_batch (dict[str, Union[list, Tensor]]): The collated batch of data containing labels
-            loss_only (bool, optional): Whether to only return the loss. Defaults to False.
+            loss_only (bool, optional): Whether to only return the loss.
 
         Returns:
             dict[str, Union[Tensor, float]]: A dictionary of metrics containing loss and mse
@@ -2295,3 +2253,62 @@ class MMSequenceRegression(TaskInterface):
             for metric in metrics.values():
                 self.call_or_update_metric(stage, metric, preds, labels)
         return {"loss": loss}
+
+    def required_data_columns(self, stage: str) -> list[str]:
+        """The required data columns for the task.
+
+        Returns:
+            list[str]: The required data columns
+        """
+        columns = [f"{omic_name}_sequences" for omic_name in self.backbone_order]
+        if stage != "predict":
+            columns += ["labels"]
+        return columns
+
+    def provided_data_columns(self, stage):
+        return ["sequences"]
+
+    def check_data_compatibility(self, stage: str) -> None:
+        """Checks if the data is compatible with the task."""
+        if self.data_module is not None:
+            data_provided_columns = set(self.data_module.provided_columns)
+            task_provided_columns = set(self.provided_data_columns(stage))
+            task_required_columns = set(self.required_data_columns(stage))
+            backbone_required_columns = set(self.backbone.required_data_columns())
+            backbone1_required_columns = set(self.backbone1.required_data_columns())
+            backbone2_required_columns = set()
+            if self.backbone2 is not None:
+                backbone2_required_columns = set(self.backbone2.required_data_columns())
+            error_msgs = []
+            # Task gets data from data modules
+            if not task_required_columns.issubset(data_provided_columns):
+                error_msgs.append(
+                    f"Task is missing required columns: {task_required_columns - data_provided_columns}. "
+                    f"Provided columns: {data_provided_columns}. "
+                    f"Required columns: {task_required_columns}. "
+                )
+            # Backbone gets data from both data module and task
+            provided_columns = data_provided_columns.union(task_provided_columns)
+            if not backbone_required_columns.issubset(provided_columns):
+                error_msgs.append(
+                    f"Backbone is missing required columns: {backbone_required_columns - provided_columns}. "
+                    f"Data Provided columns: {data_provided_columns}. "
+                    f"Task Provided columns: {task_provided_columns}. "
+                    f"Backbone Required columns: {backbone_required_columns}. "
+                )
+            if not backbone1_required_columns.issubset(provided_columns):
+                error_msgs.append(
+                    f"Backbone1 is missing required columns: {backbone1_required_columns - provided_columns}. "
+                    f"Data Provided columns: {data_provided_columns}. "
+                    f"Task Provided columns: {task_provided_columns}. "
+                    f"Backbone1 Required columns: {backbone1_required_columns}. "
+                )
+            if not backbone2_required_columns.issubset(provided_columns):
+                error_msgs.append(
+                    f"Backbone2 is missing required columns: {backbone2_required_columns - provided_columns}. "
+                    f"Data Provided columns: {data_provided_columns}. "
+                    f"Task Provided columns: {task_provided_columns}. "
+                    f"Backbone2 Required columns: {backbone2_required_columns}. "
+                )
+            if error_msgs:
+                raise ValueError("\n".join(error_msgs))

@@ -4,7 +4,7 @@
 set -ex
 
 # 0. clean the tsv files in the output directory if they exist
-# since we gather the partial tsv results in the output directory, 
+# since we gather the partial tsv results in the output directory,
 # we need to clean the output directory before running the script
 
 # clean the tsv files in the output directory

@@ -64,9 +64,7 @@ def empty_hf_loader_mixin():
 @pytest.mark.parametrize("train_split", ["train", None])
 @pytest.mark.parametrize("valid_split", ["valid", None])
 @pytest.mark.parametrize("test_split", ["test", None])
-def test_load_dataset_split(
-    empty_hf_loader_mixin, train_split, valid_split, test_split
-):
+def test_load_dataset_split(empty_hf_loader_mixin, train_split, valid_split, test_split):
     loader = empty_hf_loader_mixin
     loader.train_split_name = train_split
     loader.valid_split_name = valid_split
@@ -99,9 +97,7 @@ def test_load_dataset_split(
 @pytest.mark.parametrize("train_files", [["train", "files"], None])
 @pytest.mark.parametrize("valid_files", [["valid", "files"], None])
 @pytest.mark.parametrize("test_files", [["test", "files"], None])
-def test_load_dataset_files(
-    empty_hf_loader_mixin, train_files, valid_files, test_files
-):
+def test_load_dataset_files(empty_hf_loader_mixin, train_files, valid_files, test_files):
     loader = empty_hf_loader_mixin
     loader.train_split_name = "train"
     loader.valid_split_name = "valid"

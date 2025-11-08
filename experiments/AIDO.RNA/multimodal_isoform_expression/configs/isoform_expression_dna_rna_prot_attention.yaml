@@ -12,7 +12,7 @@ trainer:
   logger:
     class_path: lightning.pytorch.loggers.WandbLogger
     init_args:
-      name: 
+      name:
       save_dir: logs
       project: rna_tasks
   callbacks:
@@ -123,6 +123,10 @@ data:
     - rna_seq
     - dna_seq
     - protein_seq
+    rename_cols:
+      dna_seq: dna_seq_sequences
+      rna_seq: rna_seq_sequences
+      protein_seq: protein_seq_sequences
     normalize: true
     random_seed: 42
     batch_size: 2

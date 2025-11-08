@@ -1,4 +1,3 @@
-from typing import Union
 import torch
 from torchmetrics import Metric
 import torchmetrics as tm
@@ -14,7 +13,7 @@ class TopLAcc(Metric):
         """
         super().__init__(**kwargs)
         self.k = k
-        self.add_state(f"acc", default=[], dist_reduce_fx=None)
+        self.add_state("acc", default=[], dist_reduce_fx=None)
 
     def update(self, logits, labels, indices, L):
         _, _, acc = compute_top_l_acc(logits, labels, indices, L // self.k, L)

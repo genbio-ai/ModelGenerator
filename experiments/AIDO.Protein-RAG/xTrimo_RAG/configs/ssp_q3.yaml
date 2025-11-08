@@ -90,9 +90,6 @@ data:
     extra_cols:
     - msa
     - str_emb
-    extra_col_aliases:
-    - msa
-    - str_emb
     batch_size: 1
     truncate_extra_cols: true
     max_length: 512

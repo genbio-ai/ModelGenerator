@@ -67,6 +67,4 @@ class AutoWrapPolicy(ModuleWrapPolicy):
         return self._policy._run_policy(root_module, ignored_modules, root_kwargs)
 
     def __call__(self, module, recurse, *args, **kwargs):
-        return super().__call__(
-            module, recurse, *args, **kwargs
-        ) or self._policy._lambda_fn(module)
+        return super().__call__(module, recurse, *args, **kwargs) or self._policy._lambda_fn(module)

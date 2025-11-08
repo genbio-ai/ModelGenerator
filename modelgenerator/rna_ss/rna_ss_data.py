@@ -120,7 +120,7 @@ class RNASSPairwiseTokenClassification(DataInterface):
             max_seq_len=self.max_seq_len,
         )
         self.train_dataset = AnyDataset(
-            ss_ids=tmp[0], sequences=tmp[1], sec_structures=tmp[2]
+            ss_ids=tmp[0], sequences=tmp[1], labels=tmp[2]
         )
 
         tmp = self.prepare_dataset(
@@ -129,7 +129,7 @@ class RNASSPairwiseTokenClassification(DataInterface):
             max_seq_len=self.max_seq_len,
         )
         self.val_dataset = AnyDataset(
-            ss_ids=tmp[0], sequences=tmp[1], sec_structures=tmp[2]
+            ss_ids=tmp[0], sequences=tmp[1], labels=tmp[2]
         )
 
         tmp = self.prepare_dataset(
@@ -138,5 +138,10 @@ class RNASSPairwiseTokenClassification(DataInterface):
             max_seq_len=self.max_seq_len,
         )
         self.test_dataset = AnyDataset(
-            ss_ids=tmp[0], sequences=tmp[1], sec_structures=tmp[2]
+            ss_ids=tmp[0], sequences=tmp[1], labels=tmp[2]
         )
+
+    @property
+    def provided_columns(self) -> List[str]:
+        """List of columns provided by the dataset."""
+        return ["ss_ids", "sequences", "labels"]

@@ -2,8 +2,8 @@
 
 AIDO.ModelGenerator orchestrates experiments with [LightningCLI](https://lightning.ai/docs/pytorch/stable/cli/lightning_cli.html) to make runs modular, composable, and reproducible.
 
-Training, validation, testing, and prediction are separated into independent CLI calls to `mgen fit/validate/test/predict`. 
-For researchers developing new backbones, heads, or tasks, a typical workflow might be 
+Training, validation, testing, and prediction are separated into independent CLI calls to `mgen fit/validate/test/predict`.
+For researchers developing new backbones, heads, or tasks, a typical workflow might be
 ```
 # My model development workflow
 1. mgen fit --config config.yaml
@@ -73,7 +73,7 @@ data:
 
 Configs are also composable and allow multiple `--config` flags to be passed.
 Runs always use only the LAST value for each argument.
-Combining these two configs 
+Combining these two configs
 
 ```
 # my_config.yaml
@@ -120,7 +120,7 @@ Even if AIDO.ModelGenerator defaults change, simply using `mgen fit --config you
 
 ### Example
 
-Below is a full example `config.yaml` saved from the simple command 
+Below is a full example `config.yaml` saved from the simple command
 ```
 mgen fit --model SequenceRegression --data PromoterExpressionRegression
 ```

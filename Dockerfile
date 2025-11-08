@@ -1,4 +1,4 @@
-FROM nvcr.io/nvidia/cuda:12.1.0-devel-ubuntu22.04 AS build
+FROM nvcr.io/nvidia/cuda:12.4.0-devel-ubuntu22.04 AS build
 WORKDIR /workspace
 # TODO: using conda just to get a Python binary is probably overkill
 RUN apt update && apt install -y wget git
@@ -18,7 +18,7 @@ RUN pip install flash_attn==2.7.4.post1
 
 ## RNA and Protein inverse folding requirements
 RUN pip install torch_geometric==2.6.1
-RUN pip install pyg_lib torch_scatter torch_sparse torch_cluster torch_spline_conv -f https://data.pyg.org/whl/torch-2.2.0+cu121.html
+pip install pyg_lib torch_scatter torch_sparse torch_cluster torch_spline_conv -f https://data.pyg.org/whl/torch-2.6.0+cu124.html
 RUN pip install biopython==1.84
 RUN pip install MDAnalysis==2.8.0
 RUN pip install biotite==1.0.1
@@ -27,7 +27,7 @@ RUN pip install OmegaConf
 WORKDIR /workspace
 RUN pip install -e .
 
-FROM nvcr.io/nvidia/cuda:12.1.0-runtime-ubuntu22.04
+FROM nvcr.io/nvidia/cuda:12.4.0-runtime-ubuntu22.04
 WORKDIR /workspace
 COPY --from=build /opt/conda/envs /opt/conda/envs
 ENV PATH=/opt/conda/envs/finetune/bin:$PATH

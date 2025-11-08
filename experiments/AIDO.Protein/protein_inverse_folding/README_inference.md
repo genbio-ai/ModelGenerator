@@ -3,9 +3,9 @@ Protein inverse folding represents a computational technique aimed at generating
 
 
 #### Setup Docker:
-Install [ModelGenerator](https://github.com/genbio-ai/modelgenerator). 
+Install [ModelGenerator](https://github.com/genbio-ai/modelgenerator).
 - It is **required** to use [docker](https://www.docker.com/101-tutorial/) to run our inverse folding pipeline.
-- Please set up a docker image using our provided [Dockerfile](https://github.com/genbio-ai/ModelGenerator/blob/main/Dockerfile) and run the inverse folding inference from within the docker container. 
+- Please set up a docker image using our provided [Dockerfile](https://github.com/genbio-ai/ModelGenerator/blob/main/Dockerfile) and run the inverse folding inference from within the docker container.
   - Here is an example bash script to set up and access a docker container:
     ```
     # clone the ModelGenerator repository
@@ -101,4 +101,3 @@ Install [ModelGenerator](https://github.com/genbio-ai/modelgenerator).
       true:SSKLQALFAHPLYNVPEEPPLLGAEDSLLASQEALRYYRRKVARWNRRHKMDPPLQLRLEASWVQFHLGINRHGLYSRSSPVVSKLLQDMRHFPTISADYSQDEKALLGACDCTQIVKPSGVHLKLVLRFSDFGKAMFKPMRQQRDEETPVDFFYFIDFQRHNAEIAAFHLDRILDFRRVPPTVGRIVNVTKEILEVTKNEILQSVFFVSPASNVCFFAKCPYMCKTEYAVCGKPHLLEGSLSAFLPSLNLAPRLSVPNPWIRSYTLAGKEEWEVNPLYCDTVKQIYPYNNSQRLLNVIDMAIFDFLIGNMDRHHYEMFTKFGDDGFLIHLDNARGFGRHSHDEISILSPLSQCCMIKKKTLLHLQLLAQADYRLSDVMRESLLEDQLSPVLTEPHLLALDRRLQTILRTVEGCIVAHGQQSVIVDGP
       pred:MSPLEKLFNHPLYNIPVLPLLLGEDTILLDKEKALKYYKKLTKKFNLPLKKKPPLVFKEDASWVQFHLGITRHGVYSRSSPVVSKLLQDMRTLPVISVDGGGTLKALKGACDCSQLQKPSGTQLKLLVKFQNFGKALFKPMRQQRDEETPEDFFYYSDYERHNAEIAAFHLDRILDFRRVPPTVGRLVNVTKELYDVTKDNKLRSTFFISPDNNVCFFAKCPYYCDTTHVVCGNPDLLEGSLAAFLPDKNLAPRKSIPSPWIRSYTLSGKEEWEVDPDYCDTVKQIYPYNSSNRLLNIIDMSIFDFLIGNMDRHHYETFTKFGDDGFLIHLDNAKGFGRHSHDELSILAPLTQCCMIRRSTLLRLQLLSKEEVRLSDVLRESLLEDSLYPVLTEPHLLAFDRRLQIILKTVEGCLKKKGEKETIYDGP
       ```
-

@@ -54,4 +54,3 @@ data:
     cv_test_fold_id: 0
     cv_enable_val_fold: true
     cv_fold_id_col: fold_id
-
