@@ -12,11 +12,11 @@ This GenBio AI Community License Agreement (the “License”) constitutes an ag
             1.2.2 You shall not, directly or indirectly: (a) use or provide access to any Outputs or Output Derivatives to train, optimize, improve, or otherwise enhance the functionality or performance of any machine learning models or related technologies that are similar to the GenBio Materials; (b) engage in any form of model distillation or other methods that would achieve the purposes described in subsection (a) above. Notwithstanding the foregoing, you may use Outputs and Output Derivatives to train, optimize, improve, or enhance the functionality or performance of: (i) The GenBio Materials itself; and (ii) downstream Derivative Works of the GenBio Materials;
             1.2.3 Your use of the GenBio Materials shall be subject to any additional terms and conditions that: (a) GenBio provides to you separately; or (b) GenBio otherwise makes available to you.
 
-2. Sharing and Distribution.  
-      2.1 Subject to Section 1, if you distribute or make available the GenBio Materials or a Derivative Work to a third party for your Non-Commercial Purposes, in Source or Object form, you shall: 
+2. Sharing and Distribution.
+      2.1 Subject to Section 1, if you distribute or make available the GenBio Materials or a Derivative Work to a third party for your Non-Commercial Purposes, in Source or Object form, you shall:
             2.1.1 provide a copy of this License to that third party;
             2.1.2 retain the following attribution notice within a “Notice” text file distributed as a part of such copies: “This is licensed under the GenBio AI Community License Agreement, Copyright ©  GENBIO.AI, INC. All Rights Reserved”; and
-            2.1.3 prominently display “Powered by GenBio AI” on a related website, user interface, blogpost, about page, or product documentation. 
+            2.1.3 prominently display “Powered by GenBio AI” on a related website, user interface, blogpost, about page, or product documentation.
       2.2 If You create a Derivative Work, you may add your own attribution notice(s) to the “Notice” text file included with that Derivative Work, provided that you clearly indicate which attributions apply to the GenBio Materials and state in the “Notice” text file that you changed the GenBio Materials and how it was modified.
 
 3. Submission of Contribution.
@@ -26,12 +26,12 @@ This GenBio AI Community License Agreement (the “License”) constitutes an ag
       You shall comply with the applicable U.S. Foreign Corrupt Practices Act and all applicable export laws, restrictions and regulations of the U.S. Department of Commerce, and any other applicable U.S. and foreign authority.
 
 5. Disclaimer of Warranty.
-      GENBIO MATERIALS PROVIDED BY GENBIO OR ANY OUTPUT YOU RECEIVED ARE PROVIDED “AS IS.” EXCEPT TO THE EXTENT PROHIBITED BY LAW. GENBIO MAKES NO REPRESENTATIONS OR WARRANTIES OF ANY KIND, WHETHER EXPRESS, IMPLIED OR OTHERWISE, REGARDING THE ACCURACY, COMPLETENESS OR PERFORMANCE OF THE SERVICES AND YOUR OUTPUT, OR WITH RESPECT TO SATISFACTORY QUALITY, FITNESS FOR A PARTICULAR PURPOSE OR NON-INFRINGEMENT. 
+      GENBIO MATERIALS PROVIDED BY GENBIO OR ANY OUTPUT YOU RECEIVED ARE PROVIDED “AS IS.” EXCEPT TO THE EXTENT PROHIBITED BY LAW. GENBIO MAKES NO REPRESENTATIONS OR WARRANTIES OF ANY KIND, WHETHER EXPRESS, IMPLIED OR OTHERWISE, REGARDING THE ACCURACY, COMPLETENESS OR PERFORMANCE OF THE SERVICES AND YOUR OUTPUT, OR WITH RESPECT TO SATISFACTORY QUALITY, FITNESS FOR A PARTICULAR PURPOSE OR NON-INFRINGEMENT.
 
-6. Limitation of Liability.  
+6. Limitation of Liability.
       In no event and under no legal theory, whether in tort (including negligence), contract, or otherwise, unless required by applicable law (such as deliberate and grossly negligent acts) or agreed to in writing, shall any Contributor be liable to You for damages, including any direct, indirect, special, incidental, or consequential damages of any character arising as a result of this License or out of the use or inability to use the GenBio Materials (including but not limited to damages for loss of goodwill, work stoppage, computer failure or malfunction, or any and all other commercial damages or losses), even if such Contributor has been advised of the possibility of such damages.
 
-7. General Terms. 
+7. General Terms.
       7.1 Relationship of Parties.  You and GenBio are independent contractors, and nothing herein shall be deemed to constitute either party as the agent or representative of the other or both parties as joint venturers or partners for any purpose.
       7.2 Assignment.  This License and the rights and obligations herein may not be assigned or transferred, in whole or in part, by You without the prior written consent of GenBio. Any assignment in violation of this provision is void. GenBio may freely assign or transfer this License, in whole or in part. This License shall be binding upon, and inure to the benefit of, the successors and permitted assigns of the parties.
       7.3 Governing Law.  This License shall be governed, construed and interpreted in accordance with the laws of the State of California, without giving effect to principles of conflicts of law. Each of the parties to this License consents to the exclusive jurisdiction and venue of the courts of the state and federal courts of California.

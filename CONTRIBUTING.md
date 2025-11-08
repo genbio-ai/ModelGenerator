@@ -10,9 +10,14 @@ If you would like to implement a new feature or a bug, please make sure you (or 
 1. [Fork](https://github.com/genbio-ai/ModelGenerator/forks) this repository.
 2. Install locally with `pip install -e .[dev]`.
 3. Make your code changes locally.
-4. Run `black modelgenerator` to format your code.
+4. **Set up commit hooks:**
+   Initialize [pre-commit](https://pre-commit.com/) hooks:
+   ```bash
+   pre-commit install
+   ```
+   This will automatically check formatting (Ruff with max line length 100), trailing whitespace, end-of-file, YAML syntax, and large files before each commit.
 5. Run `pytest tests/` to test your code.
-6. If dependencies changed, rebuild the constraints file with `pip-compile pyproject.toml --extra dev --output-file constraints.txt`
+6. If dependencies changed, rebuild the lock file with `poetry lock`
 7. Check that your code is properly documented by going into the `docs` directory and running `mkdocs serve` to build the documentation and view it in your browser.
 8. Issue a MR to merge your changes into the `main` branch.
 

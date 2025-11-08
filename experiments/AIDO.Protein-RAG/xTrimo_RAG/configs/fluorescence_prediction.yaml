@@ -90,13 +90,12 @@ data:
     path: genbio-ai/fluorescence_prediction_rag
     is_rag_dataset: true
     config_name: null
-    x_col: seq
-    extra_cols:
+    x_col:
+    - seq
     - msa
     - str_emb
-    extra_col_aliases:
-    - msa
-    - str_emb
+    rename_cols:
+      seq: sequences
     normalize: true
     train_split_name: train
     test_split_name: test

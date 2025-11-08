@@ -13,7 +13,7 @@ git clone https://huggingface.co/genbio-ai/dummy-ckpt
 
 # Evaluate
 mgen test --config dummy-ckpt/config.yaml \
-  --ckpt_path dummy-ckpt/best_val:step=742-val_loss=0.404-train_loss=0.464.ckpt 
+  --ckpt_path dummy-ckpt/best_val:step=742-val_loss=0.404-train_loss=0.464.ckpt
 
 # Predict
 mgen predict --config dummy-ckpt/config.yaml \

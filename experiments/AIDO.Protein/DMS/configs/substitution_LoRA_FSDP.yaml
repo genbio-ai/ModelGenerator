@@ -3,6 +3,7 @@ trainer:
   devices: auto
   max_steps: 10000
   gradient_clip_val: 0.1
+  gradient_clip_algorithm: value
   default_root_dir: logs
   strategy:
     class_path: lightning.pytorch.strategies.FSDPStrategy

@@ -90,6 +90,7 @@ class RNAInvFold(TaskInterface):
 
     def configure_model(self) -> None:
         self.lm = self.backbone_fn(None, None)
+        self.lm.setup()
         # self.tokenizer = self.lm.tokenizer
 
         repo_base_dir = Path(__file__).resolve().parent.parent.parent

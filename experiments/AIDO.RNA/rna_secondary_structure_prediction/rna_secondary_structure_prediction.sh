@@ -3,7 +3,7 @@ MODE=$1 ## set it to "train" for finetuning the RNA-FM for RNA secondary structu
 
 RUN_NAME=rna_ss
 DATASET_NAME=$2 ## set the named of the dataset
-CKPT_SAVE_DIR=logs/${RUN_NAME}/${DATASET_NAME} 
+CKPT_SAVE_DIR=logs/${RUN_NAME}/${DATASET_NAME}
 
 if [ $MODE == "train" ]; then
 	mgen fit --config rna_ss_prediction.yaml \

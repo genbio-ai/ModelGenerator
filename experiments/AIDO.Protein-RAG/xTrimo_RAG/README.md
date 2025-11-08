@@ -176,4 +176,3 @@ Configuration details in `fluorescence_prediction.yaml`.
     --backbone modelgenerator.backbones.aido_protein_rag_3b \
     configs/fluorescence_prediction.yaml fluo_AIDO_3B
 ```
-

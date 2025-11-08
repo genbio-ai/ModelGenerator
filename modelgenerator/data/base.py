@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 import lightning.pytorch as pl
 from lightning.pytorch.utilities import rank_zero_info, rank_zero_warn
 from datasets import load_dataset
-from docstring_inheritance import GoogleDocstringInheritanceInitMeta
+from modelgenerator.utils import GoogleKwargsDocstringInheritanceInitMeta
 
 
 class KFoldMixin:
@@ -46,9 +46,7 @@ class KFoldMixin:
             train_dataset.select(test_idx),
         )
 
-    def generate_kfold_split(
-        self, num_samples: int, num_folds: int, shuffle: bool = True
-    ):
+    def generate_kfold_split(self, num_samples: int, num_folds: int, shuffle: bool = True):
         """Randomly split n_samples into n_splits folds and return list of fold_idx
 
         Args:
@@ -68,9 +66,7 @@ class KFoldMixin:
         fold_samples = num_samples // num_folds
         kfold_split_idx = []
         for k in range(num_folds - 1):
-            kfold_split_idx.append(
-                idx[k * fold_samples : (k + 1) * fold_samples].tolist()
-            )
+            kfold_split_idx.append(idx[k * fold_samples : (k + 1) * fold_samples].tolist())
         kfold_split_idx.append(idx[(k + 1) * fold_samples :].tolist())
         self.cv_splits = kfold_split_idx
         return kfold_split_idx
@@ -161,13 +157,15 @@ class HFDatasetLoaderMixin:
                 {k: [] for k in first_non_empty.column_names}
             )
         if test_dataset is None:
-            test_dataset = datasets.Dataset.from_dict(
-                {k: [] for k in first_non_empty.column_names}
-            )
+            test_dataset = datasets.Dataset.from_dict({k: [] for k in first_non_empty.column_names})
         return train_dataset, valid_dataset, test_dataset
 
 
-class DataInterface(pl.LightningDataModule, KFoldMixin, metaclass=GoogleDocstringInheritanceInitMeta):
+class DataInterface(
+    pl.LightningDataModule,
+    KFoldMixin,
+    metaclass=GoogleKwargsDocstringInheritanceInitMeta,
+):
     """Base class for all data modules in this project. Handles the boilerplate of setting up data loaders.
 
     Note:
@@ -178,7 +176,7 @@ class DataInterface(pl.LightningDataModule, KFoldMixin, metaclass=GoogleDocstrin
         See [MLM](./#modelgenerator.data.MLMDataModule) for an example.
 
     Args:
-        path: Path to the dataset, can be (1) a local path to a data folder or (2) a Huggingface dataset identifier
+        path: Path to the dataset, can be (1) a local path to a data folder or (2) a Huggingface dataset identifier.
         config_name: The name of the HF dataset configuration.
             Affects how the dataset is loaded.
         train_split_name: The name of the training split.
@@ -283,6 +281,17 @@ class DataInterface(pl.LightningDataModule, KFoldMixin, metaclass=GoogleDocstrin
         self.train_dataset = None
         self.val_dataset = None
         self.test_dataset = None
+
+    @property
+    def provided_columns(self) -> List[str]:
+        """Get the columns provided by the dataset
+
+        Returns:
+            List[str]: The columns provided by the dataset
+        """
+        raise NotImplementedError(
+            "This method should be overridden by subclasses to provide the columns of the dataset."
+        )
 
     def train_dataloader(self) -> DataLoader:
         """Get the training data loader

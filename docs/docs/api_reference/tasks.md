@@ -21,12 +21,12 @@ model:
         use_peft: true
         lora_r: 16
         lora_alpha: 32
-        lora_dropout: 0.1  
+        lora_dropout: 0.1
     adapter:
       class_path: modelgenerator.adapters.MLPPoolAdapter
       init_args:
         pooling: mean_pooling
-        hidden_sizes: 
+        hidden_sizes:
         - 512
         - 256
         bias: true

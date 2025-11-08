@@ -44,4 +44,3 @@ def align_adata(adata: ad.AnnData) -> Tuple[ad.AnnData, np.ndarray]:
     attention_mask[np.isin(adata_aligned.var.index, missing_genes)] = 0
     print('####################  Finished  ####################')
     return adata_aligned, attention_mask
-

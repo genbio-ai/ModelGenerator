@@ -167,7 +167,7 @@ do
         --data.train_split_files [${MUTATION_TYPE}/${TASK_NAME}.tsv] \
         --data.cv_test_fold_id ${FOLD} \
         --ckpt_path ${CKPT_PATH}"
-    
+
     if [[ "$BACKBONE" != "null" ]]; then
         cmd=$cmd" --model.init_args.backbone.class_path ${BACKBONE}"
     fi
@@ -178,4 +178,3 @@ do
     ssh ${NODE} "source ${SCRIPT_PATH}/init_env.sh && ${new_cmd} &> ${SCRIPT_PATH}/output_logs/${PROJECT}/${RUN_NAME}_test.log";
 
 done;
-

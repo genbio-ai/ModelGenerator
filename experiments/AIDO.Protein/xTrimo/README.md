@@ -7,7 +7,7 @@ For access of our model and task datasets, please visit our Hugging Face collect
 Note: All the following scripts should be run under `ModelGenerator/`.
 
 ## Contact prediction
-We finetune AIDO.Protein-16B for contact prediction using LoRA. See `contact_prediction_binary.yaml` for detailed hyperparameter settings. 
+We finetune AIDO.Protein-16B for contact prediction using LoRA. See `contact_prediction_binary.yaml` for detailed hyperparameter settings.
 
 #### Finetuning script
 ```shell
@@ -22,7 +22,7 @@ srun mgen fit --config $CONFIG_FILE \
     --trainer.callbacks.dirpath $CKPT_SAVE_DIR \
     --trainer.num_nodes 1
 ```
-Note: 
+Note:
 1. We use FSDP with a global batch size of 4.
 2. It is run on 4 NVIDIA A100-80G GPU using slurm system.
 
@@ -45,7 +45,7 @@ Note: `ckpt_path` is the finetuned checkpoint path.
 
 
 ## Secondary structure prediction
-We finetune AIDO.Protein-16B for secondary structure prediction using LoRA. See `ssp_q3.yaml` for detailed hyperparameter settings. 
+We finetune AIDO.Protein-16B for secondary structure prediction using LoRA. See `ssp_q3.yaml` for detailed hyperparameter settings.
 
 #### Finetuning script
 ```shell
@@ -82,7 +82,7 @@ mgen test --config $CONFIG_FILE  \
 ## Sequence-level regression
 
 ### Fold prediction
-We finetune AIDO.Protein-16B for fold prediction using LoRA. See `fold_prediction.yaml` for detailed hyperparameter settings. 
+We finetune AIDO.Protein-16B for fold prediction using LoRA. See `fold_prediction.yaml` for detailed hyperparameter settings.
 
 #### Finetuning script
 ```shell
@@ -118,7 +118,7 @@ mgen test --config $CONFIG_FILE \
 ## Sequence-level classification
 
 ### Fluorescence prediction
-We finetune AIDO.Protein-16B for fluorescence prediction using LoRA. See `fluorescence_prediction.yaml` for detailed hyperparameter settings. 
+We finetune AIDO.Protein-16B for fluorescence prediction using LoRA. See `fluorescence_prediction.yaml` for detailed hyperparameter settings.
 
 #### Finetuning script
 ```shell

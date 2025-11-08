@@ -172,13 +172,13 @@ def show_protein_comparison(file1, file2):
 
 def generate_ct_files(rna_sequence, output_prefix, chunk_size=1_000):
     num_chunks = (len(rna_sequence) + chunk_size - 1) // chunk_size
-    
+
     for chunk_idx in range(num_chunks):
         start = chunk_idx * chunk_size
         end = min((chunk_idx + 1) * chunk_size, len(rna_sequence))
         chunk_seq = rna_sequence[start:end]
         output_file = f"{output_prefix}_chunk{chunk_idx + 1}.ct"
-        
+
         with open(output_file, 'w') as f:
             f.write(f"{len(chunk_seq)} {output_prefix}_chunk{chunk_idx + 1}\n")
             for i, nucleotide in enumerate(chunk_seq):
@@ -196,19 +196,19 @@ def ct_to_dot_bracket(directory, output_file, seq_len, chunk_size=1_000):
     ss_matrix_full = np.zeros([seq_len, seq_len], dtype=np.float32)
     merged_nucleotides = ""
     merged_ss = ""
-    
+
     for idx, ct_file in enumerate(input_files):
         ss_matrix = np.load(npy_files[idx]).astype(np.float32)
         ss_matrix_full[idx*chunk_size:(idx+1)*chunk_size, idx*chunk_size:(idx+1)*chunk_size] = ss_matrix
-        
+
         with open(ct_file, 'r') as f:
             lines = f.readlines()[1:]  # Skip header
-        
+
         sequence_length = len(lines)
         structure = ["."] * sequence_length
         nucleotides = ""
         pairings = {}
-        
+
         for line in lines:
             parts = line.strip().split()
             if len(parts) >= 6:
@@ -218,17 +218,17 @@ def ct_to_dot_bracket(directory, output_file, seq_len, chunk_size=1_000):
                 merged_nucleotides += str(parts[1])
                 if pair > 0:
                     pairings[index - 1] = pair - 1
-        
+
         for i, j in pairings.items():
             if j > i:
                 structure[i] = "("
                 structure[j] = ")"
-        
+
         merged_ss += "".join(structure)
 
     with open(output_file, 'w') as f:
         f.write(">infered\n" + merged_nucleotides + "\n" + merged_ss + "\n")
-    
+
     print(f"Dot-bracket notation saved as {output_file}")
 
     return merged_nucleotides, merged_ss, ss_matrix_full
@@ -239,7 +239,7 @@ def dot_bracket_to_matrix(dot_bracket):
     length = len(dot_bracket)
     matrix = np.zeros((length, length), dtype=int)
     stack = []
-    
+
     for i, char in enumerate(dot_bracket):
         if char == '(':
             stack.append(i)  # Push index of opening bracket
@@ -255,7 +255,7 @@ def dot_bracket_to_matrix(dot_bracket):
 
                 #     matrix[min(length, i+k), min(length, j+k)] = 1
                 #     matrix[min(length, j+k), min(length, i+k)] = 1  # Symmetric matrix
-    
+
     return matrix
 
 
@@ -263,20 +263,20 @@ def display_complex_cif(file_path, width=800, height=600):
     # Read the CIF file content
     with open(file_path, 'r') as f:
         cif_data = f.read()
-    
+
     # Create a py3Dmol view with the specified dimensions
     view = py3Dmol.view(width=width, height=height)
-    
+
     # Add the model from the CIF data
     view.addModel(cif_data, "cif")
 
-    # Style 
+    # Style
     view.setStyle({'chain': 'A0'}, {'cartoon': {'color': '#f5ae4c'}})
     view.setStyle({'chain': 'B0'}, {'cartoon': {'color': '#58db9a'}})
     view.setStyle({'chain': 'C0'}, {'cartoon': {'color': '#a887de'}})
-    
+
     # Adjust the view to fit the model
     view.zoomTo()
-    
+
     # Display the viewer in the notebook
     return view.show()

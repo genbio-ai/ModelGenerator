@@ -2,7 +2,6 @@ import pytest
 from modelgenerator.data.data import *  # noqa: F403
 from unittest.mock import patch
 from datasets import Dataset
-from functools import partial
 
 
 def test_any_dataset():
@@ -41,9 +40,7 @@ def test_any_dataset_add_dataset():
 
 def test_any_dataset_generate_uid():
     # Test UID generation
-    dataset = AnyDataset(
-        sequences=["ACGT"] * 100, labels=[0] * 100, generate_uid=True
-    )
+    dataset = AnyDataset(sequences=["ACGT"] * 100, labels=[0] * 100, generate_uid=True)
     assert dataset[:]["uid"].tolist() == [i for i in range(100)]
 
 
@@ -92,6 +89,33 @@ def test_mlm_dataset():
     assert mask_count == 4
 
 
+def test_mlm_data_module():
+    with patch(
+        "modelgenerator.data.base.HFDatasetLoaderMixin.load_and_split_dataset",
+        return_value=(
+            Dataset.from_dict({"seq": ["ACGT", "TGCA"], "labels": [0, 1]}),
+            Dataset.from_dict({"seq": ["GCTA"], "labels": [1]}),
+            Dataset.from_dict({"seq": ["CGTA"], "labels": [0]}),
+        ),
+    ):
+        module = MLMDataModule(
+            path="dummy_path",
+            x_col="seq",
+            rename_cols={"seq": "renamed_seq"},
+            masking_rate=0.5,
+        )
+        module.setup()
+    train_sample = module.train_dataset[0]
+    val_sample = module.val_dataset[0]
+    test_sample = module.test_dataset[0]
+    assert train_sample["renamed_seq"].count("[MASK]") == 2
+    assert "seq" not in train_sample
+    assert val_sample["renamed_seq"].count("[MASK]") == 2
+    assert "seq" not in val_sample
+    assert test_sample["renamed_seq"].count("[MASK]") == 2
+    assert "seq" not in test_sample
+
+
 def test_diffusion_dataset():
     # Create sample data
     sequences = ["ACGTACGT", "TGCATGCA"]
@@ -127,6 +151,87 @@ def test_diffusion_dataset():
     assert all(weights[i] >= weights[i + 1] for i in range(len(weights) - 1))
 
 
+def test_diffusion_data_module():
+    with patch(
+        "modelgenerator.data.base.HFDatasetLoaderMixin.load_and_split_dataset",
+        return_value=(
+            Dataset.from_dict({"seq": ["ACGT", "TGCA"]}),
+            Dataset.from_dict({"seq": ["GCTA"]}),
+            Dataset.from_dict({"seq": ["CGTA"]}),
+        ),
+    ):
+        module = DiffusionDataModule(
+            path="dummy_path",
+            x_col="seq",
+            rename_cols={"seq": "renamed_seq"},
+            timesteps_per_sample=3,
+        )
+        module.setup()
+    train_sample = module.train_dataset[0]
+    val_sample = module.val_dataset[0]
+    test_sample = module.test_dataset[0]
+    assert len(train_sample["renamed_seq"]) == 3
+    assert "seq" not in train_sample
+    assert len(val_sample["renamed_seq"]) == 1
+    assert "seq" not in val_sample
+    assert len(test_sample["renamed_seq"]) == 1
+    assert "seq" not in test_sample
+
+
+def test_class_diffusion_data_module():
+    with patch(
+        "modelgenerator.data.base.HFDatasetLoaderMixin.load_and_split_dataset",
+        return_value=(
+            Dataset.from_dict({"seq": ["ACGT", "TGCA"], "labels": [0, 1]}),
+            Dataset.from_dict({"seq": ["GCTA"], "labels": [1]}),
+            Dataset.from_dict({"seq": ["CGTA"], "labels": [0]}),
+        ),
+    ):
+        module = ClassDiffusionDataModule(
+            path="dummy_path",
+            x_col="seq",
+            rename_cols={"seq": "renamed_seq"},
+            timesteps_per_sample=3,
+        )
+        module.setup()
+    train_sample = module.train_dataset[0]
+    val_sample = module.val_dataset[0]
+    test_sample = module.test_dataset[0]
+    assert len(train_sample["renamed_seq"]) == 3
+    assert "seq" not in train_sample
+    assert len(val_sample["renamed_seq"]) == 1
+    assert "seq" not in val_sample
+    assert len(test_sample["renamed_seq"]) == 1
+    assert "seq" not in test_sample
+
+
+def test_conditional_diffusion_data_module():
+    with patch(
+        "modelgenerator.data.base.HFDatasetLoaderMixin.load_and_split_dataset",
+        return_value=(
+            Dataset.from_dict({"seq": ["ACGT", "TGCA"], "labels": [1.0, 2.0]}),
+            Dataset.from_dict({"seq": ["GCTA"], "labels": [1.0]}),
+            Dataset.from_dict({"seq": ["CGTA"], "labels": [0.0]}),
+        ),
+    ):
+        module = ConditionalDiffusionDataModule(
+            path="dummy_path",
+            x_col="seq",
+            rename_cols={"seq": "renamed_seq"},
+            timesteps_per_sample=3,
+        )
+        module.setup()
+    train_sample = module.train_dataset[0]
+    val_sample = module.val_dataset[0]
+    test_sample = module.test_dataset[0]
+    assert len(train_sample["renamed_seq"]) == 3
+    assert "seq" not in train_sample
+    assert len(val_sample["renamed_seq"]) == 1
+    assert "seq" not in val_sample
+    assert len(test_sample["renamed_seq"]) == 1
+    assert "seq" not in test_sample
+
+
 def test_dependency_mapping_dataset(tmp_path):
     # Setup test data
     vocab_file = tmp_path / "vocab.json"
@@ -135,9 +240,7 @@ def test_dependency_mapping_dataset(tmp_path):
     sequences = ["ACGTACGT", "TGCATGCA", "GCTAGCTA"]
     ids = [0, 1, 2]
     data_samples = AnyDataset(sequences=sequences, ids=ids)
-    dataset = DependencyMappingDataModule.DependencyMappingDataset(
-        data_samples, vocab_file
-    )
+    dataset = DependencyMappingDataModule.DependencyMappingDataset(data_samples, vocab_file)
 
     # Number of sequences generated (mutations per sequence + wild type)
     num_seq_gen = [len(seq) * 4 + 1 for seq in sequences]
@@ -154,7 +257,7 @@ def test_dependency_mapping_dataset(tmp_path):
         assert wt_sample["ids"] == ids[i]
         for j in range(offset, wt_idx):
             sample = dataset[j]
-            # Mutation happpens at exactly one position
+            # Mutation happens at exactly one position
             assert sum(1 for a, b in zip(sample["sequences"], seq) if a != b) == 1
             assert sample["pos_i"] != -1
             assert sample["mut_i"] != -1
@@ -162,7 +265,7 @@ def test_dependency_mapping_dataset(tmp_path):
         offset += num_seq_gen[i]
 
 
-def test_sequence_classification_dataset_splitting():
+def test_classification_dataset_splitting():
     # Mock the dataset splitting
     with patch(
         "modelgenerator.data.base.HFDatasetLoaderMixin.load_and_split_dataset",
@@ -172,7 +275,7 @@ def test_sequence_classification_dataset_splitting():
             Dataset.from_dict({"sequence": ["seq4"], "label": [0]}),
         ),
     ):
-        module = SequenceClassificationDataModule(
+        module = ClassificationDataModule(
             path="dummy_path",
             x_col="sequence",
             y_col="label",
@@ -181,31 +284,29 @@ def test_sequence_classification_dataset_splitting():
         module.setup()
 
     # Check train dataset
-    assert module.train_dataset[:]["sequences"] == ["seq1", "seq2"]
+    assert module.train_dataset[:]["sequence"] == ["seq1", "seq2"]
     assert module.train_dataset[:]["labels"] == [0, 1]
 
     # Check validation dataset
-    assert module.val_dataset[:]["sequences"] == ["seq3"]
+    assert module.val_dataset[:]["sequence"] == ["seq3"]
     assert module.val_dataset[:]["labels"] == [1]
 
     # Check test dataset
-    assert module.test_dataset[:]["sequences"] == ["seq4"]
+    assert module.test_dataset[:]["sequence"] == ["seq4"]
     assert module.test_dataset[:]["labels"] == [0]
 
 
-def test_sequence_classification_class_filter():
+def test_classification_class_filter():
     # Mock the dataset splitting
     with patch(
         "modelgenerator.data.base.HFDatasetLoaderMixin.load_and_split_dataset",
         return_value=(
-            Dataset.from_dict(
-                {"sequence": ["seq1", "seq2", "seq3"], "label": [0, 1, 0]}
-            ),
+            Dataset.from_dict({"sequence": ["seq1", "seq2", "seq3"], "label": [0, 1, 0]}),
             Dataset.from_dict({"sequence": ["seq4"], "label": [1]}),
             Dataset.from_dict({"sequence": ["seq5"], "label": [0]}),
         ),
     ):
-        module = SequenceClassificationDataModule(
+        module = ClassificationDataModule(
             path="dummy_path",
             x_col="sequence",
             y_col="label",
@@ -214,32 +315,28 @@ def test_sequence_classification_class_filter():
         module.setup()
 
     # Check train dataset after filtering
-    assert module.train_dataset[:]["sequences"] == ["seq2"]
+    assert module.train_dataset[:]["sequence"] == ["seq2"]
     assert module.train_dataset[:]["labels"] == [1]
 
     # Check validation dataset after filtering
-    assert module.val_dataset[:]["sequences"] == ["seq4"]
+    assert module.val_dataset[:]["sequence"] == ["seq4"]
     assert module.val_dataset[:]["labels"] == [1]
 
     # Check test dataset after filtering
     assert len(module.test_dataset) == 0  # No samples with class 1 in test set
 
 
-def test_sequence_classification_multilabel():
+def test_classification_multilabel():
     # Mock the dataset splitting
     with patch(
         "modelgenerator.data.base.HFDatasetLoaderMixin.load_and_split_dataset",
         return_value=(
-            Dataset.from_dict(
-                {"sequence": ["seq1", "seq2"], "l1": [1, 0], "l2": [0, 1]}
-            ),
-            Dataset.from_dict(
-                {"sequence": ["seq3"], "l1": [1], "l2": [1]}
-            ),
+            Dataset.from_dict({"sequence": ["seq1", "seq2"], "l1": [1, 0], "l2": [0, 1]}),
+            Dataset.from_dict({"sequence": ["seq3"], "l1": [1], "l2": [1]}),
             Dataset.from_dict({"sequence": ["seq4"], "l1": [0], "l2": [0]}),
         ),
     ):
-        module = SequenceClassificationDataModule(
+        module = ClassificationDataModule(
             path="dummy_path",
             x_col="sequence",
             y_col=["l1", "l2"],
@@ -248,16 +345,83 @@ def test_sequence_classification_multilabel():
         module.setup()
 
     # Check train dataset
-    assert module.train_dataset[:]["sequences"] == ["seq1", "seq2"]
+    assert module.train_dataset[:]["sequence"] == ["seq1", "seq2"]
     assert module.train_dataset[:]["labels"].tolist() == [[1, 0], [0, 1]]
 
     # Check validation dataset
-    assert module.val_dataset[:]["sequences"] == ["seq3"]
+    assert module.val_dataset[:]["sequence"] == ["seq3"]
     assert module.val_dataset[:]["labels"].tolist() == [[1, 1]]
 
     # Check test dataset
-    assert module.test_dataset[:]["sequences"] == ["seq4"]
+    assert module.test_dataset[:]["sequence"] == ["seq4"]
     assert module.test_dataset[:]["labels"].tolist() == [[0, 0]]
+
+
+def test_classification_multi_xcol():
+    with patch(
+        "modelgenerator.data.base.HFDatasetLoaderMixin.load_and_split_dataset",
+        return_value=(
+            Dataset.from_dict(
+                {
+                    "x1": ["seq1", "seq2"],
+                    "x2": ["seqA", "seqB"],
+                    "label": [0, 1],
+                }
+            ),
+            Dataset.from_dict(
+                {
+                    "x1": ["seq3"],
+                    "x2": ["seqC"],
+                    "label": [1],
+                }
+            ),
+            Dataset.from_dict(
+                {
+                    "x1": ["seq4"],
+                    "x2": ["seqD"],
+                    "label": [0],
+                }
+            ),
+        ),
+    ):
+        module = ClassificationDataModule(
+            path="dummy_path",
+            x_col=["x1", "x2"],
+            y_col="label",
+            rename_cols={"x1": "sequences1", "x2": "sequences2"},
+        )
+        module.setup()
+
+    # Check train dataset
+    assert module.train_dataset[:]["sequences1"] == ["seq1", "seq2"]
+    assert module.train_dataset[:]["sequences2"] == ["seqA", "seqB"]
+    assert module.train_dataset[:]["labels"] == [0, 1]
+
+    # Check validation dataset
+    assert module.val_dataset[:]["sequences1"] == ["seq3"]
+    assert module.val_dataset[:]["sequences2"] == ["seqC"]
+    assert module.val_dataset[:]["labels"] == [1]
+
+    # Check test dataset
+    assert module.test_dataset[:]["sequences1"] == ["seq4"]
+    assert module.test_dataset[:]["sequences2"] == ["seqD"]
+    assert module.test_dataset[:]["labels"] == [0]
+
+
+def test_sequence_classification_default_args():
+    """Test default behavior of SequenceClassificationDataModule."""
+    with patch(
+        "modelgenerator.data.base.HFDatasetLoaderMixin.load_and_split_dataset",
+        return_value=(
+            Dataset.from_dict({"sequences": ["seq1", "seq2"], "labels": [0, 1]}),
+            Dataset.from_dict({"sequences": ["seq3"], "labels": [1]}),
+            Dataset.from_dict({"sequences": ["seq4"], "labels": [0]}),
+        ),
+    ):
+        module = SequenceClassificationDataModule(path="dummy_path")
+        module.setup()
+
+    assert module.train_dataset[:]["sequences"] == ["seq1", "seq2"]
 
 
 def test_collate_pad_labels():
@@ -284,11 +448,13 @@ def test_collate_pad_labels():
 def test_token_classification_dataset_processing():
     # Pairwise=False
     dataset = [
-        {"sequence": "ACGT", "label": [1, 0, 1, 0]},
-        {"sequence": "TGCA", "label": [0, 1, 0, 1]},
+        {"sequences": "ACGT", "labels": [1, 0, 1, 0]},
+        {"sequences": "TGCA", "labels": [0, 1, 0, 1]},
     ]
     module = TokenClassificationDataModule("dummy_path", max_length=3, pairwise=False)
-    sequences, labels = module.process_dataset(dataset)
+    processed = module.process_dataset(dataset)
+    sequences = processed["sequences"]
+    labels = processed["labels"]
     assert sequences == ["AC", "TG"]
     assert len(labels) == 2
     assert labels[0].tolist() == [1, 0]
@@ -296,11 +462,13 @@ def test_token_classification_dataset_processing():
 
     # Pairwise=True
     dataset = [
-        {"sequence": "ACGT", "label": [(1, 0), (0, 1)]},
-        {"sequence": "TGCA", "label": [(0, 1), (1, 2)]},
+        {"sequences": "ACGT", "labels": [(1, 0), (0, 1)]},
+        {"sequences": "TGCA", "labels": [(0, 1), (1, 2)]},
     ]
     module = TokenClassificationDataModule("dummy_path", max_length=4, pairwise=True)
-    sequences, labels = module.process_dataset(dataset)
+    processed = module.process_dataset(dataset)
+    sequences = processed["sequences"]
+    labels = processed["labels"]
     assert sequences == ["ACG", "TGC"]
     assert len(labels) == 2
     assert labels[0].tolist() == [[0, 1, 0], [1, 0, 0], [0, 0, 0]]
@@ -312,17 +480,13 @@ def test_sequence_regression_data_module_setup():
     with patch(
         "modelgenerator.data.base.HFDatasetLoaderMixin.load_and_split_dataset",
         return_value=(
-            Dataset.from_dict(
-                {"sequence": ["seq1", "seq2"], "label": [1.0, 2.0]}
-            ),
-            Dataset.from_dict({"sequence": ["seq3"], "label": [3.0]}),
-            Dataset.from_dict({"sequence": ["seq4"], "label": [4.0]}),
+            Dataset.from_dict({"sequences": ["seq1", "seq2"], "labels": [1.0, 2.0]}),
+            Dataset.from_dict({"sequences": ["seq3"], "labels": [3.0]}),
+            Dataset.from_dict({"sequences": ["seq4"], "labels": [4.0]}),
         ),
     ):
         module = SequenceRegressionDataModule(
             path="dummy_path",
-            x_col="sequence",
-            y_col="label",
             normalize=False,
         )
         module.setup()
@@ -345,12 +509,8 @@ def test_sequence_regression_data_module_normalization():
     with patch(
         "modelgenerator.data.base.HFDatasetLoaderMixin.load_and_split_dataset",
         return_value=(
-            Dataset.from_dict(
-                {"sequence": ["seq1", "seq2"], "label": [1.0, 3.0]}
-            ),
-            Dataset.from_dict(
-                {"sequence": ["seq3", "seq4"], "label": [3.0, 1.0]}
-            ),
+            Dataset.from_dict({"sequence": ["seq1", "seq2"], "label": [1.0, 3.0]}),
+            Dataset.from_dict({"sequence": ["seq3", "seq4"], "label": [3.0, 1.0]}),
             Dataset.from_dict({"sequence": ["seq5"], "label": [4.0]}),
         ),
     ):
@@ -407,29 +567,24 @@ def test_sequence_regression_multiinput_multilabel():
             path="dummy_path",
             x_col=["input1", "input2"],
             y_col=["label1", "label2"],
+            rename_cols={"input1": "backbone1_sequences", "input2": "backbone2_sequences"},
             normalize=False,
         )
         module.setup()
 
     # Check train dataset
-    assert module.train_dataset[:]["sequences"] == {
-        "input1": ["seq1", "seq2"],
-        "input2": ["seqA", "seqB"],
-    }
+    assert module.train_dataset[:]["backbone1_sequences"] == ["seq1", "seq2"]
+    assert module.train_dataset[:]["backbone2_sequences"] == ["seqA", "seqB"]
     assert module.train_dataset[:]["labels"].tolist() == [[1.0, 3.0], [2.0, 4.0]]
 
     # Check validation dataset
-    assert module.val_dataset[:]["sequences"] == {
-        "input1": ["seq3"],
-        "input2": ["seqC"],
-    }
+    assert module.val_dataset[:]["backbone1_sequences"] == ["seq3"]
+    assert module.val_dataset[:]["backbone2_sequences"] == ["seqC"]
     assert module.val_dataset[:]["labels"].tolist() == [[5.0, 6.0]]
 
     # Check test dataset
-    assert module.test_dataset[:]["sequences"] == {
-        "input1": ["seq4"],
-        "input2": ["seqD"],
-    }
+    assert module.test_dataset[:]["backbone1_sequences"] == ["seq4"]
+    assert module.test_dataset[:]["backbone2_sequences"] == ["seqD"]
     assert module.test_dataset[:]["labels"].tolist() == [[7.0, 8.0]]
 
 
@@ -438,9 +593,7 @@ def test_column_retrieval_data_module():
     with patch(
         "modelgenerator.data.base.HFDatasetLoaderMixin.load_and_split_dataset",
         return_value=(
-            Dataset.from_dict(
-                {"col1": ["val1", "val2"], "col2": ["valA", "valB"]}
-            ),
+            Dataset.from_dict({"col1": ["val1", "val2"], "col2": ["valA", "valB"]}),
             Dataset.from_dict({"col1": ["val3"], "col2": ["valC"]}),
             Dataset.from_dict({"col1": ["val4"], "col2": ["valD"]}),
         ),
@@ -465,79 +618,25 @@ def test_column_retrieval_data_module():
     assert module.test_dataset[:]["new_col2"] == ["valD"]
 
 
-@pytest.mark.parametrize("data_module,data_dict,is_nested", [
-    [SequenceClassificationDataModule, {"sequence": ["seq1", "seq2"], "label": [0, 1]}, False],
-    [TokenClassificationDataModule, {"sequence": ["AC", "GT"], "label": [[1, 0], [0, 1]]}, False],
-    [MLMDataModule, {"sequence": ["seq1", "seq2"], "label": [0, 1]}, False],
-    [SequenceRegressionDataModule, {"sequence": ["seq1", "seq2"], "label": [1.0, 2.0]}, False],
-    [RNAMeanRibosomeLoadDataModule, {"utr": ["seq1", "seq2"], "rl": [0.5, 0.8]}, False],
-    [partial(DiffusionDataModule, timesteps_per_sample=1), {"sequence": ["seq1", "seq2"]}, True],
-    [partial(ClassDiffusionDataModule, timesteps_per_sample=1), {"sequence": ["seq1", "seq2"], "label": [0, 1]}, True],
-])
-def test_extra_cols_and_aliases(data_module, data_dict, is_nested):
-    # Mock dataset with extra columns
+def test_sequence_classification_class_weight():
     with patch(
         "modelgenerator.data.base.HFDatasetLoaderMixin.load_and_split_dataset",
         return_value=(
             Dataset.from_dict(
-                {**data_dict, "col1": ["extra1", "extra2"], "col2": ["extraA", "extraB"]}
+                {
+                    "sequence": ["seq1"] * 100,
+                    "label": [0] * 20 + [1] * 80,
+                }
             ),
-            Dataset.from_dict(
-                {**data_dict, "col1": ["extra1", "extra2"], "col2": ["extraA", "extraB"]}
-            ),
-            Dataset.from_dict(
-                {**data_dict, "col1": ["extra1", "extra2"], "col2": ["extraA", "extraB"]}
-            ),
+            Dataset.from_dict({"sequence": [], "label": []}),
+            Dataset.from_dict({"sequence": [], "label": []}),
         ),
     ):
-        module_normal = data_module(
+        module = SequenceClassificationDataModule(
             path="dummy_path",
-            extra_cols=["col1", "col2"],
-            extra_col_aliases=["alias1", "alias2"],
+            x_col="sequence",
+            y_col="label",
         )
-        module_normal.setup()
-        module_no_alias = data_module(
-            path="dummy_path",
-            extra_cols=["col1", "col2"],
-        )
-        module_no_alias.setup()
-        with pytest.raises(ValueError):
-            data_module(
-                path="dummy_path",
-                extra_cols=["col1", "col2"],
-                extra_col_aliases=["alias1"],
-            )
+        module.setup()
 
-    if is_nested:
-        expected_values1 = [["extra1"], ["extra2"]]
-        expected_values2 = [["extraA"], ["extraB"]]
-    else:
-        expected_values1 = ["extra1", "extra2"]
-        expected_values2 = ["extraA", "extraB"]
-    for i in range(len(module_normal.train_dataset)):
-        assert module_normal.train_dataset[i]["alias1"] == expected_values1[i]
-        assert module_normal.train_dataset[i]["alias2"] == expected_values2[i]
-        assert "col1" not in module_normal.train_dataset[i]
-        assert "col2" not in module_normal.train_dataset[i]
-        assert module_no_alias.train_dataset[i]["col1"] == expected_values1[i]
-        assert module_no_alias.train_dataset[i]["col2"] == expected_values2[i]
-        assert "alias1" not in module_no_alias.train_dataset[i]
-        assert "alias2" not in module_no_alias.train_dataset[i]
-    for i in range(len(module_normal.val_dataset)):
-        assert module_normal.val_dataset[i]["alias1"] == expected_values1[i]
-        assert module_normal.val_dataset[i]["alias2"] == expected_values2[i]
-        assert "col1" not in module_normal.val_dataset[i]
-        assert "col2" not in module_normal.val_dataset[i]
-        assert module_no_alias.val_dataset[i]["col1"] == expected_values1[i]
-        assert module_no_alias.val_dataset[i]["col2"] == expected_values2[i]
-        assert "alias1" not in module_no_alias.val_dataset[i]
-        assert "alias2" not in module_no_alias.val_dataset[i]
-    for i in range(len(module_normal.test_dataset)):
-        assert module_normal.test_dataset[i]["alias1"] == expected_values1[i]
-        assert module_normal.test_dataset[i]["alias2"] == expected_values2[i]
-        assert "col1" not in module_normal.test_dataset[i]
-        assert "col2" not in module_normal.test_dataset[i]
-        assert module_no_alias.test_dataset[i]["col1"] == expected_values1[i]
-        assert module_no_alias.test_dataset[i]["col2"] == expected_values2[i]
-        assert "alias1" not in module_no_alias.test_dataset[i]
-        assert "alias2" not in module_no_alias.test_dataset[i]
+    assert module.class_weight.equal(torch.tensor([2.5, 0.625]))

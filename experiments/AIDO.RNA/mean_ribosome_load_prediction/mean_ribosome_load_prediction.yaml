@@ -6,6 +6,10 @@ data:
   init_args:
     path: "genbio-ai/rna-downstream-tasks"
     config_name: "mean_ribosome_load"
+    x_col: "sequence"
+    y_col: "label"
+    rename_cols:
+      sequence: "sequences"
     batch_size: 64
     num_workers: 32
     pin_memory: true
@@ -58,7 +62,7 @@ trainer:
   log_every_n_steps: 50
   detect_anomaly: true
   accumulate_grad_batches: 1
-  
+
   # callbacks
   callbacks:
     # Save a checkpoint for max val acc
@@ -72,20 +76,19 @@ trainer:
         save_last: true
         verbose: true
         auto_insert_metric_name: false
-    
+
     # learning rate monitor
     - class_path: lightning.pytorch.callbacks.LearningRateMonitor
       dict_kwargs:
         logging_interval: "step"
-    
+
     # finetuning scheduler
     - class_path: modelgenerator.callbacks.FTScheduler
       dict_kwargs:
         ft_schedule_path: null
-  
+
   # DDP strategy
   strategy:
     class_path: lightning.pytorch.strategies.DDPStrategy
     dict_kwargs:
       find_unused_parameters: true
-  

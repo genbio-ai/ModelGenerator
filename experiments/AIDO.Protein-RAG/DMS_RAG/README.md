@@ -65,4 +65,3 @@ To evaluate using 5-fold cross-validation:
 # AIDO.Protein-RAG-3B
 ./run_dms_eval.sh --node node_name --mask-str --backbone modelgenerator.backbones.aido_protein_rag_3b Q2N0S5_9HIV1_Haddox_2018
 ```
-

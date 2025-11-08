@@ -44,7 +44,7 @@ trainer:
   devices: auto
   max_epochs: 1
   gradient_clip_val: 0
-  callbacks: 
+  callbacks:
     # Save a checkpoint for max val f1:
     - class_path: lightning.pytorch.callbacks.ModelCheckpoint
       dict_kwargs:
@@ -71,4 +71,3 @@ trainer:
   default_root_dir: '/workspace/modelgenerator/logs'
   strategy:
     class_path: lightning.pytorch.strategies.DDPStrategy
-

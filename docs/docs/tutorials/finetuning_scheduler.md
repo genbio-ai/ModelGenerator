@@ -13,7 +13,7 @@ To use a FT scheduler, first we have to create a schedule and saving as a `.yaml
 In this example, when the model is setup, all the layers are first frozen. Then before the `0-th`-th epoch starts, all the parameters in the `adapter` module are unfrozen, and they remain unfrozen (trainable) for the rest of the training run. Similarly, before the `3-rd` epoch starts, parameters in the `backbone.encoder.encoder.ln` module (i.e., the last layer norm module of the backbone's encoder) is unfrozen, and they remain unfrozen until the training ends. Here can add any other layer or module if we want to unfreeze it before the starting of some specific epoch.
 
 #### Using `schedule` when finetuning with ModelGenerator
-In order to use this schedule for finetuning, we can simply to set this as CLI argument for `--trainer.callbacks.ft_schedule_path` when calling `mget fit`. 
+In order to use this schedule for finetuning, we can simply to set this as CLI argument for `--trainer.callbacks.ft_schedule_path` when calling `mget fit`.
 
 Following is an example of finetuning the [AIDO.RNA-1.6B](https://huggingface.co/genbio-ai/AIDO.RNA-1.6B) model for RNA secondary structure prediction, with a **scheduler named `layers_0_32.yaml`**. (**NOTE:** Please refer to the [correspoding experiment folder](https://github.com/genbio-ai/ModelGenerator/tree/main/experiments/AIDO.RNA/rna_secondary_structure_prediction) for details of this experiment):
 ```

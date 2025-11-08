@@ -1,8 +1,7 @@
 import torch
-import math
 import torch.nn as nn
 from torch import Tensor
-from typing import List, Callable, Optional
+from typing import List, Callable
 import numpy as np
 from modelgenerator.adapters.base import (
     TokenAdapter,
@@ -59,14 +58,15 @@ class MLPAdapter(nn.Sequential, TokenAdapter):
         output = super().forward(hidden_states)
         return output
 
+
 class MLPAdapterWithoutOutConcat(nn.Module, TokenAdapter):
     """Multi-layer perceptron (MLP) adapter without outer concatenate
-    
+
     This class is generally used in PairwiseTokenClassification. The following two implementations are equivalent:
     1. hidden_states -> outer_concat -> MLPAdapter
     2. hidden_states -> MLPAdapterWithoutOutConcat
     MLPAdapterWithoutOutConcat avoids the large memory consumption of outer_concat
-    
+
     Args:
         in_features (int): Number of features of the input
         out_features (int): Number of features of the output
@@ -76,7 +76,7 @@ class MLPAdapterWithoutOutConcat(nn.Module, TokenAdapter):
         dropout (float): The probability for the dropout layer. Defaults to 0.0
         dropout_in_middle (bool): Whether to use dropout in the middle layers. Defaults to True
     """
-    
+
     def __init__(
         self,
         in_features: int,
@@ -89,18 +89,20 @@ class MLPAdapterWithoutOutConcat(nn.Module, TokenAdapter):
     ):
         super().__init__()
         self.in_dropout = nn.Dropout(dropout)
-        assert len(hidden_sizes) > 0, f"len(hidden_sizes) must be > 0"
-        
-        min_value = -np.sqrt(1 / (in_features*2))
-        max_value =  np.sqrt(1 / (in_features*2))
-        init_values = torch.FloatTensor(hidden_sizes[0], in_features*2).uniform_(min_value, max_value)
-        self.first_linear = torch.nn.Parameter( init_values, requires_grad=True )
+        assert len(hidden_sizes) > 0, "len(hidden_sizes) must be > 0"
+
+        min_value = -np.sqrt(1 / (in_features * 2))
+        max_value = np.sqrt(1 / (in_features * 2))
+        init_values = torch.FloatTensor(hidden_sizes[0], in_features * 2).uniform_(
+            min_value, max_value
+        )
+        self.first_linear = torch.nn.Parameter(init_values, requires_grad=True)
         init_values = torch.FloatTensor(hidden_sizes[0]).uniform_(min_value, max_value)
-        self.first_bias   = torch.nn.Parameter( init_values, requires_grad=True )
-        
+        self.first_bias = torch.nn.Parameter(init_values, requires_grad=True)
+
         in_dim = hidden_sizes[0]
-        
-        layers = [ activation_layer() ]
+
+        layers = [activation_layer()]
         if dropout_in_middle:
             layers.append(nn.Dropout(dropout))
         for hidden_dim in hidden_sizes[1:]:
@@ -109,10 +111,10 @@ class MLPAdapterWithoutOutConcat(nn.Module, TokenAdapter):
             if dropout_in_middle:
                 layers.append(nn.Dropout(dropout))
             in_dim = hidden_dim
-        
+
         layers.append(nn.Linear(in_dim, out_features, bias=bias))
         self.layers = nn.Sequential(*layers)
-    
+
     def forward(self, hidden_states: Tensor, attention_mask: Tensor = None) -> Tensor:
         """Forward pass
 
@@ -123,18 +125,21 @@ class MLPAdapterWithoutOutConcat(nn.Module, TokenAdapter):
             torch.Tensor: predictions (n, seq_len, seq_len, out_features)
         """
         n, seq_len, in_features = hidden_states.shape
-        
-        hidden_states = self.in_dropout(hidden_states) # [B, L, D]
-        
-        left  = hidden_states @ self.first_linear[:, 0::2].T # [B, L, E]
-        right = hidden_states @ self.first_linear[:, 1::2].T # [B, L, E]
-        
-        hidden_states = left[..., :, None, :] + right[..., None, :, :] + self.first_bias[None, None, None, :] # [B, L, L, D1]
-        
+
+        hidden_states = self.in_dropout(hidden_states)  # [B, L, D]
+
+        left = hidden_states @ self.first_linear[:, 0::2].T  # [B, L, E]
+        right = hidden_states @ self.first_linear[:, 1::2].T  # [B, L, E]
+
+        hidden_states = (
+            left[..., :, None, :] + right[..., None, :, :] + self.first_bias[None, None, None, :]
+        )  # [B, L, L, D1]
+
         I, J = torch.tril_indices(seq_len, seq_len, -1)
         hidden_states[..., I, J, :] = hidden_states[..., J, I, :]
-        
+
         return self.layers(hidden_states)
+
 
 class MLPPoolAdapter(nn.Module, SequenceAdapter):
     """MLP adapter for a 2D embedding with pooling for the sequence length dimension
@@ -188,9 +193,9 @@ class MLPPoolAdapter(nn.Module, SequenceAdapter):
                 input_mask_expanded = (
                     attention_mask.unsqueeze(-1).expand(hidden_states.size()).to(hidden_states)
                 )
-                embeddings = torch.sum(
-                    hidden_states * input_mask_expanded, 1
-                ) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
+                embeddings = torch.sum(hidden_states * input_mask_expanded, 1) / torch.clamp(
+                    input_mask_expanded.sum(1), min=1e-9
+                )
             else:
                 embeddings = hidden_states.mean(1)
         elif self.pooling == "cls_pooling":
@@ -262,9 +267,7 @@ class LinearMeanPoolAdapter(nn.Module, SequenceAdapter):
             torch.Tensor: predictions (n, out_features)
         """
         if attention_mask is not None:
-            input_mask_expanded = (
-                attention_mask.unsqueeze(-1).expand(hidden_states.size()).float()
-            )
+            input_mask_expanded = attention_mask.unsqueeze(-1).expand(hidden_states.size()).float()
             embeddings = torch.sum(hidden_states * input_mask_expanded, 1) / torch.clamp(
                 input_mask_expanded.sum(1), min=1e-9
             )
@@ -371,9 +374,7 @@ class ConditionalLMAdapter(nn.Module, ConditionalGenerationAdapter):
             nhead=nhead,
             dim_feedforward=dim_feedforward,
         )
-        self.transformer = nn.TransformerEncoder(
-            transformer_layer, num_layers=num_layers
-        )
+        self.transformer = nn.TransformerEncoder(transformer_layer, num_layers=num_layers)
 
     def forward(self, embeddings: Tensor, labels: Tensor) -> Tensor:
         """Forward pass
@@ -414,9 +415,7 @@ class ResNet2DAdapter(nn.Module, SequenceAdapter):
         super().__init__()
         self.in_to_conv = nn.Linear(in_channels, conv_channels)
         self.resnet = self.ResNet2DModule(conv_channels, num_res_blocks, kernel_size)
-        self.conv_to_output = nn.Conv2d(
-            conv_channels, 1, kernel_size=kernel_size, padding="same"
-        )
+        self.conv_to_output = nn.Conv2d(conv_channels, 1, kernel_size=kernel_size, padding="same")
 
     def symmetrize_matrix(self, matrix: Tensor) -> Tensor:
         """
@@ -555,9 +554,7 @@ class ResNet1DAdapter(nn.Module, SequenceAdapter):
 
     # Adapted from https://github.com/lbcb-sci/RiNALMo/blob/main/rinalmo/model/downstream.py
 
-    def __init__(
-        self, input_channels, num_outputs=1, channels=256, num_blocks=9, dropout=0.2
-    ):
+    def __init__(self, input_channels, num_outputs=1, channels=256, num_blocks=9, dropout=0.2):
         super().__init__()
         self.in_to_conv = nn.Linear(input_channels, channels)
         self.resnet = self.ResNet1DModule(channels, num_blocks)

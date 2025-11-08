@@ -15,24 +15,24 @@ def extract_backbone_coordinates(pdb_file, chain_id):
         parser = PDB.MMCIFParser(QUIET=True)
         structure = parser.get_structure("protein", pdb_file)
     model = structure[0]  # Taking the first model
-    
+
     backbone_atoms = ['N', 'CA', 'C', 'O']
     residues = [res for res in model[chain_id] if PDB.is_aa(res)]
-    
+
     num_residues = min(MAX_SEQ_LEN, len(residues))
     coordinates = {atom: np.full((num_residues, 3), np.nan) for atom in backbone_atoms}
     residue_sequence = ""  # To store one-letter residue codes
-    
+
     for i, residue in enumerate(residues):
-        if i == MAX_SEQ_LEN: 
+        if i == MAX_SEQ_LEN:
             break
         residue_sequence += seq1(residue.get_resname(), custom_map={})  # Convert three-letter to one-letter code
         for atom in backbone_atoms:
             if atom in residue:
                 coordinates[atom][i] = residue[atom].coord
-    
+
     num_chains = len(list(model.get_chains()))  # Count the number of chains
-    
+
     return coordinates, residue_sequence, num_chains
 
 

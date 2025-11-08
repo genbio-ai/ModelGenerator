@@ -15,6 +15,7 @@ nav:
     - usage/saving_outputs.md
     - usage/exporting_models.md
     - usage/reproducing_experiments.md
+    - usage/embedding_caching.md
   - Tutorials:
     - tutorials/kfold_cross_validation.md
     - tutorials/finetuning_scheduler.md
@@ -50,7 +51,7 @@ plugins:
           heading_level: 3
           extensions:
             - griffe_inherited_docstrings
-            - docstring_inheritance.griffe
+            - modelgenerator.utils.griffe_kwargs_extension:KwargsDocstringInheritance
 
 markdown_extensions:
   - attr_list

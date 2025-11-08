@@ -1,11 +1,11 @@
 # K-fold cross validation
 
-Datasets implementing the `DataInterface` with the `KFoldMixin` support semi-automatic k-fold crossvalidation for uncertainty estimation. 
+Datasets implementing the `DataInterface` with the `KFoldMixin` support semi-automatic k-fold crossvalidation for uncertainty estimation.
 
 We use translation efficiency prediction as an example task to demonstrate how to do a k-fold cross validation in ModelGenerator. The logic is to split the dataset into k-fold, and call each fold as a test set iteratively.
 
 #### Data configs
-For cross validation task, we input only one dataset named `train` containing a colomn `fold_id` indicating the fold index for each sample. You need to set `cv_num_folds`, `cv_test_fold_id`, `cv_enable_val_fold`, `cv_fold_id_col` according to your experiment setting. 
+For cross validation task, we input only one dataset named `train` containing a colomn `fold_id` indicating the fold index for each sample. You need to set `cv_num_folds`, `cv_test_fold_id`, `cv_enable_val_fold`, `cv_fold_id_col` according to your experiment setting.
 ```yaml
 data:
   class_path: modelgenerator.data.TranslationEfficiency

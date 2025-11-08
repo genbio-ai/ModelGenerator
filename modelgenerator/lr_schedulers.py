@@ -11,10 +11,9 @@ class LazyLRScheduler(LambdaLR):
     A wrapper class for torch.optim.lr_scheduler.LambdaLR that allows for lazy initialization.
     """
 
-    def __init__(self, optimizer, last_epoch=-1, verbose="deprecated"):
+    def __init__(self, optimizer, last_epoch=-1):
         self.optimizer = optimizer
         self.last_epoch = last_epoch
-        self.verbose = verbose
 
     def initialize(self, trainer: Trainer):
         """
@@ -24,9 +23,7 @@ class LazyLRScheduler(LambdaLR):
             trainer (lightning.pytorch.Trainer): The trainer object that will be used during training.
         """
         lr_lambdas = self._initialize(trainer)
-        super().__init__(
-            self.optimizer, lr_lambdas, last_epoch=self.last_epoch, verbose=self.verbose
-        )
+        super().__init__(self.optimizer, lr_lambdas, last_epoch=self.last_epoch)
 
     def _initialize(self, trainer: Trainer):
         raise NotImplementedError(
@@ -41,7 +38,6 @@ class CosineWithWarmup(LazyLRScheduler):
         warmup_ratio: Optional[float] = None,
         num_warmup_steps: Optional[int] = None,
         last_epoch: int = -1,
-        verbose: str = "deprecated",
     ):
         """
         Args:
@@ -53,20 +49,17 @@ class CosineWithWarmup(LazyLRScheduler):
                 The number of warmup steps to do. Defaults to None.
             last_epoch (int): The index of last epoch. Default: -1.
         """
-        super().__init__(optimizer, last_epoch=last_epoch, verbose=verbose)
+        super().__init__(optimizer, last_epoch=last_epoch)
         self.warmup_ratio = warmup_ratio
         self.num_warmup_steps = num_warmup_steps
         if self.warmup_ratio is None and self.num_warmup_steps is None:
-            raise ValueError(
-                "Either warmup_ratio or num_warmup_steps must be provided."
-            )
+            raise ValueError("Either warmup_ratio or num_warmup_steps must be provided.")
 
     def _initialize(self, trainer: Trainer):
         num_training_steps = trainer.estimated_stepping_batches
         if num_training_steps == float("inf"):
             raise ValueError(
-                "A deterministic number of training steps "
-                "is required to use this scheduler."
+                "A deterministic number of training steps is required to use this scheduler."
             )
         if self.num_warmup_steps is not None:
             num_warmup_steps = self.num_warmup_steps
@@ -88,7 +81,6 @@ class ConstantWithWarmup(LazyLRScheduler):
         warmup_ratio: Optional[float] = None,
         num_warmup_steps: Optional[int] = None,
         last_epoch: int = -1,
-        verbose: str = "deprecated",
     ):
         """
         Args:
@@ -100,20 +92,17 @@ class ConstantWithWarmup(LazyLRScheduler):
                 The number of warmup steps to do. Defaults to None.
             last_epoch (int): The index of last epoch. Default: -1.
         """
-        super().__init__(optimizer, last_epoch=last_epoch, verbose=verbose)
+        super().__init__(optimizer, last_epoch=last_epoch)
         self.warmup_ratio = warmup_ratio
         self.num_warmup_steps = num_warmup_steps
         if self.warmup_ratio is None and self.num_warmup_steps is None:
-            raise ValueError(
-                "Either warmup_ratio or num_warmup_steps must be provided."
-            )
+            raise ValueError("Either warmup_ratio or num_warmup_steps must be provided.")
 
     def _initialize(self, trainer: Trainer):
         num_training_steps = trainer.estimated_stepping_batches
         if num_training_steps == float("inf"):
             raise ValueError(
-                "A deterministic number of training steps "
-                "is required to use this scheduler."
+                "A deterministic number of training steps is required to use this scheduler."
             )
         if self.num_warmup_steps is not None:
             num_warmup_steps = self.num_warmup_steps
@@ -135,7 +124,6 @@ class LinearWithWarmup(LazyLRScheduler):
         warmup_ratio: Optional[float] = None,
         num_warmup_steps: Optional[int] = None,
         last_epoch: int = -1,
-        verbose: str = "deprecated",
     ):
         """
         Args:
@@ -147,20 +135,17 @@ class LinearWithWarmup(LazyLRScheduler):
                 The number of warmup steps to do. Defaults to None.
             last_epoch (int): The index of last epoch. Default: -1.
         """
-        super().__init__(optimizer, last_epoch=last_epoch, verbose=verbose)
+        super().__init__(optimizer, last_epoch=last_epoch)
         self.warmup_ratio = warmup_ratio
         self.num_warmup_steps = num_warmup_steps
         if self.warmup_ratio is None and self.num_warmup_steps is None:
-            raise ValueError(
-                "Either warmup_ratio or num_warmup_steps must be provided."
-            )
+            raise ValueError("Either warmup_ratio or num_warmup_steps must be provided.")
 
     def _initialize(self, trainer: Trainer):
         num_training_steps = trainer.estimated_stepping_batches
         if num_training_steps == float("inf"):
             raise ValueError(
-                "A deterministic number of training steps "
-                "is required to use this scheduler."
+                "A deterministic number of training steps is required to use this scheduler."
             )
         if self.num_warmup_steps is not None:
             num_warmup_steps = self.num_warmup_steps

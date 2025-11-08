@@ -1,13 +1,13 @@
 # Caleb Ellington
 model:
   class_path: Inference
-  init_args: 
+  init_args:
     backbone: aido_dna_7b
 data:
   class_path: DependencyMappingDataModule
   init_args:
     path: experiments/AIDO.DNA/dependency_mapping/
-    test_split_files: 
+    test_split_files:
       - depmap.csv
     vocab_file: experiments/AIDO.DNA/dependency_mapping/DNA.txt
     batch_size: 32

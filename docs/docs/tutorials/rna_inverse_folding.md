@@ -9,7 +9,7 @@ We evaluate our model in two settings: (1) adaptation with conditional diffusion
 |    gRNAde+AIDO.RNA-Zeroshot    |    53.16    |
 |    gRNAde+AIDO.RNA-Finetuned.  |    54.41    |
 
-##### Acknowledgement 
+##### Acknowledgement
 We thank the authors of [gRNAde](https://arxiv.org/abs/2305.14749) for providing their models' checkpoints and configuration files.
 
 #
@@ -17,9 +17,9 @@ We thank the authors of [gRNAde](https://arxiv.org/abs/2305.14749) for providing
 In the following sections, we discuss how to use AIDO.RNA for RNA inverse folding using ModelGenerator.
 
 #### Setup
-Install [ModelGenerator](https://github.com/genbio-ai/modelgenerator). 
+Install [ModelGenerator](https://github.com/genbio-ai/modelgenerator).
 - It is **required** to use [docker](https://www.docker.com/101-tutorial/) to run our inverse folding pipeline.
-- Please set up a docker image using our provided [Dockerfile](https://github.com/genbio-ai/ModelGenerator/blob/main/Dockerfile) and run the inverse folding inference from within the docker container. 
+- Please set up a docker image using our provided [Dockerfile](https://github.com/genbio-ai/ModelGenerator/blob/main/Dockerfile) and run the inverse folding inference from within the docker container.
 
 Here is an example bash script to set up and access a docker container:
 ```

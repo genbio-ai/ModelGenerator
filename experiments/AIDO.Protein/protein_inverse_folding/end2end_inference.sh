@@ -30,4 +30,4 @@ mgen test \
     --trainer.devices 0, \
     --data.path ${DATA_DIR}/
 
-### The results will be saved under the folder "/experiments/AIDO.Protein/protein_inverse_folding/proteinIF_outputs" in a file named "results_acc_{recovery_accuracy}.txt". 
+### The results will be saved under the folder "/experiments/AIDO.Protein/protein_inverse_folding/proteinIF_outputs" in a file named "results_acc_{recovery_accuracy}.txt".

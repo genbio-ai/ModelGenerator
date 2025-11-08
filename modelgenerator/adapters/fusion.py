@@ -2,7 +2,7 @@ import math
 import torch
 import torch.nn as nn
 from torch import Tensor
-from typing import List, Optional, Tuple, Callable, Union
+from typing import Optional, Tuple, Callable
 from modelgenerator.huggingface_models.rnabert.modeling_rnabert import (
     apply_rotary_pos_emb,
 )
@@ -34,19 +34,11 @@ class MultiHeadAttention(nn.Module):
         self.attention_head_size = int(config.hidden_size / config.num_attention_heads)
         self.all_head_size = self.num_attention_heads * self.attention_head_size
 
-        self.query = nn.Linear(
-            config.hidden_size, self.all_head_size, bias=config.add_linear_bias
-        )
-        self.key = nn.Linear(
-            context_input_size, self.all_head_size, bias=config.add_linear_bias
-        )
-        self.value = nn.Linear(
-            context_input_size, self.all_head_size, bias=config.add_linear_bias
-        )
+        self.query = nn.Linear(config.hidden_size, self.all_head_size, bias=config.add_linear_bias)
+        self.key = nn.Linear(context_input_size, self.all_head_size, bias=config.add_linear_bias)
+        self.value = nn.Linear(context_input_size, self.all_head_size, bias=config.add_linear_bias)
         # for residual connection
-        self.dense = nn.Linear(
-            config.hidden_size, self.all_head_size, bias=config.add_linear_bias
-        )
+        self.dense = nn.Linear(config.hidden_size, self.all_head_size, bias=config.add_linear_bias)
 
         # self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
         self.position_embedding_type = position_embedding_type or getattr(
@@ -130,16 +122,13 @@ class MultiHeadAttention(nn.Module):
             query_layer = query_layer.permute(2, 0, 1, 3).contiguous()
             key_layer = key_layer.permute(2, 0, 1, 3).contiguous()
 
-            query_layer = apply_rotary_pos_emb(
-                query_layer, q_pos_emb
-            )  # debug query_layer[:,0]
+            query_layer = apply_rotary_pos_emb(query_layer, q_pos_emb)  # debug query_layer[:,0]
             key_layer = apply_rotary_pos_emb(key_layer, k_pos_emb)
 
             # [sq, b, hn, c] --> [b, hn, sq, c]
             query_layer = query_layer.permute(1, 2, 0, 3).contiguous()
             key_layer = key_layer.permute(1, 2, 0, 3).contiguous()
 
-        use_cache = past_key_value is not None
         if self.is_decoder:
             # if cross_attention save Tuple(torch.Tensor, torch.Tensor) of all cross attention key/value_states.
             # Further calls to cross_attention layer can then reuse all cross-attention
@@ -181,9 +170,7 @@ class MultiHeadAttention(nn.Module):
         new_context_layer_shape = context_layer.size()[:-2] + (self.all_head_size,)
         context_layer = context_layer.view(new_context_layer_shape)
 
-        outputs = (
-            (context_layer, attention_probs) if output_attentions else (context_layer,)
-        )
+        outputs = (context_layer, attention_probs) if output_attentions else (context_layer,)
 
         if self.is_decoder:
             outputs = outputs + (past_key_value,)
@@ -303,18 +290,16 @@ class CrossAttentionFusion(nn.Module):
                 - 0 for tokens that are masked.
         """
         # (bs, seq_len1, seq_len2), masking out the padding
-        encoder_attention_mask = key_attention_mask.unsqueeze(
-            1
-        ) * query_attention_mask.unsqueeze(-1)
-        encoder_attention_mask = encoder_attention_mask.unsqueeze(
-            1
-        )  # (bs, 1, seq_len1, seq_len2)
+        encoder_attention_mask = key_attention_mask.unsqueeze(1) * query_attention_mask.unsqueeze(
+            -1
+        )
+        encoder_attention_mask = encoder_attention_mask.unsqueeze(1)  # (bs, 1, seq_len1, seq_len2)
         return encoder_attention_mask
 
 
 class ConcatFusion(nn.Module):
     """Concat output embeddings for 2-3 backbones
-    
+
     Args:
         hidden_size (int): number of input features for first backbone
         hidden_size_1 (int): number of input features for second backbone
@@ -345,13 +330,15 @@ class ConcatFusion(nn.Module):
         if self.pooling not in ["mean_pooling", "cls_pooling"]:
             raise NotImplementedError
 
-    def forward(self, 
-                hidden_states: Tensor, 
-                attention_mask: Tensor,
-                hidden_states_1: Tensor, 
-                attention_mask_1: Tensor,
-                hidden_states_2: Tensor = None,
-                attention_mask_2: Tensor = None) -> Tensor:
+    def forward(
+        self,
+        hidden_states: Tensor,
+        attention_mask: Tensor,
+        hidden_states_1: Tensor,
+        attention_mask_1: Tensor,
+        hidden_states_2: Tensor = None,
+        attention_mask_2: Tensor = None,
+    ) -> Tensor:
         """Forward pass
 
         Args:
@@ -366,8 +353,8 @@ class ConcatFusion(nn.Module):
             torch.Tensor: fused embeddings of shape (n, seq_len, hidden_size)
         """
         if self.hidden_size_2 is not None and hidden_states_2 is None:
-             raise ValueError(f"{hidden_states_2} is required.")
-        # seq pooling    
+            raise ValueError(f"{hidden_states_2} is required.")
+        # seq pooling
         pooled_embeddings = self.seq_pooling(hidden_states, attention_mask)
         pooled_embeddings_1 = self.seq_pooling(hidden_states_1, attention_mask_1)
         # project to the same dimension
@@ -378,17 +365,17 @@ class ConcatFusion(nn.Module):
         else:
             pooled_embeddings_2 = self.seq_pooling(hidden_states_2, attention_mask_2)
             pooled_embeddings_2 = self.project_2(pooled_embeddings_2)
-            fused_embedding = torch.cat((pooled_embeddings, pooled_embeddings_1, pooled_embeddings_2), dim=1)
+            fused_embedding = torch.cat(
+                (pooled_embeddings, pooled_embeddings_1, pooled_embeddings_2), dim=1
+            )
         return fused_embedding
-    
+
     def seq_pooling(self, hidden_states, attention_mask):
         if self.pooling == "mean_pooling":
-            input_mask_expanded = (
-                attention_mask.unsqueeze(-1).expand(hidden_states.size()).float()
+            input_mask_expanded = attention_mask.unsqueeze(-1).expand(hidden_states.size()).float()
+            embeddings = torch.sum(hidden_states * input_mask_expanded, 1) / torch.clamp(
+                input_mask_expanded.sum(1), min=1e-9
             )
-            embeddings = torch.sum(
-                hidden_states * input_mask_expanded, 1
-            ) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
         elif self.pooling == "cls_pooling":
             embeddings = hidden_states[:, 0]
         else:
@@ -396,11 +383,10 @@ class ConcatFusion(nn.Module):
         return embeddings
 
 
-
 class MMFusionSeqAdapter(nn.Module, FusionAdapter):
     """Multimodal embeddings fusion with SequenceAdapter.
 
-    Note: 
+    Note:
         Accepts 2-3 sequence embeddings as input and fuses them into a multimodal embedding for the adapter.
 
     Args:
@@ -425,14 +411,15 @@ class MMFusionSeqAdapter(nn.Module, FusionAdapter):
         self.fusion_module = fusion(input_size, input_size_1, input_size_2)
         self.adapter = adapter(self.fusion_module.output_hidden_size, out_features)
 
-    def forward(self, 
-                hidden_states: Tensor,  
-                attention_mask: Tensor,
-                hidden_states_1: Tensor, 
-                attention_mask_1: Tensor,
-                hidden_states_2: Tensor = None, 
-                attention_mask_2: Tensor = None
-                ) -> Tensor:
+    def forward(
+        self,
+        hidden_states: Tensor,
+        attention_mask: Tensor,
+        hidden_states_1: Tensor,
+        attention_mask_1: Tensor,
+        hidden_states_2: Tensor = None,
+        attention_mask_2: Tensor = None,
+    ) -> Tensor:
         """Forward pass
 
         Args:
@@ -446,16 +433,22 @@ class MMFusionSeqAdapter(nn.Module, FusionAdapter):
         Returns:
             torch.Tensor: predictions (n, out_features)
         """
-        fused_embeddings = self.fusion_module(hidden_states, attention_mask,
-                                              hidden_states_1, attention_mask_1,
-                                              hidden_states_2, attention_mask_2)
+        fused_embeddings = self.fusion_module(
+            hidden_states,
+            attention_mask,
+            hidden_states_1,
+            attention_mask_1,
+            hidden_states_2,
+            attention_mask_2,
+        )
         preds = self.adapter(fused_embeddings, attention_mask)
         return preds
+
 
 class MMFusionTokenAdapter(nn.Module, FusionAdapter):
     """Multimodal embeddings fusion with TokenAdapter. Fuses embeddings into a single token embedding.
 
-    Note: 
+    Note:
         Accepts 2-3 sequence embeddings as input and fuse them into a multimodal embedding for the adapter
 
     Args:
@@ -480,14 +473,15 @@ class MMFusionTokenAdapter(nn.Module, FusionAdapter):
         self.fusion_module = fusion(input_size, input_size_1, input_size_2)
         self.adapter = adapter(self.fusion_module.output_hidden_size, out_features)
 
-    def forward(self, 
-                hidden_states: Tensor,  
-                attention_mask: Tensor,
-                hidden_states_1: Tensor, 
-                attention_mask_1: Tensor,
-                hidden_states_2: Tensor = None, 
-                attention_mask_2: Tensor = None
-                ) -> Tensor:
+    def forward(
+        self,
+        hidden_states: Tensor,
+        attention_mask: Tensor,
+        hidden_states_1: Tensor,
+        attention_mask_1: Tensor,
+        hidden_states_2: Tensor = None,
+        attention_mask_2: Tensor = None,
+    ) -> Tensor:
         """Forward pass
 
         Args:
@@ -501,9 +495,13 @@ class MMFusionTokenAdapter(nn.Module, FusionAdapter):
         Returns:
             torch.Tensor: predictions (n, out_features)
         """
-        fused_embeddings = self.fusion_module(hidden_states, attention_mask,
-                                              hidden_states_1, attention_mask_1,
-                                              hidden_states_2, attention_mask_2)
+        fused_embeddings = self.fusion_module(
+            hidden_states,
+            attention_mask,
+            hidden_states_1,
+            attention_mask_1,
+            hidden_states_2,
+            attention_mask_2,
+        )
         preds = self.adapter(fused_embeddings)
         return preds
-    

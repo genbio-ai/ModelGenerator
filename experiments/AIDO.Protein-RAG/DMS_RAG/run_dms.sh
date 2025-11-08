@@ -211,7 +211,7 @@ do
                 --data.batch_size 1 \
                 --model.init_args.backbone.init_args.config_overwrites.str_embedding_in ${STR_EMBEDDING_IN} \
                 --trainer.callbacks.patience ${PATIENCE}"
-        
+
         if [[ "$BACKBONE" != "null" ]]; then
             cmd=$cmd" --model.init_args.backbone.class_path ${BACKBONE}"
         fi

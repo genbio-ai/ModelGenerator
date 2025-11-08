@@ -4,8 +4,8 @@ data:
   class_path: modelgenerator.data.ClockDataModule
   init_args:
     path: '/workspace/modelgenerator/cell-downstream-tasks/clocks/'
-    batch_size: 16 # On 1xH100, this can be 4 for the 100M model and 16 for the 3M or 10M models. 
-    train_split_files: 
+    batch_size: 16 # On 1xH100, this can be 4 for the 100M model and 16 for the 3M or 10M models.
+    train_split_files:
       - 'blood/effector_memory_CD8-positive_alpha-beta_T_cell.h5ad'
     split_column: 'split'
     filter_columns:
@@ -45,7 +45,7 @@ trainer:
   max_epochs: 50
   gradient_clip_val: 0
   profiler: null
-  callbacks: 
+  callbacks:
     - class_path: lightning.pytorch.callbacks.LearningRateMonitor
       dict_kwargs:
         logging_interval: "step"
@@ -75,7 +75,7 @@ trainer:
   default_root_dir: '/workspace/modelgenerator/logs'
   strategy:
     class_path: lightning.pytorch.strategies.DDPStrategy
-  logger: 
+  logger:
     class_path: lightning.pytorch.loggers.wandb.WandbLogger
     init_args:
       name: "default"

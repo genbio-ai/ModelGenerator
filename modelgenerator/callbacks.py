@@ -3,13 +3,11 @@ import torch
 from torch.optim.optimizer import Optimizer
 import torch.nn.functional as F
 from lightning import LightningModule
-import lightning.pytorch as pl
-from lightning.pytorch.utilities import rank_zero_info, rank_zero_warn
+from lightning.pytorch.utilities import rank_zero_warn
 from lightning.pytorch.callbacks import Callback, BaseFinetuning
 import glob
 import pandas as pd
-from typing import Optional, List, Any, Literal
-from pathlib import Path
+from typing import Optional, List
 import re
 import yaml
 
@@ -41,23 +39,23 @@ class PredictionWriter(Callback):
         drop_special_tokens: bool = False,  # doesn't work for pt filetype
         argmax_predictions: bool = False,  # run argmax on predictions before saving
         remove_duplicates: bool = False,  # remove duplicates in the final file, needs uid in the write_cols
-        delete_intermediate_files: bool = False 
+        delete_intermediate_files: bool = False,
         # TODO: we need something that cleans up the intermediate files
     ):
         super().__init__()
         assert filetype in ["tsv", "pt"], "Only support tsv and pt filetype for now."
-        assert (
-            drop_special_tokens == False or filetype == "tsv"
-        ), "drop_special_tokens only works for tsv filetype."
-        assert (
-            remove_duplicates == False or "uid" in write_cols
-        ), "remove_duplicates requires 'uid' in write_cols."
-        assert (
-            remove_duplicates == False or filetype == "tsv"
-        ), "remove_duplicates only works for tsv filetype."
-        assert (
-            delete_intermediate_files == False or remove_duplicates == True
-        ), "delete_intermediate_files only works for remove_duplicates == True."
+        assert drop_special_tokens == False or filetype == "tsv", (
+            "drop_special_tokens only works for tsv filetype."
+        )
+        assert remove_duplicates == False or "uid" in write_cols, (
+            "remove_duplicates requires 'uid' in write_cols."
+        )
+        assert remove_duplicates == False or filetype == "tsv", (
+            "remove_duplicates only works for tsv filetype."
+        )
+        assert delete_intermediate_files == False or remove_duplicates == True, (
+            "delete_intermediate_files only works for remove_duplicates == True."
+        )
 
         self.output_dir = output_dir
         self.filetype = filetype
@@ -89,29 +87,22 @@ class PredictionWriter(Callback):
                 )
             elif (
                 predictions["attention_mask"].shape
-                != predictions["predictions"].shape[
-                    : len(predictions["attention_mask"].shape)
-                ]
+                != predictions["predictions"].shape[: len(predictions["attention_mask"].shape)]
             ):
                 rank_zero_warn(
                     "drop_special_tokens is set to True, but the shape of 'attention_mask' does not match the shape of 'predictions'."
                     f"attention_mask shape: {predictions['attention_mask'].shape}, predictions shape: {predictions['predictions'].shape}"
                 )
             else:
-                mask = (
-                    torch.tensor(predictions["attention_mask"]).bool().cpu()
-                    & ~(torch.tensor(predictions["special_tokens_mask"]).bool().cpu())
+                mask = torch.tensor(predictions["attention_mask"]).bool().cpu() & ~(
+                    torch.tensor(predictions["special_tokens_mask"]).bool().cpu()
                 )
-                new_predictions = {}
                 predictions_no_special = [
-                    pred[mask[i]].tolist()
-                    for i, pred in enumerate(predictions["predictions"])
+                    pred[mask[i]].tolist() for i, pred in enumerate(predictions["predictions"])
                 ]
                 # this is a non-inplace replacement
                 # NOTE: the predictions now become a list of lists
-                predictions = replace_key_value(
-                    predictions, "predictions", predictions_no_special
-                )
+                predictions = replace_key_value(predictions, "predictions", predictions_no_special)
 
         if self.write_cols is None:
             save_predictions = predictions
@@ -123,11 +114,15 @@ class PredictionWriter(Callback):
             for k in save_predictions.keys():
                 if isinstance(save_predictions[k], torch.Tensor):
                     # << Keep same length for each item
-                    v = save_predictions[k].squeeze(-1).tolist()
-                    if isinstance(v, (tuple, list)) and len(v) != 1:
-                        v = [v]
-                    save_predictions[k] = v
-            
+                    # v = save_predictions[k].squeeze(-1).tolist()
+                    # if isinstance(v, (tuple, list)) and len(v) != 1:
+                    #     v = [v]
+                    # save_predictions[k] = v
+
+                    # TODO: the above code is not working for AIDO.RNA-1.6B-translation-efficiency-muscle on
+                    # the SequenceRegression task, which need to be figured out and fixed later
+                    save_predictions[k] = save_predictions[k].squeeze(-1).tolist()
+
             df = pd.DataFrame.from_dict(save_predictions)
             df.to_csv(
                 os.path.join(
@@ -162,9 +157,7 @@ class PredictionWriter(Callback):
         if trainer.is_global_zero:
             if self.filetype == "tsv":
                 # merge all tsv files and write to a new tsv file
-                tsv_files = glob.glob(
-                    os.path.join(self.output_dir, f"{stage}_predictions_*.tsv")
-                )
+                tsv_files = glob.glob(os.path.join(self.output_dir, f"{stage}_predictions_*.tsv"))
                 df_list = [pd.read_csv(file, sep="\t") for file in tsv_files]
                 merged_df = pd.concat(df_list, ignore_index=True)
                 if self.remove_duplicates:
@@ -187,7 +180,11 @@ class PredictionWriter(Callback):
                 merged_data = {}
                 tensor_cols = {}
                 for i, file in enumerate(prediction_files):
-                    data = torch.load(file)
+                    # Some backbones return `SequenceBackboneOutput` which is a dataclass
+                    # `torch.load` does not unpickle objects other than tensors for safety since pytorch 2.6
+                    # Therefore, we need to use weights_only=False to load the data back
+                    # The `weights_only` has been provided since pytorch 1.13 so it should be safe to always set it to False
+                    data = torch.load(file, weights_only=False)
                     if i == 0:
                         for col, val in data.items():
                             if val is None:
@@ -282,9 +279,7 @@ class FTScheduler(BaseFinetuning):
             self.freeze_before_training(pl_module)
 
         if current_epoch in self.ft_schedule:
-            current_epoch_unfreeze_regex = re.compile(
-                "|".join(self.ft_schedule[current_epoch])
-            )
+            current_epoch_unfreeze_regex = re.compile("|".join(self.ft_schedule[current_epoch]))
             for name, module in pl_module.named_modules():
                 if current_epoch_unfreeze_regex.match(name):
                     self.unfreeze_and_add_param_group(

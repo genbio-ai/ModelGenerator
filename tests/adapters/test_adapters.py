@@ -78,9 +78,7 @@ def test_sequence_adapter_output_shapes(
 ):
     adapter = adapter_class(**adapter_args)
     inputs = torch.randn(*input_shape)
-    attention_mask = (
-        torch.randint(0, 2, attention_mask_shape) if attention_mask_shape else None
-    )
+    attention_mask = torch.randint(0, 2, attention_mask_shape) if attention_mask_shape else None
     output = adapter(inputs, attention_mask)
     assert output.shape == expected_output_shape
     # all adapters should be able to handle None attention masks
@@ -123,9 +121,7 @@ def test_token_adapter_output_shapes(
 ):
     adapter = adapter_class(**adapter_args)
     inputs = torch.randn(*input_shape)
-    attention_mask = (
-        torch.randint(0, 2, attention_mask_shape) if attention_mask_shape else None
-    )
+    attention_mask = torch.randint(0, 2, attention_mask_shape) if attention_mask_shape else None
     output = adapter(inputs, attention_mask)
     assert output.shape == expected_output_shape
     # all adapters should be able to handle None attention masks

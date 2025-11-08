@@ -24,7 +24,6 @@ keywords = [
 ]
 dependencies = [
     "torch",
-    "torchvision",
     "transformers==4.38.0",
     "datasets>=2.14.6",  # fsspec issue fixed in 2.14.6
     "numpy<2",
@@ -51,17 +50,17 @@ dependencies = [
     "enformer-pytorch",
     "local_attention",
     "docstring-inheritance",
-    "tiledb==0.33.6", 
-    "tiledbsoma==1.16.1", 
+    "tiledb==0.33.6",
+    "tiledbsoma==1.16.1",
     "tiledbsoma-ml==0.1.0",
     "bionty==1.3.2",
+    "lmdb",
 ]
 requires-python = ">=3.10,<3.13"
 
 [project.optional-dependencies]
 dev = [
-    "pip-tools",
-    "black",
+    "pre-commit",
     "pytest",
     "pytest-cov",
     "mkdocstrings-python==1.12.2",
@@ -70,7 +69,6 @@ dev = [
 ]
 flash_attn = [
     "torch==2.6.0",
-    "torchvision==0.21.0",
     "flash_attn==2.7.4.post1",
 ]
 
@@ -87,3 +85,17 @@ allow-direct-references = true
 [project.urls]
 "Homepage" = "https://genbio-ai.github.io/ModelGenerator"
 "Source" = "https://github.com/genbio-ai/ModelGenerator"
+
+[tool.ruff]
+line-length = 100
+exclude = [
+    "modelgenerator/huggingface_models",
+    "modelgenerator/prot_inv_fold",
+    "modelgenerator/rna_inv_fold",
+    "modelgenerator/rna_ss",
+    "modelgenerator/structure_tokenizer",
+    "experiments"
+]
+
+[tool.ruff.lint]
+ignore = ["F405", "F403", "E741", "E712"]

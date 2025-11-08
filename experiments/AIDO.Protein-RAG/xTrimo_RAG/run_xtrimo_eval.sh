@@ -156,4 +156,3 @@ echo -e "\x1b[0;94;49m ${new_cmd} \x1b[0m"
 ssh ${NODE} "source ${SCRIPT_PATH}/init_env.sh && ${new_cmd} &> ${SCRIPT_PATH}/output_logs/${PROJECT}/${RUN_NAME}_test.log"
 
 # --model.reset_optimizer_states True
-

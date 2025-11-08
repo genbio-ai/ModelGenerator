@@ -14,5 +14,3 @@ srun mgen fit --config experiments/AIDO.Protein/DMS/configs/indels_LP_DDP.yaml \
     --data.batch_size 8 \
     &> output_logs/protein/${RUN_NAME}.log
 done
-
-

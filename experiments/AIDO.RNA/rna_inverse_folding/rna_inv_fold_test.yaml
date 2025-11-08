@@ -13,7 +13,7 @@ model:
   init_args:
     backbone:
       class_path: modelgenerator.backbones.aido_rna_1b600m
-    custom_invfold_config:      
+    custom_invfold_config:
       ## diffusion
       num_denoise_steps: 3
       diffusion_verbose: 1
@@ -28,7 +28,7 @@ trainer:
   precision: 32
   default_root_dir: "/mgen_data/modelgenerator/logs/rna_inv_fold/"
   detect_anomaly: true
-  
+
   # DDP strategy
   strategy:
     class_path: lightning.pytorch.strategies.DDPStrategy

@@ -1,5 +1,5 @@
 trainer:
-  logger: 
+  logger:
     class_path: lightning.pytorch.loggers.wandb.WandbLogger
     init_args:
       name: "my-experiment-name"

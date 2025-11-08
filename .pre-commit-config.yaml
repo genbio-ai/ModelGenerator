@@ -1,0 +1,26 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.7
+    hooks:
+      - id: ruff
+        args: [--config, pyproject.toml, --fix]
+      - id: ruff-format
+        args: [--config, pyproject.toml]
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^modelgenerator/(huggingface_models|prot_inv_fold|rna_inv_fold|rna_ss|structure_tokenizer)
+      - id: end-of-file-fixer
+        exclude: ^modelgenerator/(huggingface_models|prot_inv_fold|rna_inv_fold|rna_ss|structure_tokenizer)
+      - id: check-yaml
+        exclude: ^modelgenerator/(huggingface_models|prot_inv_fold|rna_inv_fold|rna_ss|structure_tokenizer)
+      - id: debug-statements
+        exclude: ^modelgenerator/(huggingface_models|prot_inv_fold|rna_inv_fold|rna_ss|structure_tokenizer)
+      - id: check-added-large-files
+        exclude: ^modelgenerator/(huggingface_models|prot_inv_fold|rna_inv_fold|rna_ss|structure_tokenizer)
+  - repo: https://github.com/python-poetry/poetry
+    rev: 2.1.2
+    hooks:
+      - id: poetry-check
+      - id: poetry-lock

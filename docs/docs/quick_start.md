@@ -33,13 +33,15 @@ mgen predict --model Inference --model.backbone aido_dna_dummy \
 ### Finetune a model
 ```
 mgen fit --model ConditionalDiffusion --model.backbone aido_dna_dummy \
-  --data ConditionalDiffusionDataModule --data.path "genbio-ai/100m-random-promoters"
+  --data ConditionalDiffusionDataModule --data.path "genbio-ai/100m-random-promoters" \
+  --data.x_col sequence --data.y_col label --data.rename_cols "{sequence: sequences}"
 ```
 
 ### Evaluate a model checkpoint
 ```
 mgen test --model ConditionalDiffusion --model.backbone aido_dna_dummy \
   --data ConditionalDiffusionDataModule --data.path "genbio-ai/100m-random-promoters" \
+  --data.x_col sequence --data.y_col label --data.rename_cols "{sequence: sequences}" \
   --ckpt_path logs/lightning_logs/version_X/checkpoints/<your_model>.ckpt
 ```
 
@@ -47,6 +49,7 @@ mgen test --model ConditionalDiffusion --model.backbone aido_dna_dummy \
 ```
 mgen predict --model ConditionalDiffusion --model.backbone aido_dna_dummy \
   --data ConditionalDiffusionDataModule --data.path "genbio-ai/100m-random-promoters" \
+  --data.x_col sequence --data.y_col label --data.rename_cols "{sequence: sequences}" \
   --ckpt_path logs/lightning_logs/version_X/checkpoints/<your_model>.ckpt \
   --config configs/examples/save_predictions.yaml
 ```
@@ -55,7 +58,8 @@ mgen predict --model ConditionalDiffusion --model.backbone aido_dna_dummy \
 This command
 ```
 mgen fit --model ConditionalDiffusion --model.backbone aido_dna_dummy \
-  --data ConditionalDiffusionDataModule --data.path "genbio-ai/100m-random-promoters"
+  --data ConditionalDiffusionDataModule --data.path "genbio-ai/100m-random-promoters" \
+  --data.x_col sequence --data.y_col label --data.rename_cols "{sequence: sequences}"
 ```
 
 is equivalent to
@@ -71,6 +75,10 @@ data:
   class_path: ConditionalDiffusionDataModule
   init_args:
     path: "genbio-ai/100m-random-promoters"
+    x_col: sequence
+    y_col: label
+    rename_cols:
+      sequence: sequences
 ```
 
 ## Use composable configs to customize workflows
@@ -101,6 +109,7 @@ First run pretraining objective on finetuning data
 # https://arxiv.org/pdf/2310.02980
 mgen fit --model MLM --model.backbone aido_dna_dummy \
   --data MLMDataModule --data.path leannmlindsey/GUE \
+  --data.x_col sequence --data.y_col label --data.rename_cols "{sequence: sequences}" \
   --data.config_name prom_core_notata
 ```
 
@@ -108,6 +117,7 @@ Then finetune using the adapted model
 ```
 mgen fit --model SequenceClassification --model.strict_loading false \
   --data SequenceClassificationDataModule --data.path leannmlindsey/GUE \
+  --data.x_col sequence --data.y_col label --data.rename_cols "{sequence: sequences}" \
   --data.config_name prom_core_notata \
   --ckpt_path logs/lightning_logs/version_X/checkpoints/<your_adapted_model>.ckpt
 ```

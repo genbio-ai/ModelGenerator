@@ -48,4 +48,3 @@ data:
     test_split_name: test
     valid_split_size: 0.1
     batch_size: 4
-

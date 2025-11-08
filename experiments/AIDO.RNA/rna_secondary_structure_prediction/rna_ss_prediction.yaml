@@ -17,15 +17,15 @@ model:
     use_legacy_adapter: false
     strict_loading: true
     reset_optimizer_states: false
-    backbone_fn:
+    backbone:
       class_path: modelgenerator.backbones.aido_rna_1b600m
       init_args:
-        max_length: 1024  
+        max_length: 1024
         use_peft: false
         config_overwrites:
           hidden_dropout_prob: 0.1
           attention_probs_dropout_prob: 0.1
-    adapter_fn:
+    adapter:
       class_path: modelgenerator.adapters.ResNet2DAdapter
     optimizer:
       class_path: torch.optim.AdamW
@@ -38,7 +38,6 @@ model:
         start_factor: 1.0
         end_factor: 0.1
         total_iters: 7500
-        verbose: true
 
 # Training Configuration
 trainer:
@@ -51,7 +50,7 @@ trainer:
   log_every_n_steps: 50
   detect_anomaly: false
   accumulate_grad_batches: 1
-  
+
   # callbacks
   callbacks:
     # Save a checkpoint for max val acc
@@ -65,17 +64,17 @@ trainer:
         # save_last: true
         verbose: true
         auto_insert_metric_name: false
-    
+
     # learning rate monitor
     - class_path: lightning.pytorch.callbacks.LearningRateMonitor
       dict_kwargs:
         logging_interval: "step"
-    
+
     # finetuning scheduler
     - class_path: modelgenerator.callbacks.FTScheduler
       dict_kwargs:
         ft_schedule_path: null
-  
+
   # DDP strategy
   strategy:
     class_path: lightning.pytorch.strategies.DDPStrategy

@@ -47,7 +47,7 @@ trainer:
   max_epochs: 5
   gradient_clip_val: 0
   profiler: null
-  callbacks: 
+  callbacks:
     - class_path: lightning.pytorch.callbacks.LearningRateMonitor
       dict_kwargs:
         logging_interval: "step"
@@ -77,7 +77,7 @@ trainer:
   default_root_dir: '/workspace/modelgenerator/logs'
   strategy:
     class_path: lightning.pytorch.strategies.DDPStrategy
-  logger: 
+  logger:
     class_path: lightning.pytorch.loggers.wandb.WandbLogger
     init_args:
       name: "default"
