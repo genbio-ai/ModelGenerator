@@ -106,10 +106,12 @@ class InverseFoldingDataset(Dataset):
         self.split = split
 
         logits_all, estimated_seq_by_gRNAde_all = torch.load(
-            os.path.join(data_root, f"logits_samples__{split}.pt")
+            os.path.join(data_root, f"logits_samples__{split}.pt"),
+            weights_only=False
         )
         lm_labels_all, structure_encodings_all = torch.load(
-            os.path.join(data_root, f"encodings__{split}.pt")
+            os.path.join(data_root, f"encodings__{split}.pt"),
+            weights_only=False
         )  ## load labels
 
         self.string_all = [

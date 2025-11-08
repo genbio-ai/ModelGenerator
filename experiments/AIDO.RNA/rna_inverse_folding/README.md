@@ -9,7 +9,7 @@ We evaluate our model in two settings: (1) adaptation with conditional diffusion
 |    gRNAde+AIDO.RNA-Zeroshot    |    53.16    |
 |    gRNAde+AIDO.RNA-Finetuned.  |    54.41    |
 
-##### Acknowledgement
+### Acknowledgement
 We thank the authors of [gRNAde](https://arxiv.org/abs/2305.14749) for providing their models' checkpoints and configuration files.
 
 #
@@ -71,15 +71,22 @@ huggingface-cli download genbio-ai/rna-inverse-folding \
 ```
 
 #### Run inference
-From your terminal, change directory to `experiments/AIDO.RNA/rna_inverse_folding` folder and run the following script:
+
+###### Initial estimate and structure encoding 
+From your terminal and run the following scripts first to produce the initial sequence estimates and the encodings by gRNAde:
 ```
 cd modelgenerator/rna_inv_fold/gRNAde_structure_encoder
-echo "Running inference.."
+echo "Generating initial estimate.."
 python main.py
 echo "Extracting structure encoding.."
 python main_encoder_only.py
+```
+
+###### Refinement
+Now run the following command to further refine the initial estimate:
+```
 cd  ../../../experiments/AIDO.RNA/rna_inverse_folding/
-# run inference
+mkdir -p rnaIF_outputs
 mgen test --config rna_inv_fold_test.yaml \
   --trainer.default_root_dir ${MGEN_DATA_DIR}/modelgenerator/logs/rna_inv_fold/ \
   --ckpt_path ${MGEN_DATA_DIR}/modelgenerator/huggingface_models/rna_inv_fold/AIDO.RNAIF-1.6B/model.ckpt \
@@ -111,3 +118,17 @@ An example file content with two test samples is shown below:
   ]
 }
 ```
+
+#### Zeroshot performance analyses
+If you are interested in the zeroshot performance analyses, we have provided a simple script `zeroshot_analyses.py` (under folder `modelgenerator/rna_inv_fold/`) that you can run **after** generating the initial estimates using gRNAde (similar to how we did it above).  Ensure that you have first changed directory to `experiments/AIDO.RNA/rna_inverse_folding` in your terminal.
+
+If you want to run the full ablation, you can simply run the following command:
+```
+python ../../../modelgenerator/rna_inv_fold/zeroshot_analyses.py run_ablation
+```
+If you are only interested in reproducing the score reported in the table above (with the best hyperparameters we found; reported as _"gRNAde+AIDO.RNA-Zeroshot"_), run the following command instead:
+```
+python ../../../modelgenerator/rna_inv_fold/zeroshot_analyses.py run_ablation
+```
+
+In both cases, the results will be printed on the terminal and also saved in the tsv file `./rnaIF_outputs/zeroshot_analyses_results.tsv`.
