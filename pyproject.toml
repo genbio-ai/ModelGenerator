@@ -63,6 +63,7 @@ dev = [
     "pre-commit",
     "pytest",
     "pytest-cov",
+    "mkdocstrings[python]>=0.25",
     "mkdocstrings-python==1.12.2",
     "mkdocs-material==9.5.44",
     "griffe-inherited-docstrings==1.1.1",
