@@ -24,5 +24,5 @@ jobs:
           path: .cache
           restore-keys: |
             mkdocs-material-
-      - run: pip install ".[dev]"
+      - run: PIP_NO_CACHE_DIR=1 pip install ".[dev]"
       - run: mkdocs gh-deploy --config-file docs/mkdocs.yml --force
