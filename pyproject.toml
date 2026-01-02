@@ -95,7 +95,8 @@ exclude = [
     "modelgenerator/rna_inv_fold",
     "modelgenerator/rna_ss",
     "modelgenerator/structure_tokenizer",
-    "experiments"
+    "experiments",
+    "huggingface"
 ]
 
 [tool.ruff.lint]
