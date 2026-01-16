@@ -1,0 +1,16 @@
+[PAD]
+[MASK]
+[CLS]
+[SEP]
+[UNK]
+A
+G
+C
+T
+U
+N
+[BOS]
+[EOS]
+[UNUSED1]
+[UNUSED2]
+[UNUSED3]

@@ -3,16 +3,16 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "aido-cell"
+name = "aido-rna"
 version = "0.1.0"
-description = "Standalone AIDO.Cell model package for single-cell RNA-seq analysis using HuggingFace transformers"
+description = "Standalone AIDO.RNA model package for RNA analysis using HuggingFace transformers"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "Apache-2.0"}
 authors = [
     {name = "genbio-ai"},
 ]
-keywords = ["single-cell", "RNA-seq", "transformer", "foundation-model", "embeddings"]
+keywords = ["RNA", "transformer", "foundation-model", "embeddings"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
@@ -27,17 +27,8 @@ dependencies = [
     "torch>=2.0.0",
     "transformers>=4.30.0",
     "numpy>=1.20.0",
-    "anndata>=0.8.0",
-    "scanpy>=1.10.0",
     "pandas>=1.3.0",
     "tqdm>=4.60.0",
-]
-
-[project.optional-dependencies]
-flash_attn = [
-    "flash-attn>=2.1.0",
-]
-peft = [
     "peft>=0.4.0",
 ]
 
@@ -45,7 +36,8 @@ peft = [
 Repository = "https://github.com/genbio-ai/ModelGenerator/huggingface"
 
 [tool.setuptools]
-packages = ["aido_cell", "aido_cell.models", "aido_cell.utils"]
+packages = ["aido_rna", "aido_rna.models", "aido_rna.utils"]
 
+# Vocab
 [tool.setuptools.package-data]
-aido_cell = ["models/gene_lists/*.tsv"]
+aido_rna = ["models/vocab.txt"]
