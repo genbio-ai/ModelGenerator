@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/license-GenBio_AI_Community_License-orange)](https://github.com/genbio-ai/ModelGenerator/blob/main/LICENSE)
 ![python](https://img.shields.io/badge/python-3.10%20|%203.11%20|%203.12-blue)
 [![PyPI version](https://badge.fury.io/py/modelgenerator.svg)](https://badge.fury.io/py/modelgenerator)
-![Maintenance](https://img.shields.io/maintenance/yes/2025?style=flat-square)
+![Maintenance](https://img.shields.io/maintenance/yes/2026?style=flat-square)
 [![Downloads](https://pepy.tech/badge/modelgenerator)](https://pepy.tech/project/modelgenerator)
 [![DOI](https://img.shields.io/badge/DOI-10.1101/2025.06.30.662437-brightgreen)](https://doi.org/10.1101/2025.06.30.662437)
 
