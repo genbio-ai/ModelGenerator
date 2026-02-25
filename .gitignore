@@ -175,3 +175,5 @@ cython_debug/
 
 # Pre-commit
 .ruff_cache
+
+.DS_Store

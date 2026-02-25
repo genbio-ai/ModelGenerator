@@ -1961,12 +1961,10 @@ class SpatialDataGenerator(Dataset):
         label = self.obs.iloc[idx].values[
             0
         ]  # Assuming single label column, assumes first column is label
-        if type(label) is np.float64:
+        if isinstance(label, (np.floating, np.integer, float, int)):
             label = np.array([label]).astype(np.float64)
-        else:
-            # print(type(label), label)
-            if "," in label:
-                label = np.array(list(map(float, label.split(",")))).astype(np.float64)
+        elif isinstance(label, str) and "," in label:
+            label = np.array(list(map(float, label.split(",")))).astype(np.float64)
 
         return {"sequences": features.astype(np.float32), "labels": label}
 
