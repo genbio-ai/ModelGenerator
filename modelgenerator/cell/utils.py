@@ -4,7 +4,28 @@ import anndata as ad
 import bionty as bt
 import numpy as np
 import pandas as pd
+import logging
 from lightning.pytorch.utilities import rank_zero_info
+
+logger = logging.getLogger(__name__)
+
+
+def _ensure_unique_obs_names(adata: ad.AnnData) -> ad.AnnData:
+    """Ensures that the observation names in the AnnData object are unique.
+
+    Args:
+        adata (ad.AnnData): The input AnnData object.
+
+    Returns:
+        ad.AnnData: The AnnData object with unique observation names.
+    """
+    if not adata.obs_names.is_unique:
+        logger.warning(
+            "Duplicate AnnData obs_names detected. "
+            "Automatically applying obs_names_make_unique()."
+        )
+        adata.obs_names_make_unique()
+    return adata
 
 
 def build_map(gene_symbols):

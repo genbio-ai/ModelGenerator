@@ -1556,17 +1556,21 @@ class CellClassificationDataModule(DataInterface):
         if self.filter_columns is not None:
             return ["sequences"] + self.filter_columns
         adata = ad.read_h5ad(os.path.join(self.path, self.trainfile), backed="r")
+        adata = cell_utils._ensure_unique_obs_names(adata)
         return ["sequences"] + list(adata.obs.columns)
 
     def setup(self, stage: Optional[str] = None):
         """Set up the data module by loading the whole datasets and splitting them into training, validation, and test sets."""
         adata_train = ad.read_h5ad(os.path.join(self.path, self.trainfile))
+        adata_train = cell_utils._ensure_unique_obs_names(adata_train)
         adata_train = cell_utils.map_gene_symbols(adata_train, symbol_field="gene_symbols")
         adata_train = cell_utils.align_genes(adata_train, self.backbone_gene_list)
         adata_val = ad.read_h5ad(os.path.join(self.path, self.valfile))
+        adata_val = cell_utils._ensure_unique_obs_names(adata_val)
         adata_val = cell_utils.map_gene_symbols(adata_val, symbol_field="gene_symbols")
         adata_val = cell_utils.align_genes(adata_val, self.backbone_gene_list)
         adata_test = ad.read_h5ad(os.path.join(self.path, self.testfile))
+        adata_test = cell_utils._ensure_unique_obs_names(adata_test)
         adata_test = cell_utils.map_gene_symbols(adata_test, symbol_field="gene_symbols")
         adata_test = cell_utils.align_genes(adata_test, self.backbone_gene_list)
 
@@ -1840,6 +1844,7 @@ class ClockDataModule(DataInterface):
     def setup(self, stage: Optional[str] = None):
         """Set up the data module by loading the whole datasets and splitting them into training, validation, and test sets."""
         adata = ad.read_h5ad(os.path.join(self.path, self.trainfile))
+        adata = cell_utils._ensure_unique_obs_names(adata)
         adata = cell_utils.align_genes(adata, self.backbone_gene_list, ensembl_field="feature_id")
 
         adata_train = adata[adata.obs[self.split_column] == "train"]
@@ -1913,6 +1918,7 @@ class SpatialDataGenerator(Dataset):
 
         # Load metadata in backed mode
         self.adata = ad.read_h5ad(self.file_path, backed="r")
+        self.adata = cell_utils._ensure_unique_obs_names(self.adata)
         self._process_metadata()
         self.neighbor_indices = self._precompute_neighbors()
         self.length = len(self.adata.obs)
@@ -2176,13 +2182,17 @@ class PertClassificationDataModule(DataInterface):
         if self.filter_columns is not None:
             return ["sequences"] + self.filter_columns
         adata = ad.read_h5ad(os.path.join(self.path, self.file), backed="r")
+        adata = cell_utils._ensure_unique_obs_names(adata)
         return ["sequences"] + list(adata.obs.columns)
-
     def setup(self, stage: Optional[str] = None):
         """Set up the data module by loading the whole datasets and splitting them into training, validation, and test sets."""
         rank_zero_info("***")
         rank_zero_info(f"loading {self.file}")
         adata = ad.read_h5ad(os.path.join(self.path, self.file))
+        # Check for duplicate obs_names
+        if not adata.obs_names.is_unique:
+            rank_zero_info("⚠ Duplicate AnnData obs_names detected. Automatically applying obs_names_make_unique().")
+            adata.obs_names_make_unique()
         adata = cell_utils.map_gene_symbols(adata, symbol_field="index")
         adata = cell_utils.align_genes(adata, self.backbone_gene_list)
         rank_zero_info(f"loaded {adata.shape[0]} cells")
