@@ -38,6 +38,7 @@ class ProteinInvFold(TaskInterface):
         self.accuracies_str_enc = []
         self.acc_metric = MyAccuracy()
 
+    @once_only
     def configure_model(self) -> None:
         self.lm = self.backbone_fn(None, None)
         self.tokenizer = self.lm.tokenizer

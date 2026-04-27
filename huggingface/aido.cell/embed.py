@@ -49,6 +49,10 @@ print("="*60 + "\n")
 print("Loading input data...")
 try:
     adata = ad.read_h5ad(INPUT_FILE)
+    # Check for duplicate obs_names
+    if not adata.obs_names.is_unique:
+        print("⚠ Duplicate AnnData obs_names detected. Automatically applying obs_names_make_unique().")
+        adata.obs_names_make_unique()
     print(f"✓ Loaded data with {adata.n_obs} cells and {adata.n_vars} genes\n")
 except Exception as e:
     print(f"Error loading data: {e}")

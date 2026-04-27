@@ -146,27 +146,6 @@ class GenBioBERT(HFSequenceBackbone):
                 for name, param in self.encoder.named_parameters():
                     param.requires_grad = False
 
-    def process_batch(self, batch, device, add_special_tokens=True, **kwargs):
-        """Processes a batch of sequences to model input format.
-
-        Args:
-            batch (List[str]): List of input sequences.
-            device (torch.device): Device to move the data to.
-            add_special_tokens (bool, optional): Whether to add special tokens. Defaults to True.
-
-        Returns:
-            Dict: A dictionary containing required args for forward pass.
-        """
-        seq_tokenized = self.tokenize(
-            batch["sequences"], padding=True, add_special_tokens=add_special_tokens, **kwargs
-        )
-        for k, v in seq_tokenized.items():
-            if v is not None:
-                if torch.is_tensor(v):
-                    seq_tokenized[k] = v.to(dtype=torch.long, device=device)
-                else:
-                    seq_tokenized[k] = torch.tensor(v, dtype=torch.long, device=device)
-        return seq_tokenized
 
     def forward(
         self,
@@ -1555,28 +1534,6 @@ class Onehot(HFSequenceBackbone):
         """
         return _Identity()
 
-    def process_batch(
-        self, batch: dict, device: torch.device, add_special_tokens: bool = True, **kwargs
-    ):
-        """Processes a batch of sequences to model input format.
-
-        Args:
-            batch (dict): A dictionary containing input sequences.
-            device (torch.device): Device to move the data to.
-
-        Returns:
-            Dict: A dictionary containing required args for forward pass.
-        """
-        seq_tokenized = self.tokenize(
-            batch["sequences"], padding=True, add_special_tokens=add_special_tokens, **kwargs
-        )
-        for k, v in seq_tokenized.items():
-            if v is not None:
-                if torch.is_tensor(v):
-                    seq_tokenized[k] = v.to(dtype=torch.long, device=device)
-                else:
-                    seq_tokenized[k] = torch.tensor(v, dtype=torch.long, device=device)
-        return seq_tokenized
 
     def tokenize(
         self,
@@ -1821,28 +1778,6 @@ class Huggingface(HFSequenceBackbone):
         """
         return _Identity()
 
-    def process_batch(
-        self, batch: dict, device: torch.device, add_special_tokens: bool = True, **kwargs
-    ):
-        """Processes a batch of sequences to model input format.
-
-        Args:
-            batch (dict): A dictionary containing input sequences.
-            device (torch.device): Device to move the data to.
-
-        Returns:
-            Dict: A dictionary containing required args for forward pass.
-        """
-        seq_tokenized = self.tokenize(
-            batch["sequences"], padding=True, add_special_tokens=add_special_tokens, **kwargs
-        )
-        for k, v in seq_tokenized.items():
-            if v is not None:
-                if torch.is_tensor(v):
-                    seq_tokenized[k] = v.to(dtype=torch.long, device=device)
-                else:
-                    seq_tokenized[k] = torch.tensor(v, dtype=torch.long, device=device)
-        return seq_tokenized
 
     def tokenize(self, sequences: list[str], **kwargs) -> dict:
         """Tokenizes a list of sequences
@@ -2033,17 +1968,6 @@ class Enformer(HFSequenceBackbone):
         """
         return self.decoder
 
-    def process_batch(self, batch: dict, device: torch.device, **kwargs):
-        """Processes a batch of sequences to model input format.
-
-        Args:
-            batch (dict): A dictionary containing input sequences.
-
-        Returns:
-            Dict: A dictionary containing required args for forward pass.
-        """
-        input_ids = self.tokenize(batch["sequences"])["input_ids"].to(device=device)
-        return {"input_ids": input_ids}
 
     def tokenize(
         self,
@@ -2230,17 +2154,6 @@ class Borzoi(HFSequenceBackbone):
         """
         return self.decoder
 
-    def process_batch(self, batch: dict, device: torch.device, **kwargs):
-        """Processes a batch of sequences to model input format.
-
-        Args:
-            batch (dict): A dictionary containing input sequences.
-
-        Returns:
-            Dict: A dictionary containing required args for forward pass.
-        """
-        input_ids = self.tokenize(batch["sequences"])["input_ids"].to(device=device)
-        return {"input_ids": input_ids}
 
     def tokenize(
         self,
@@ -2494,24 +2407,6 @@ class ESM(HFSequenceBackbone):
         """
         return self.decoder
 
-    def process_batch(self, batch: dict, device: torch.device, **kwargs):
-        """Processes a batch of sequences to model input format.
-
-        Args:
-            batch (dict): A dictionary containing input sequences.
-            device (torch.device): Device to move the data to.
-
-        Returns:
-            Dict: A dictionary containing required args for forward pass.
-        """
-        seq_tokenized = self.tokenize(batch["sequences"])
-        for k, v in seq_tokenized.items():
-            if v is not None:
-                if torch.is_tensor(v):
-                    seq_tokenized[k] = v.to(dtype=torch.long, device=device)
-                else:
-                    seq_tokenized[k] = torch.tensor(v, dtype=torch.long, device=device)
-        return seq_tokenized
 
     def tokenize(self, sequences: list[str], **kwargs) -> dict:
         """Tokenizes a list of sequences

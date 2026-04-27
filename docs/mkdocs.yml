@@ -16,6 +16,7 @@ nav:
     - usage/exporting_models.md
     - usage/reproducing_experiments.md
     - usage/embedding_caching.md
+    - usage/wandb_sweeps.md
   - Tutorials:
     - tutorials/kfold_cross_validation.md
     - tutorials/finetuning_scheduler.md

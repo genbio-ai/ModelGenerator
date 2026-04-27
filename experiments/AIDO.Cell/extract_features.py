@@ -14,6 +14,8 @@ model = Embed.from_config({
 model = model.to(device).to(torch.float16)
 
 adata = ad.read_h5ad('../../modelgenerator/cell-downstream-tasks/zheng/zheng_train.h5ad')
+if not adata.obs_names.is_unique:
+    adata.obs_names_make_unique()
 
 batch_np = adata[:batch_size].X.toarray()
 batch_tensor = torch.from_numpy(batch_np).to(torch.float16).to(device)
