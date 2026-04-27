@@ -309,7 +309,16 @@ class SequenceBackboneInterface(nn.Module, metaclass=GoogleKwargsDocstringInheri
         Returns:
             Dict: A dictionary containing required args for forward pass.
         """
-        raise NotImplementedError
+        seq_tokenized = self.tokenize(
+            batch["sequences"], padding=True, add_special_tokens=add_special_tokens, **kwargs
+        )
+        for k, v in seq_tokenized.items():
+            if v is not None:
+                if torch.is_tensor(v):
+                    seq_tokenized[k] = v.to(dtype=torch.long, device=device)
+                else:
+                    seq_tokenized[k] = torch.tensor(v, dtype=torch.long, device=device)
+        return seq_tokenized
 
     def required_data_columns(self) -> List[str]:
         """List of required data columns for the model.

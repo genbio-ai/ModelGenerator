@@ -88,6 +88,7 @@ class RNAInvFold(TaskInterface):
 
         print(self)
 
+    @once_only
     def configure_model(self) -> None:
         self.lm = self.backbone_fn(None, None)
         self.lm.setup()

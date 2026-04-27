@@ -9,18 +9,25 @@ from modelgenerator.data import *
 
 class MyLightningCLI(LightningCLI):
     def add_arguments_to_parser(self, parser):
-        parser.link_arguments("data.init_args.batch_size", "model.init_args.batch_size")
+        parser.link_arguments(
+            "data.init_args.batch_size", 
+            "model.init_args.batch_size",
+            apply_on="instantiate",
+        )
         parser.link_arguments(
             "model.init_args.backbone.class_path",
             "trainer.strategy.init_args.auto_wrap_policy.init_args.backbone_classes",
+            apply_on="instantiate",
         )
         parser.link_arguments(
             "model.init_args.backbone.class_path",
             "data.init_args.backbone_class_path",
+            apply_on="instantiate",
         )
         parser.link_arguments(
             "model.init_args.backbone.init_args.use_peft",
             "trainer.strategy.init_args.auto_wrap_policy.init_args.use_peft",
+            apply_on="instantiate",
         )
         parser.link_arguments(
             "data",

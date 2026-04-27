@@ -48,6 +48,7 @@ class RNASSPairwiseTokenClassification(TaskInterface):
         self.THRESHOLD_TUNE_METRIC = "f1"
         self.THRESHOLD_CANDIDATES = [i / 100 for i in range(1, 30, 1)]
 
+    @once_only
     def configure_model(self) -> None:
         self.backbone.setup()
         if self.use_legacy_adapter:
