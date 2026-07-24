@@ -6,7 +6,7 @@ Pre-trained foundation models (FMs, backbones) improve performance across a wide
 However, tasks utilize FMs in very different ways, often requiring a unique reimplementation or adaptation for every backbone-task pair, a process that is time-consuming and error-prone.
 For FM-enabled research and development to be practical, modularity and reusability are essential.
 
-AIDO.ModelGenerator `tasks` enable rapid prototyping and experimentation through hot-swappable `backbone` and `adapter` components, which make use of standard interfaces.
+GB.ModelGenerator `tasks` enable rapid prototyping and experimentation through hot-swappable `backbone` and `adapter` components, which make use of standard interfaces.
 All of this is made possible by the PyTorch Lightning framework, which provides the [LightningModule](https://lightning.ai/docs/pytorch/stable/cli/lightning_cli.html) interface for hardware-agnostic training, evaluation, and prediction, as well as configified experiment management and extensive [CLI](https://lightning.ai/docs/pytorch/stable/cli/lightning_cli.html) support.
 
 

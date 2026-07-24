@@ -126,7 +126,7 @@ class ContactPredictionBinary(TokenClassificationDataModule):
     Args:
         max_context_length: Maximum context length for the input sequences.
         msa_random_seed: Random seed for MSA generation.
-        is_rag_dataset: Whether the dataset is a RAG dataset for AIDO.Protein-RAG.
+        is_rag_dataset: Whether the dataset is a RAG dataset for GB.Protein-RAG.
     """
 
     def __init__(
@@ -176,7 +176,7 @@ class SspQ3(TokenClassificationDataModule):
     Args:
         max_context_length: Maximum context length for the input sequences.
         msa_random_seed: Random seed for MSA generation.
-        is_rag_dataset: Whether the dataset is a RAG dataset for AIDO.Protein-RAG.
+        is_rag_dataset: Whether the dataset is a RAG dataset for GB.Protein-RAG.
     """
 
     def __init__(
@@ -226,7 +226,7 @@ class FoldPrediction(SequenceClassificationDataModule):
     Args:
         max_context_length: Maximum context length for the input sequences.
         msa_random_seed: Random seed for MSA generation.
-        is_rag_dataset: Whether the dataset is a RAG dataset for AIDO.Protein-RAG.
+        is_rag_dataset: Whether the dataset is a RAG dataset for GB.Protein-RAG.
     """
 
     def __init__(
@@ -861,7 +861,7 @@ class FluorescencePrediction(SequenceRegressionDataModule):
     Args:
         max_context_length: Maximum context length for the input sequences.
         msa_random_seed: Random seed for MSA generation.
-        is_rag_dataset: Whether the dataset is a RAG dataset for AIDO.Protein-RAG.
+        is_rag_dataset: Whether the dataset is a RAG dataset for GB.Protein-RAG.
     """
 
     def __init__(
@@ -1044,7 +1044,7 @@ class DMSFitnessPrediction(SequenceRegressionDataModule):
     Args:
         max_context_length: Maximum context length for the input sequences.
         msa_random_seed: Random seed for MSA generation.
-        is_rag_dataset: Whether the dataset is a RAG dataset for AIDO.Protein-RAG.
+        is_rag_dataset: Whether the dataset is a RAG dataset for GB.Protein-RAG.
     """
 
     def __init__(

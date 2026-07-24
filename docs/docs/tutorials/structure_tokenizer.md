@@ -40,9 +40,9 @@ Relevant configuration files:
 - `encode_decode.yaml` for combined encoding and decoding.
 
 Relevant huggingface models:
-- `genbio-ai/AIDO.StructureEncoder` is the model for encoding protein structures into tokens.
-- `genbio-ai/AIDO.StructureDecoder` is the model for decoding tokens back into protein structures.
-- `genbio-ai/AIDO.StructureTokenizer` is the combined model for encoding and decoding protein structures.
+- `genbio-ai/GB.StructureEncoder` is the model for encoding protein structures into tokens.
+- `genbio-ai/GB.StructureDecoder` is the model for decoding tokens back into protein structures.
+- `genbio-ai/GB.StructureTokenizer` is the combined model for encoding and decoding protein structures.
 
 ### Structure Prediction Model (16B Language Model)
 
@@ -59,8 +59,8 @@ Relevant configuration files:
 - `decode.yaml` for decoding predicted tokens into structures.
 
 Relevant huggingface models:
-- `genbio-ai/AIDO.Protein2StructureToken-16B` is the model for predicting protein structure tokens from amino acid sequences.
-- `genbio-ai/AIDO.StructureDecoder` is the model for decoding predicted tokens back into protein structures.
+- `genbio-ai/GB.Protein2StructureToken-16B` is the model for predicting protein structure tokens from amino acid sequences.
+- `genbio-ai/GB.StructureDecoder` is the model for decoding predicted tokens back into protein structures.
 
 <!-- ## Setup
 
@@ -73,8 +73,8 @@ For pulling dataset from huggingface, you need `huggingface-hub` installed. -->
 
 If you want to have a quick try of the features without reading the detailed instructions in the following sections,
 you could run the following scripts that pack the commands for encoding, decoding, and structure prediction tasks.
-- `experiments/AIDO.StructureTokenizer/structure_encoding.sh`: Packs the commands for encoding and decoding tasks.
-- `experiments/AIDO.StructureTokenizer/structure_prediction.sh`: Packs the commands for structure prediction and decoding tasks.
+- `experiments/GB.StructureTokenizer/structure_encoding.sh`: Packs the commands for encoding and decoding tasks.
+- `experiments/GB.StructureTokenizer/structure_prediction.sh`: Packs the commands for structure prediction and decoding tasks.
 The outputs are under the `logs/` directory.
 
 **Notes:**
@@ -107,7 +107,7 @@ If you want to use your own dataset for testing the structure tokenizer model, y
 
 Then, you need to prepare a registry file in CSV format using the following command:
 ``` bash
-python experiments/AIDO.StructureTokenizer/register_dataset.py \
+python experiments/GB.StructureTokenizer/register_dataset.py \
     --folder_path /path/to/folder_path \
     --format cif.gz \
     --output_file /path/to/output_file.csv
@@ -115,7 +115,7 @@ python experiments/AIDO.StructureTokenizer/register_dataset.py \
 
 Example (if you have a folder with PDB files in `data/protstruct_sample_data/CASP15_merged/`):
 ``` bash
-python experiments/AIDO.StructureTokenizer/register_dataset.py \
+python experiments/GB.StructureTokenizer/register_dataset.py \
     --folder_path data/protstruct_sample_data/CASP15_merged/ \
     --format pdb \
     --output_file data/protstruct_sample_data/registries/casp15_merged_copy.csv
@@ -125,12 +125,12 @@ python experiments/AIDO.StructureTokenizer/register_dataset.py \
 
 If you use the sample dataset, you can run the encoding task using the following command:
 ```bash
-CUDA_VISIBLE_DEVICES=0 mgen predict --config experiments/AIDO.StructureTokenizer/encode.yaml
+CUDA_VISIBLE_DEVICES=0 mgen predict --config experiments/GB.StructureTokenizer/encode.yaml
 ```
 
 If you use your own dataset, you need to update the `folder_path` and the `registry_path` in the `encode.yaml` configuration file to point to your dataset folder and registry file. Alternatively, you can override these parameters when running the command:
 ```bash
-CUDA_VISIBLE_DEVICES=0 mgen predict --config experiments/AIDO.StructureTokenizer/encode.yaml \
+CUDA_VISIBLE_DEVICES=0 mgen predict --config experiments/GB.StructureTokenizer/encode.yaml \
     --data.init_args.config.proteins_datasets_configs.name="your_dataset_name" \
     --data.init_args.config.proteins_datasets_configs.registry_path="your_dataset_folder_path" \
     --data.init_args.config.proteins_datasets_configs.folder_path="your_dataset_registry_path" \
@@ -172,13 +172,13 @@ We can use the decoder from the structure tokenizer to convert the encoded token
 If you have run the encoding task above on the sample dataset, the default `decode.yaml` configuration file is already set up to decode the encoded tokens. You don't need to change anything in the configuration file. You can directly run the decoding task using the following command:
 
 ```bash
-CUDA_VISIBLE_DEVICES=0 mgen predict --config=experiments/AIDO.StructureTokenizer/decode.yaml
+CUDA_VISIBLE_DEVICES=0 mgen predict --config=experiments/GB.StructureTokenizer/decode.yaml
 ```
 
 #### Decoding Your Structure Tokens
 To decode protein structures, you will need the structure tokens in `.pt` format and a corresponding codebook file (`codebook.pt`). For ease of use, we recommend preparing the structure tokens in TSV format and then converting them to `.pt` format using the provided script.
 
-The TSV file should include the following columns (an example file is available at `experiments/AIDO.StructureTokenizer/decode_example_input.tsv`):
+The TSV file should include the following columns (an example file is available at `experiments/GB.StructureTokenizer/decode_example_input.tsv`):
 - `uid`: A unique identifier for the protein sequence.
 - `sequences`: The amino acid sequence (e.g., "LRTPTT").
 - `predictions`: The structure tokens to be decoded, provided as a list (e.g., "[164, 287, 119, ...]"). The list length must match the length of the amino acid sequence.
@@ -186,17 +186,17 @@ The TSV file should include the following columns (an example file is available 
 
 After preparing the TSV file, you need to convert the TSV file to the `.pt` format using the following command:
 ```bash
-python experiments/AIDO.StructureTokenizer/struct_token_format_conversion.py your_tsv_file.tsv your_output_pt_file.pt
+python experiments/GB.StructureTokenizer/struct_token_format_conversion.py your_tsv_file.tsv your_output_pt_file.pt
 ```
 
 You also need to prepare a codebook file (`codebook.pt`) that contains the embedding of each token. The codebook could be extracted using this command:
 ```bash
-python experiments/AIDO.StructureTokenizer/extract_structure_tokenizer_codebook.py --output_path your_output_codebook.pt
+python experiments/GB.StructureTokenizer/extract_structure_tokenizer_codebook.py --output_path your_output_codebook.pt
 ```
 
 Then you need to update the `struct_tokens_path` and `codebook_path` in the `decode.yaml` configuration file to point to your structure tokens and codebook file. Alternatively, you can override these parameters when running the command:
 ```bash
-CUDA_VISIBLE_DEVICES=0 mgen predict --config experiments/AIDO.StructureTokenizer/decode.yaml \
+CUDA_VISIBLE_DEVICES=0 mgen predict --config experiments/GB.StructureTokenizer/decode.yaml \
  --data.init_args.config.struct_tokens_datasets_configs.name="your_dataset_name" \
  --data.init_args.config.struct_tokens_datasets_configs.struct_tokens_path="your_structure_tokens.pt" \
  --data.init_args.config.struct_tokens_datasets_configs.codebook_path="your_codebook.pt" \
@@ -228,14 +228,14 @@ The data preparation is the same as [Encoding Structures into Tokens](#encoding-
 
 If you use the sample dataset, you can run the combined encoding and decoding task using the following command:
 ```bash
-CUDA_VISIBLE_DEVICES=0 mgen predict --config=experiments/AIDO.StructureTokenizer/encode_decode.yaml
+CUDA_VISIBLE_DEVICES=0 mgen predict --config=experiments/GB.StructureTokenizer/encode_decode.yaml
 ```
 
 If you use your own dataset, you need to update the `folder_path` and the `registry_path` in the `encode_decode.yaml` configuration file or override them when running the command as described in [Encoding Structures into Tokens](#encoding-structures-into-tokens).
 
 Example:
 ```bash
-CUDA_VISIBLE_DEVICES=0 mgen predict --config experiments/AIDO.StructuctureTokenizer/encode_decode.yaml \
+CUDA_VISIBLE_DEVICES=0 mgen predict --config experiments/GB.StructureTokenizer/encode_decode.yaml \
     --data.init_args.config.proteins_datasets_configs.name="your_dataset_name" \
     --data.init_args.config.proteins_datasets_configs.registry_path="your_dataset_folder_path" \
     --data.init_args.config.proteins_datasets_configs.folder_path="your_dataset_registry_path" \
@@ -274,11 +274,11 @@ We can use the structure prediction model to predict protein structure tokens di
 <!-- # 1. run the 16b language model to predict the structure tokens from protein sequences (amino acids)
 # the input is the casp14, casp15, and cameo amino acid sequences (specified in the config file)
 # the output is logs/protein2structoken_16b/predict_predictions.tsv
-mgen predict --config experiments/AIDO.StructureTokenizer/protein2structoken_16b.yaml -->
+mgen predict --config experiments/GB.StructureTokenizer/protein2structoken_16b.yaml -->
 
 We've provided a sample configuration file `protein2structoken_16b.yaml` that is set up to predict structure tokens from amino acid sequences in the CASP14, CASP15, and CAMEO datasets. You can run the structure prediction task using the following command:
 ```bash
-mgen predict --config experiments/AIDO.StructureTokenizer/protein2structoken_16b.yaml
+mgen predict --config experiments/GB.StructureTokenizer/protein2structoken_16b.yaml
 ```
 This will automatically download the preprocessed files from the Hugging Face hub and predict the structure tokens from the amino acid sequences. The predicted tokens will be saved in the `logs/protein2structoken_16b/predict_predictions.tsv` file.
 
@@ -290,10 +290,10 @@ Alternatively, if you want to predict structure tokens from your own amino acid 
 |-----------|-------------------------------------|
 | example   | KEFWNLDKNLQLRLGIVFLG                |
 
-We've provided an example input file at `experiments/AIDO.StructureTokenizer/protein2structoken_example_input.csv` that you can use to test the structure prediction model. You can run the following command to predict the structure tokens from the amino acid sequences in the input file:
+We've provided an example input file at `experiments/GB.StructureTokenizer/protein2structoken_example_input.csv` that you can use to test the structure prediction model. You can run the following command to predict the structure tokens from the amino acid sequences in the input file:
 ```bash
-mgen predict --config experiments/AIDO.StructureTokenizer/protein2structoken_16b.yaml \
-    --data.init_args.path=experiments/AIDO.StructureTokenizer/ \
+mgen predict --config experiments/GB.StructureTokenizer/protein2structoken_16b.yaml \
+    --data.init_args.path=experiments/GB.StructureTokenizer/ \
     --data.init_args.test_split_files=[protein2structoken_example_input.csv]
 ```
 
@@ -302,17 +302,17 @@ We need to decode the predicted structure tokens into protein structures using t
 
 ``` bash
 # 2. convert the predicted structures in tsv into one pt file
-python experiments/AIDO.StructureTokenizer/struct_token_format_conversion.py logs/protein2structoken_16b/predict_predictions.tsv logs/protein2structoken_16b/predict_predictions.pt
+python experiments/GB.StructureTokenizer/struct_token_format_conversion.py logs/protein2structoken_16b/predict_predictions.tsv logs/protein2structoken_16b/predict_predictions.pt
 
 # 3. extract the codebook of the structure tokenizer
 # the output is logs/protein2structoken_16b/codebook.pt
-python experiments/AIDO.StructureTokenizer/extract_structure_tokenizer_codebook.py --output_path logs/protein2structoken_16b/codebook.pt
+python experiments/GB.StructureTokenizer/extract_structure_tokenizer_codebook.py --output_path logs/protein2structoken_16b/codebook.pt
 
 # 4. run the decode model to convert the structure tokens into pdb files
 # currently this script doesn't support multi-gpu, so only use one gpu
 # the command line overrides the name, input structure tokens, and codebook path
 # the output is logs/protein2structoken_16b/predict_predictions.pdb
-CUDA_VISIBLE_DEVICES=0 mgen predict --config experiments/AIDO.StructureTokenizer/decode.yaml \
+CUDA_VISIBLE_DEVICES=0 mgen predict --config experiments/GB.StructureTokenizer/decode.yaml \
  --data.init_args.config.struct_tokens_datasets_configs.name=protein2structoken_16b \
  --data.init_args.config.struct_tokens_datasets_configs.struct_tokens_path=logs/protein2structoken_16b/predict_predictions.pt \
  --data.init_args.config.struct_tokens_datasets_configs.codebook_path=logs/protein2structoken_16b/codebook.pt

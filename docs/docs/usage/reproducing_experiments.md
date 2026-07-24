@@ -1,12 +1,12 @@
 # Reproducing Experiments
 
-Experiments run through AIDO.ModelGenerator generate `config.yaml` and `<model>.ckpt` artifacts which can be used to reproduce training and evaluation, or extend experiments and improve models.
+Experiments run through GB.ModelGenerator generate `config.yaml` and `<model>.ckpt` artifacts which can be used to reproduce training and evaluation, or extend experiments and improve models.
 
 Many pre-packaged experiments are available in the [experiments](https://github.com/genbio-ai/ModelGenerator/blob/main/experiments) directory with instructions to run inference, evaluate, and reproduce training runs.
 
 ## Experiment Configs
 
-When you start a run, AIDO.ModelGenerator saves a full `config.yaml` file for every experiment run which includes all user-specified and default args.
+When you start a run, GB.ModelGenerator saves a full `config.yaml` file for every experiment run which includes all user-specified and default args.
 To reproduce a training run
 
 ```
@@ -19,7 +19,7 @@ Checkpoints can be used immediately to reproduce test metrics or run inference o
 
 ## Experiment Checkpoints
 
-If you use checkpointing callbacks (enabled by default), AIDO.ModelGenerator will save `<model>.ckpt` files within your logging directory.
+If you use checkpointing callbacks (enabled by default), GB.ModelGenerator will save `<model>.ckpt` files within your logging directory.
 These can be used with the saved `config.yaml` to run evaluation or prediction.
 
 ```
@@ -35,7 +35,7 @@ mgen predict --config config.yaml \
 
 ## Pre-packaged Experiments
 
-Experiment configs and scripts from studies using AIDO.ModelGenerator are available in the [experiments](https://github.com/genbio-ai/ModelGenerator/blob/main/experiments) directory with instructions to run inference, evaluate, and reproduce training runs.
+Experiment configs and scripts from studies using GB.ModelGenerator are available in the [experiments](https://github.com/genbio-ai/ModelGenerator/blob/main/experiments) directory with instructions to run inference, evaluate, and reproduce training runs.
 
 Below are some general guidelines for reproducing experiments, or adding new experiments to the repository.
 For more details on each study, see the [Studies](../studies/index.md) page.

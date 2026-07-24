@@ -16,7 +16,7 @@ model:
   class_path: SequenceClassification
   init_args:
     backbone:
-      class_path: aido_dna_7b
+      class_path: gb_dna_7b
       init_args:
         use_peft: true
         lora_r: 16

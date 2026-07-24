@@ -1977,7 +1977,7 @@ class SpatialDataGenerator(Dataset):
 
 
 class CellWithNeighborDataModule(DataInterface):
-    """Data module for cell classification with neighbors for AIDO.Tissue.
+    """Data module for cell classification with neighbors for GB.Tissue.
 
     Note:
         Each sample includes a feature vector (one of the rows in <adata.X>) and a single class label (one of the columns in <adata.obs>)

@@ -1,6 +1,6 @@
 #### inv folding
 from modelgenerator.tasks import *
-from modelgenerator.backbones import aido_protein_16b
+from modelgenerator.backbones import gb_protein_16b
 from .extra_utils import *
 from typing import Mapping, Any
 import os
@@ -9,7 +9,7 @@ import os
 class ProteinInvFold(TaskInterface):
     def __init__(
         self,
-        backbone: BackboneCallable = aido_protein_16b,
+        backbone: BackboneCallable = gb_protein_16b,
         optimizer: OptimizerCallable = torch.optim.AdamW,
         lr_scheduler: Optional[LRSchedulerCallable] = LinearLR,
         batch_size: Optional[int] = None,

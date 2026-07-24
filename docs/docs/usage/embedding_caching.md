@@ -1,6 +1,6 @@
 # Embedding Caching (Experimental)
 
-AIDO.ModelGenerator provides seamless file-based persistent embedding caching for all freezable backbones (e.g. backbones with the option `frozen=True`). This feature aims to boost training speed and reduce overall resource consumption by skipping backbone forwarding and redundant data loading.
+GB.ModelGenerator provides seamless file-based persistent embedding caching for all freezable backbones (e.g. backbones with the option `frozen=True`). This feature aims to boost training speed and reduce overall resource consumption by skipping backbone forwarding and redundant data loading.
 
 ## Create and resume from cache
 

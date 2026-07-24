@@ -1,12 +1,12 @@
 # Adding Data Loaders
 
-AIDO.ModelGenerator uses [Lightning DataModules](https://lightning.ai/docs/pytorch/stable/data/datamodule.html) for dataset management and loading.
+GB.ModelGenerator uses [Lightning DataModules](https://lightning.ai/docs/pytorch/stable/data/datamodule.html) for dataset management and loading.
 We also provide a few tools to make data management more convenient, and work with common file types out-of-the-box.
 
-AIDO.ModelGenerator provides a `DataInterface` class that hides boilerplate, along with a `HFDatasetLoaderMixin` that combines Lightning DataModule structure and [HuggingFace Datasets](https://huggingface.co/docs/datasets) convenience together to quickly load data from HuggingFace or common file formats (e.g. tsv, csv, json, etc).
+GB.ModelGenerator provides a `DataInterface` class that hides boilerplate, along with a `HFDatasetLoaderMixin` that combines Lightning DataModule structure and [HuggingFace Datasets](https://huggingface.co/docs/datasets) convenience together to quickly load data from HuggingFace or common file formats (e.g. tsv, csv, json, etc).
 More convenient mixins and example usage are outlined below.
 
-Many common tasks and data loaders are already implemented in AIDO.ModelGenerator, and only require setting new paths to run with new data.
+Many common tasks and data loaders are already implemented in GB.ModelGenerator, and only require setting new paths to run with new data.
 See the [Data API Reference](../api_reference/data.md) for all types of available data modules.
 
 ::: modelgenerator.data.DataInterface

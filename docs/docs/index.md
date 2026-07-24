@@ -1,9 +1,9 @@
 # Introduction
 
-AIDO.ModelGenerator is a software stack powering the development of an AI-driven Digital Organism by enabling researchers to adapt pretrained models and generate finetuned models for downstream tasks.
-To read more about AIDO.ModelGenerator's integral role in building the world's first AI-driven Digital Organism, see [AIDO](https://github.com/genbio-ai/AIDO).
+GB.ModelGenerator is a software stack powering the development of an AI-driven Digital Organism by enabling researchers to adapt pretrained models and generate finetuned models for downstream tasks.
+To read more about GB.ModelGenerator's integral role in building the world's first AI-driven Digital Organism, see [AIDO](https://github.com/genbio-ai/AIDO).
 
-AIDO.ModelGenerator is open-sourced as an opinionated plug-and-play research framework for cross-disciplinary teams in ML & Bio.
+GB.ModelGenerator is open-sourced as an opinionated plug-and-play research framework for cross-disciplinary teams in ML & Bio.
 It is designed to enable rapid and reproducible prototyping with four kinds of experiments in mind:
 
 1. Applying pre-trained foundation models to new data
@@ -13,9 +13,9 @@ It is designed to enable rapid and reproducible prototyping with four kinds of e
 
 while also scaling with hardware and integrating with larger data pipelines or research workflows.
 
-AIDO.ModelGenerator is built on PyTorch, HuggingFace, and Lightning, and works seamlessly with these ecosystems.
+GB.ModelGenerator is built on PyTorch, HuggingFace, and Lightning, and works seamlessly with these ecosystems.
 
-## Who uses AIDO.ModelGenerator?
+## Who uses GB.ModelGenerator?
 
 ### 🧬 Biologists
 * Intuitive one-command CLIs for in silico experiments
@@ -40,7 +40,7 @@ AIDO.ModelGenerator is built on PyTorch, HuggingFace, and Lightning, and works s
 * Community-driven development
 * Permissive license for academic and non-commercial use
 
-## Projects using AIDO.ModelGenerator
+## Projects using GB.ModelGenerator
 
 - [Accurate and General DNA Representations Emerge from Genome Foundation Models at Scale](https://doi.org/10.1101/2024.12.01.625444)
 - [A Large-Scale Foundation Model for RNA Function and Structure Prediction](https://doi.org/10.1101/2024.11.28.625345)

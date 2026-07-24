@@ -1,10 +1,10 @@
-site_name: AIDO.ModelGenerator
+site_name: GB.ModelGenerator
 site_url: https://genbio-ai.github.io/ModelGenerator/
 site_author: GenBio AI
-site_description: AIDO.ModelGenerator is a software stack powering the development of an AI-driven Digital Organism by enabling researchers to adapt pretrained models and generate finetuned models for downstream tasks.
+site_description: GB.ModelGenerator is a software stack powering the development of an AI-driven Digital Organism by enabling researchers to adapt pretrained models and generate finetuned models for downstream tasks.
 copyright: All rights reserved &copy; 2024-Present, GenBio AI
 
-repo_name: AIDO.ModelGenerator
+repo_name: GB.ModelGenerator
 repo_url: https://github.com/genbio-ai/ModelGenerator
 
 nav:

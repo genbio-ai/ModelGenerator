@@ -119,7 +119,7 @@ class PredictionWriter(Callback):
                     #     v = [v]
                     # save_predictions[k] = v
 
-                    # TODO: the above code is not working for AIDO.RNA-1.6B-translation-efficiency-muscle on
+                    # TODO: the above code is not working for GB.RNA-1.6B-translation-efficiency-muscle on
                     # the SequenceRegression task, which need to be figured out and fixed later
                     save_predictions[k] = save_predictions[k].squeeze(-1).tolist()
 

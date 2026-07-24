@@ -1,6 +1,6 @@
 # Basic Usage
 
-AIDO.ModelGenerator orchestrates experiments with [LightningCLI](https://lightning.ai/docs/pytorch/stable/cli/lightning_cli.html) to make runs modular, composable, and reproducible.
+GB.ModelGenerator orchestrates experiments with [LightningCLI](https://lightning.ai/docs/pytorch/stable/cli/lightning_cli.html) to make runs modular, composable, and reproducible.
 
 Training, validation, testing, and prediction are separated into independent CLI calls to `mgen fit/validate/test/predict`.
 For researchers developing new backbones, heads, or tasks, a typical workflow might be
@@ -42,7 +42,7 @@ mgen fit --model.help <Task>
 mgen fit --data.help <Dataset>
 # e.g. mgen fit --data.help PromoterExpressionRegression
 mgen fit --model.help <Task> --model.<arg>.help <arg_object>
-# e.g. mgen fit --model.help ConditionalDiffusion --model.backbone.help aido_dna_dummy
+# e.g. mgen fit --model.help ConditionalDiffusion --model.backbone.help gb_dna_dummy
 ```
 
 ## Using Configs
@@ -51,7 +51,7 @@ mgen fit --model.help <Task> --model.<arg>.help <arg_object>
 For reproducibility and fine-grained control, all CLI calls can be organized into a `config.yaml` file.
 The command
 ```
-mgen fit --model ConditionalDiffusion --model.backbone aido_dna_dummy \
+mgen fit --model ConditionalDiffusion --model.backbone gb_dna_dummy \
   --data ConditionalDiffusion --data.path "genbio-ai/100m-random-promoters"
 ```
 
@@ -62,7 +62,7 @@ is equivalent to
 # my_config.yaml
 model:
   class_path: ConditionalDiffusion
-  backbone: aido_dna_dummy
+  backbone: gb_dna_dummy
 data:
   class_path: ConditionalDiffusion
   init_args:
@@ -79,7 +79,7 @@ Combining these two configs
 # my_config.yaml
 model:
   class_path: ConditionalDiffusion
-  backbone: aido_dna_dummy
+  backbone: gb_dna_dummy
   adapter:
     class_path: modelgenerator.adapters.ConditionalLMAdapter
     init_args:
@@ -90,7 +90,7 @@ model:
 # my_new_config.yaml
 model:
   class_path: ConditionalDiffusion
-  backbone: aido_dna_7b
+  backbone: gb_dna_7b
   adapter:
     class_path: modelgenerator.adapters.ConditionalLMAdapter
     init_args:
@@ -101,7 +101,7 @@ as `mgen fit --config my_config.yaml --config my_new_config.yaml` results in
 ```
 model:
   class_path: ConditionalDiffusion
-  backbone: aido_dna_7b
+  backbone: gb_dna_7b
   adapter:
     class_path: modelgenerator.adapters.ConditionalLMAdapter
     init_args:
@@ -116,7 +116,7 @@ We provide some useful tools in `configs/examples` for logging, development, LoR
 
 The full configuration including all defaults and user-specified arguments will always be saved for each run.
 This file changes location depending on logger, but will be in `logs/lightning_logs/your-experiment/config.yaml` by default, or if using wandb `logs/config.yaml`.
-Even if AIDO.ModelGenerator defaults change, simply using `mgen fit --config your/logged/config.yaml` will always reproduce the experiment.
+Even if GB.ModelGenerator defaults change, simply using `mgen fit --config your/logged/config.yaml` will always reproduce the experiment.
 
 ### Example
 
@@ -133,7 +133,7 @@ model:
   class_path: modelgenerator.tasks.SequenceRegression
   init_args:
     backbone:
-      class_path: modelgenerator.backbones.aido_dna_dummy
+      class_path: modelgenerator.backbones.gb_dna_dummy
       init_args:
         from_scratch: false
         max_length: null

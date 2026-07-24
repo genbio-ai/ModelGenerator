@@ -15,9 +15,9 @@ In this example, when the model is setup, all the layers are first frozen. Then 
 #### Using `schedule` when finetuning with ModelGenerator
 In order to use this schedule for finetuning, we can simply to set this as CLI argument for `--trainer.callbacks.ft_schedule_path` when calling `mget fit`.
 
-Following is an example of finetuning the [AIDO.RNA-1.6B](https://huggingface.co/genbio-ai/AIDO.RNA-1.6B) model for RNA secondary structure prediction, with a **scheduler named `layers_0_32.yaml`**. (**NOTE:** Please refer to the [correspoding experiment folder](https://github.com/genbio-ai/ModelGenerator/tree/main/experiments/AIDO.RNA/rna_secondary_structure_prediction) for details of this experiment):
+Following is an example of finetuning the [GB.RNA-1.6B](https://huggingface.co/genbio-ai/GB.RNA-1.6B) model for RNA secondary structure prediction, with a **scheduler named `layers_0_32.yaml`**. (**NOTE:** Please refer to the [correspoding experiment folder](https://github.com/genbio-ai/ModelGenerator/tree/main/experiments/GB.RNA/rna_secondary_structure_prediction) for details of this experiment):
 ```
-cd experiments/AIDO.RNA/rna_secondary_structure_prediction
+cd experiments/GB.RNA/rna_secondary_structure_prediction
 MGEN_DATA_DIR=~/mgen_data
 DATASET_NAME=bpRNA
 CKPT_SAVE_DIR=logs/rna_ss/${DATASET_NAME}

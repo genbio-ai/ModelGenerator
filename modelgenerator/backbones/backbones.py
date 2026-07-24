@@ -23,9 +23,9 @@ class GenBioBERT(HFSequenceBackbone):
     """GenBioBERT model
 
     Note:
-        Models using this interface include `aido_dna_7b`, `aido_dna_300m`, `dna_dummy`, `aido_dna_debug`,
-        `aido_rna_1b600m`, `aido_rna_1b600m_cds`, `aido_rna_1m_mars`, `aido_rna_25m_mars`, `aido_rna_300m_mars`,
-        `aido_rna_650m`, `aido_rna_650m_cds`.
+        Models using this interface include `gb_dna_7b`, `gb_dna_300m`, `dna_dummy`, `gb_dna_debug`,
+        `gb_rna_1b600m`, `gb_rna_1b600m_cds`, `gb_rna_1m_mars`, `gb_rna_25m_mars`, `gb_rna_300m_mars`,
+        `gb_rna_650m`, `gb_rna_650m_cds`.
 
         FSDP auto_wrap_policy is `modelgenerator.distributed.fsdp.wrap.AutoWrapPolicy`
 
@@ -310,7 +310,7 @@ class GenBioFM(HFSequenceBackbone):
     """GenBioFM model
 
     Note:
-        Models using this interface include `aido_protein_16b`, `aido_protein_16b_v1`, `aido_protein2structoken_16b`, `aido_protein_debug`.
+        Models using this interface include `gb_protein_16b`, `gb_protein_16b_v1`, `gb_protein2structoken_16b`, `gb_protein_debug`.
 
         FSDP auto_wrap_policy is `modelgenerator.distributed.fsdp.wrap.AutoWrapPolicy`
 
@@ -757,7 +757,7 @@ class GenBioCellFoundation(HFSequenceBackbone):
     """GenBioCellFoundation model
 
     Note:
-        Models using this interface include `aido_cell_100m`, `aido_cell_10m`, and `aido_cell_3m`.
+        Models using this interface include `gb_cell_100m`, `gb_cell_10m`, and `gb_cell_3m`.
 
         FSDP auto_wrap_policy is `modelgenerator.distributed.fsdp.wrap.AutoWrapPolicy`
 
@@ -1028,7 +1028,7 @@ class GenBioCellSpatialFoundation(HFSequenceBackbone):
     """GenBioCellSpatialFoundation model
 
     Note:
-        Models using this interface include `aido_tissue_60m` and `aido_tissue_3m`.
+        Models using this interface include `gb_tissue_60m` and `gb_tissue_3m`.
 
         FSDP auto_wrap_policy is `modelgenerator.distributed.fsdp.wrap.AutoWrapPolicy`
 
