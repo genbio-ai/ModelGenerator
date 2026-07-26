@@ -1,6 +1,6 @@
 import unittest
 from modelgenerator.backbones import (
-    aido_dna_debug,
+    gb_dna_debug,
     dna_onehot,
     protein_onehot,
     enformer,
@@ -31,7 +31,7 @@ class TestDatasets(unittest.TestCase):
     def test_NTClassification(self):
         data = NTClassification()
         task = SequenceClassification(
-            backbone=aido_dna_debug,
+            backbone=gb_dna_debug,
             adapter=self.sequence_adapter_partial,
         )
         self._test(task, data)
@@ -50,7 +50,7 @@ class TestDatasets(unittest.TestCase):
             config_name="enhancers",
         )
         task = MLM(
-            backbone=aido_dna_debug,
+            backbone=gb_dna_debug,
         )
         self._test(task, data)
 
@@ -132,7 +132,7 @@ class TestDatasets(unittest.TestCase):
             normalize=False,
         )
         task = ConditionalDiffusion(
-            backbone=aido_dna_debug,
+            backbone=gb_dna_debug,
             adapter=self.conditional_generation_adapter_partial,
             use_legacy_adapter=True,
         )
@@ -361,7 +361,7 @@ class TestDatasets(unittest.TestCase):
             batch_size=2,
         )
         task = ZeroshotPredictionDistance(
-            backbone=aido_dna_debug,
+            backbone=gb_dna_debug,
         )
         self._test_inference(task, data)
 
@@ -372,7 +372,7 @@ class TestDatasets(unittest.TestCase):
             method="Diff",
         )
         task = ZeroshotPredictionDiff(
-            backbone=aido_dna_debug,
+            backbone=gb_dna_debug,
         )
         self._test_inference(task, data)
 

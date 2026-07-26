@@ -8,7 +8,7 @@ model:
         lr: 0.001
         weight_decay: 0.01
     backbone:
-      class_path: modelgenerator.backbones.aido_dna_dummy
+      class_path: modelgenerator.backbones.gb_dna_dummy
       init_args:
         use_peft: True
         lora_r: 16

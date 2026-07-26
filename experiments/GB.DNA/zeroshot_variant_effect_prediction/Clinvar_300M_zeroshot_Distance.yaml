@@ -1,0 +1,25 @@
+trainer:
+  accelerator: auto
+  devices: auto
+  logger: false
+  callbacks:
+  - class_path: modelgenerator.callbacks.PredictionWriter
+    dict_kwargs:
+      output_dir: output_logs
+      filetype: tsv
+      write_cols: ['score','norm_type','labels','num_layer']
+model:
+  class_path: modelgenerator.tasks.ZeroshotPredictionDistance
+  init_args:
+    backbone:
+      class_path: modelgenerator.backbones.gb_dna_300m
+      init_args:
+        frozen: true
+    all_hidden_states: True
+    shared_ref: False
+data:
+  class_path: modelgenerator.data.ClinvarRetrieve
+  init_args:
+    method: Distance
+    window: 512
+    batch_size: 5

@@ -1,0 +1,36 @@
+ckpt_path: null
+
+# Data Loading
+data:
+  class_path: modelgenerator.prot_inv_fold.data_inverse_folding.datamodule.ProteinInverseFoldingDataModule
+  init_args:
+    # path: /mgen_data/modelgenerator/datasets/protein_inv_fold/cath_4.2/
+    path: null
+
+# Model Arguments
+model:
+  class_path: modelgenerator.prot_inv_fold.pif_task.ProteinInvFold
+  init_args:
+    backbone:
+      class_path: modelgenerator.backbones.gb_protein_16b
+    custom_invfold_config:
+      ## custom setting for diffusion
+      num_denoise_steps: 3
+      diffusion_verbose: 1
+
+# Training Configuration
+trainer:
+  accelerator: auto
+  devices: 3,
+  max_steps: -1
+  max_epochs: -1
+  gradient_clip_val: null
+  precision: 32
+  default_root_dir: "/mgen_data/modelgenerator/logs/protein_inv_fold/"
+  detect_anomaly: true
+
+  # DDP strategy
+  strategy:
+    class_path: lightning.pytorch.strategies.DDPStrategy
+    dict_kwargs:
+      find_unused_parameters: true

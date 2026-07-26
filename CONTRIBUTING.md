@@ -1,5 +1,5 @@
-# Contributing to AIDO.ModelGenerator
-Thank you for considering to contribute to AIDO.ModelGenerator!
+# Contributing to GB.ModelGenerator
+Thank you for considering to contribute to GB.ModelGenerator!
 
 ## Merge Requests
 We welcome your merge requests (MRs).
@@ -31,5 +31,5 @@ Before submitting an issue, please make sure:
 3. Your issue is either a bug (unexpected/undesirable behavior) or a feature request.
 
 ## License
-By contributing to AIDO.ModelGenerator, you agree that your contributions will be licensed
+By contributing to GB.ModelGenerator, you agree that your contributions will be licensed
 under the LICENSE file in the root directory of the source tree.

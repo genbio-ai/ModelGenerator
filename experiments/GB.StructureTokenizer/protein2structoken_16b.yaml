@@ -1,0 +1,48 @@
+# Jiayou Zhang
+# Usage: mgen predict --config experiments/GB.StructureTokenizer/protein2structoken_16b.yaml
+# The input amino acid sequences are specified in the test_split_files.
+# The model will predict the structure tokens of the input sequences.
+# The predictions will be saved in `callbacks.init_args.output_dir` using tsv format.
+seed_everything: 42
+trainer:
+  accelerator: auto
+  strategy:
+    class_path: lightning.pytorch.strategies.DDPStrategy
+  devices: auto
+  num_nodes: 1
+  precision: 32
+  logger:
+    class_path: lightning.pytorch.loggers.WandbLogger
+    init_args:
+      name: protein2structoken_16b
+      save_dir: logs
+      project: MGEN_GB.StructureTokenizer
+  callbacks:
+  - class_path: modelgenerator.callbacks.PredictionWriter
+    init_args:
+      output_dir: logs/protein2structoken_16b
+      filetype: tsv
+      write_cols: [uid, sequences, labels, predictions]
+      drop_special_tokens: true
+      argmax_predictions: true
+      remove_duplicates: true
+model:
+  class_path: modelgenerator.tasks.Inference
+  init_args:
+    backbone:
+      class_path: modelgenerator.backbones.gb_protein2structoken_16b
+      init_args:
+        from_scratch: false
+        max_length: 2048 # 512 is too short for some proteins. The first stage training of the model is done with 2048. The second stage is 1024.
+        config_overwrites:
+          hidden_dropout_prob: 0
+          attention_probs_dropout_prob: 0
+    use_legacy_adapter: true
+    strict_loading: true
+data:
+  class_path: modelgenerator.data.StructureTokenDataModule
+  init_args:
+    path: genbio-ai/casp14-casp15-cameo-test-proteins
+    test_split_files: [casp14_csv/test.csv, casp15_csv/test.csv, cameo_csv/test.csv]
+    batch_size: 1
+ckpt_path: null

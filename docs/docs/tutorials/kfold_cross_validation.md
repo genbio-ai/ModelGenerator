@@ -22,16 +22,16 @@ data:
     cv_enable_val_fold: true
     cv_fold_id_col: fold_id
 ```
-See `experiments/AIDO.RNA/configs/translation_efficiency.yaml` for full hyperparameter settings.
+See `experiments/GB.RNA/configs/translation_efficiency.yaml` for full hyperparameter settings.
 
 
 #### Finetuning script
 ```shell
 for FOLD in {0..9}
   do
-    RUN_NAME=te_Muscle_aido_rna_1b600m_fold${FOLD}
+    RUN_NAME=te_Muscle_gb_rna_1b600m_fold${FOLD}
     CKPT_SAVE_DIR=logs/rna_tasks/${RUN_NAME}
-    CUDA_VISIBLE_DEVICES=0 mgen fit --config experiments/AIDO.RNA/configs/translation_efficiency.yaml \
+    CUDA_VISIBLE_DEVICES=0 mgen fit --config experiments/GB.RNA/configs/translation_efficiency.yaml \
       --data.config_name translation_efficiency_Muscle \
       --data.cv_test_fold_id $FOLD \
       --trainer.logger.name $RUN_NAME \
@@ -43,9 +43,9 @@ for FOLD in {0..9}
 ```shell
 for FOLD in {0..9}
 do
-  CKPT_PATH=logs/rna_tasks/te_Muscle_aido_rna_1b600m_fold${FOLD}/best_val*
+  CKPT_PATH=logs/rna_tasks/te_Muscle_gb_rna_1b600m_fold${FOLD}/best_val*
   echo ">>> Fold ${FOLD}"
-  mgen test --config experiments/AIDO.RNA/configs/translation_efficiency.yaml \
+  mgen test --config experiments/GB.RNA/configs/translation_efficiency.yaml \
     --data.config_name translation_efficiency_Muscle \
     --data.cv_test_fold_id $FOLD \
     --model.strict_loading True \

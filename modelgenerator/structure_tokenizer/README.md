@@ -1,5 +1,5 @@
 # Protein Structure Tokenizer
-This is the implementation for [genbio-ai/AIDO.StructureTokenizer](https://huggingface.co/genbio-ai/AIDO.StructureTokenizer). Due to the properties of protein data, it has a standalone data pipeline. The overall structure of this folder is as follows:
+This is the implementation for [genbio-ai/GB.StructureTokenizer](https://huggingface.co/genbio-ai/GB.StructureTokenizer). Due to the properties of protein data, it has a standalone data pipeline. The overall structure of this folder is as follows:
 
 - `callbacks`: Contains the callbacks used in saving structure tokens and PDB files
 - `configs`: Contains the configuration files for the model and data
@@ -8,4 +8,4 @@ This is the implementation for [genbio-ai/AIDO.StructureTokenizer](https://huggi
 - `models`: Contains the encoder (`equiformer_encoder.py`), decoder (`esmfold_decoder.py`), the full model (`structure_tokenizer.py`), and its lightning module (`structure_tokenizer_lightning.py`)
 - `utils`: Miscellaneous utility functions
 
-For the usage of this model, please refer to `experiments/AIDO.StructureTokenizer/README.md`.
+For the usage of this model, please refer to `experiments/GB.StructureTokenizer/README.md`.

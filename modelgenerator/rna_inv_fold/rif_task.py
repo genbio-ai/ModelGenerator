@@ -57,7 +57,7 @@ class MyAccuracy(Metric):
 class RNAInvFold(TaskInterface):
     def __init__(
         self,
-        backbone: BackboneCallable = aido_rna_1b600m,
+        backbone: BackboneCallable = gb_rna_1b600m,
         strict_loading: bool = True,
         # grnade_ckpt_path: str = None,
         custom_invfold_config: RNAInvFoldConfig = default_config,

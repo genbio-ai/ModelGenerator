@@ -7,7 +7,7 @@ There are two requirements:
 If you are using a finetuned model checkpoint, find this in the associated config.yaml.
 2. Your data must be in a format that the Hugging Face `load_dataset` can read (e.g. tsv, csv, json, etc).
 
-If these are satisified, congrats! You can immediately use your data with AIDO.ModelGenerator by overriding the data paths and files in the config.
+If these are satisified, congrats! You can immediately use your data with GB.ModelGenerator by overriding the data paths and files in the config.
 
 ## Overriding Data Paths
 

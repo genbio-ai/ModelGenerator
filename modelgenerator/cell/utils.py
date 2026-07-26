@@ -118,7 +118,7 @@ def load_backbone_gene_list(backbone_class_path):
     """
     load_base = os.path.dirname(os.path.abspath(__file__))
     model_name = backbone_class_path.split(".")[-1]
-    if model_name in ["aido_cell_3m", "aido_cell_10m", "aido_cell_100m", "scfoundation"]:
+    if model_name in ["aido_cell_3m", "aido_cell_10m", "aido_cell_100m", "gb_cell_3m", "gb_cell_10m", "gb_cell_100m", "scfoundation"]:
         gene_symbols = pd.read_csv(
             os.path.join(load_base, "gene_lists/OS_scRNA_gene_index.19264.tsv"), sep="\t"
         )["gene_name"].values

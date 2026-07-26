@@ -1,22 +1,22 @@
 # Saving Outputs
 
-AIDO.ModelGenerator provides a unified and hardware-adaptive interface for inference, embedding, and prediction with pre-trained models.
+GB.ModelGenerator provides a unified and hardware-adaptive interface for inference, embedding, and prediction with pre-trained models.
 
-This page covers how to use AIDO.ModelGenerator to get embeddings and predictions from pre-trained backbones as well as finetuned models, and how to save and manage outputs for downstream analysis.
+This page covers how to use GB.ModelGenerator to get embeddings and predictions from pre-trained backbones as well as finetuned models, and how to save and manage outputs for downstream analysis.
 
 ## Pre-trained Backbones
 
-Backbones in AIDO.ModelGenerator are pre-trained foundation models.
+Backbones in GB.ModelGenerator are pre-trained foundation models.
 
 A full list of available backbones is in the [Backbone API reference](../api_reference/backbones.md).
 For each data modality, we suggest using
 
-- `aido_dna_7b` for DNA sequences
-- `aido_protein_16b` for protein sequences
-- `aido_rna_1b600m` for RNA sequences
-- `aido_cell_650m` for gene expression
-- `aido_protein2structoken_16b` for translating protein sequence to structure tokens
-- `aido_dna_dummy` and `aido_protein_dummy` for debugging
+- `gb_dna_7b` for DNA sequences
+- `gb_protein_16b` for protein sequences
+- `gb_rna_1b600m` for RNA sequences
+- `gb_cell_100m` for gene expression
+- `gb_protein2structoken_16b` for translating protein sequence to structure tokens
+- `gb_dna_dummy` and `gb_protein_debug` for debugging
 - `dna_onehot` and `protein_onehot` for non-FM baselines
 
 ## Backbone Embedding and Inference
@@ -37,7 +37,7 @@ For example, to get embeddings from the `dummy` model on a small number of seque
 model:
   class_path: Embed
   init_args:
-    backbone: aido_dna_dummy
+    backbone: gb_dna_dummy
 data:
   class_path: SequencesDataModule
   init_args:
@@ -60,7 +60,7 @@ To get token probabilities, use `mgen predict` with the `Inference` task.
 model:
   class_path: Inference
   init_args:
-    backbone: aido_dna_dummy
+    backbone: gb_dna_dummy
 data:
   class_path: SequencesDataModule
   init_args:
@@ -78,7 +78,7 @@ trainer:
 
 ## Finetuned Models
 
-Finetuned model weights and configs from studies using AIDO.ModelGenerator are available for download on [Hugging Face](https://huggingface.co/genbio-ai).
+Finetuned model weights and configs from studies using GB.ModelGenerator are available for download on [Hugging Face](https://huggingface.co/genbio-ai).
 
 To get predictions from a finetuned model, use `mgen predict` with the model's config file and checkpoint.
 ```
@@ -95,8 +95,8 @@ See [Data Experiment Design](../experiment_design/data.md) for more details.
 
 Models and datasets are often too large to fit in memory on a single device.
 
-AIDO.ModelGenerator supports distributed training and inference on multiple devices by sharding models and data with [FSDP](https://lightning.ai/docs/pytorch/stable/advanced/model_parallel/fsdp.html).
-For example, to split `aido_protein_16b` across multiple nodes and multiple GPUs, add the following to your config:
+GB.ModelGenerator supports distributed training and inference on multiple devices by sharding models and data with [FSDP](https://lightning.ai/docs/pytorch/stable/advanced/model_parallel/fsdp.html).
+For example, to split `gb_protein_16b` across multiple nodes and multiple GPUs, add the following to your config:
 ```
 trainer:
   num_nodes: X  # 1 by default, but not automatic. Must be set correctly for multi-node.

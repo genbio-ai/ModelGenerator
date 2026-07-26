@@ -1,6 +1,6 @@
 [![GenBio AI](docs/docs/assets/images/genbio_header.png)](https://genbio.ai/)
 
-# [AIDO](https://github.com/genbio-ai/AIDO).ModelGenerator
+# [GB](https://github.com/genbio-ai/AIDO).ModelGenerator
 
 
 [![License](https://img.shields.io/badge/license-GenBio_AI_Community_License-orange)](https://github.com/genbio-ai/ModelGenerator/blob/main/LICENSE)
@@ -10,10 +10,10 @@
 [![Downloads](https://pepy.tech/badge/modelgenerator)](https://pepy.tech/project/modelgenerator)
 [![DOI](https://img.shields.io/badge/DOI-10.1101/2025.06.30.662437-brightgreen)](https://doi.org/10.1101/2025.06.30.662437)
 
-AIDO.ModelGenerator is a software stack powering the development of an AI-driven Digital Organism by enabling researchers to adapt pretrained models and generate finetuned models for downstream tasks.
-To read more about AIDO.ModelGenerator's integral role in building the world's first AI-driven Digital Organism, see [AIDO](https://github.com/genbio-ai/AIDO).
+GB.ModelGenerator is a software stack powering the development of an AI-driven Digital Organism by enabling researchers to adapt pretrained models and generate finetuned models for downstream tasks.
+To read more about GB.ModelGenerator's integral role in building the world's first AI-driven Digital Organism, see [AIDO](https://github.com/genbio-ai/AIDO).
 
-AIDO.ModelGenerator is open-sourced as an opinionated plug-and-play research framework for cross-disciplinary teams in ML & Bio.
+GB.ModelGenerator is open-sourced as an opinionated plug-and-play research framework for cross-disciplinary teams in ML & Bio.
 It is designed to enable rapid and reproducible prototyping with four kinds of experiments in mind:
 
 1. Applying pre-trained foundation models to new data
@@ -23,9 +23,9 @@ It is designed to enable rapid and reproducible prototyping with four kinds of e
 
 while also scaling with hardware and integrating with larger data pipelines or research workflows.
 
-AIDO.ModelGenerator is built on PyTorch, HuggingFace, and Lightning, and works seamlessly with these ecosystems.
+GB.ModelGenerator is built on PyTorch, HuggingFace, and Lightning, and works seamlessly with these ecosystems.
 
-See the [AIDO.ModelGenerator documentation](https://genbio-ai.github.io/ModelGenerator) for installation, usage, tutorials, and API reference.
+See the [GB.ModelGenerator documentation](https://genbio-ai.github.io/ModelGenerator) for installation, usage, tutorials, and API reference.
 
 ## Who uses ModelGenerator?
 
@@ -52,7 +52,7 @@ See the [AIDO.ModelGenerator documentation](https://genbio-ai.github.io/ModelGen
 * Community-driven development
 * Permissive license for academic and non-commercial use
 
-## Projects using AIDO.ModelGenerator
+## Projects using GB.ModelGenerator
 
 - [Accurate and General DNA Representations Emerge from Genome Foundation Models at Scale](https://doi.org/10.1101/2024.12.01.625444)
 - [A Large-Scale Foundation Model for RNA Function and Structure Prediction](https://doi.org/10.1101/2024.11.28.625345)
@@ -76,7 +76,7 @@ pip install git+https://github.com/NVIDIA/dllogger.git@0540a43971f4a8a16693a9de9
 ## Quick Start
 ### Get embeddings from a pre-trained model
 ```
-mgen predict --model Embed --model.backbone aido_dna_dummy \
+mgen predict --model Embed --model.backbone gb_dna_dummy \
   --data SequencesDataModule --data.path genbio-ai/100m-random-promoters \
   --data.x_col sequence --data.id_col sequence --data.test_split_size 0.0001 \
   --config configs/examples/save_predictions.yaml
@@ -84,7 +84,7 @@ mgen predict --model Embed --model.backbone aido_dna_dummy \
 
 ### Get token probabilities from a pre-trained model
 ```
-mgen predict --model Inference --model.backbone aido_dna_dummy \
+mgen predict --model Inference --model.backbone gb_dna_dummy \
   --data SequencesDataModule --data.path genbio-ai/100m-random-promoters \
   --data.x_col sequence --data.id_col sequence --data.test_split_size 0.0001 \
   --config configs/examples/save_predictions.yaml
@@ -92,14 +92,14 @@ mgen predict --model Inference --model.backbone aido_dna_dummy \
 
 ### Finetune a model
 ```
-mgen fit --model ConditionalDiffusion --model.backbone aido_dna_dummy \
+mgen fit --model ConditionalDiffusion --model.backbone gb_dna_dummy \
   --data ConditionalDiffusionDataModule --data.path "genbio-ai/100m-random-promoters" \
   --data.x_col sequence --data.y_col label --data.rename_cols "{sequence: sequences}"
 ```
 
 ### Evaluate a model checkpoint
 ```
-mgen test --model ConditionalDiffusion --model.backbone aido_dna_dummy \
+mgen test --model ConditionalDiffusion --model.backbone gb_dna_dummy \
   --data ConditionalDiffusionDataModule --data.path "genbio-ai/100m-random-promoters" \
   --data.x_col sequence --data.y_col label --data.rename_cols "{sequence: sequences}" \
   --ckpt_path logs/lightning_logs/version_X/checkpoints/<your_model>.ckpt
@@ -107,7 +107,7 @@ mgen test --model ConditionalDiffusion --model.backbone aido_dna_dummy \
 
 ### Save predictions
 ```
-mgen predict --model ConditionalDiffusion --model.backbone aido_dna_dummy \
+mgen predict --model ConditionalDiffusion --model.backbone gb_dna_dummy \
   --data ConditionalDiffusionDataModule --data.path "genbio-ai/100m-random-promoters" \
   --data.x_col sequence --data.y_col label --data.rename_cols "{sequence: sequences}" \
   --ckpt_path logs/lightning_logs/version_X/checkpoints/<your_model>.ckpt \
@@ -117,7 +117,7 @@ mgen predict --model ConditionalDiffusion --model.backbone aido_dna_dummy \
 ## Configify your experiment
 This command
 ```
-mgen fit --model ConditionalDiffusion --model.backbone aido_dna_dummy \
+mgen fit --model ConditionalDiffusion --model.backbone gb_dna_dummy \
   --data ConditionalDiffusionDataModule --data.path "genbio-ai/100m-random-promoters" \
   --data.x_col sequence --data.y_col label --data.rename_cols "{sequence: sequences}"
 ```
@@ -130,7 +130,7 @@ is equivalent to
 model:
   class_path: ConditionalDiffusion
   init_args:
-    backbone: aido_dna_dummy
+    backbone: gb_dna_dummy
 data:
   class_path: ConditionalDiffusionDataModule
   init_args:
@@ -167,7 +167,7 @@ mgen fit --data PromoterExpressionRegression \
 First run pretraining objective on finetuning data
 ```
 # https://arxiv.org/pdf/2310.02980
-mgen fit --model MLM --model.backbone aido_dna_dummy \
+mgen fit --model MLM --model.backbone gb_dna_dummy \
   --data MLMDataModule --data.path leannmlindsey/GUE \
   --data.x_col sequence --data.y_col label --data.rename_cols "{sequence: sequences}" \
   --data.config_name prom_core_notata

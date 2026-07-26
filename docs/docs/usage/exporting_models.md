@@ -1,11 +1,11 @@
 # Exporting Models
 
-While AIDO.ModelGenerator is CLI-driven, models created with AIDO.ModelGenerator can also be loaded in Python scripts and exported to HuggingFace.
+While GB.ModelGenerator is CLI-driven, models created with GB.ModelGenerator can also be loaded in Python scripts and exported to HuggingFace.
 
 ## Exporting and Loading with CLI
 
 As an example of a finetuned model export, see some of the many checkpoints available on [Huggingface](https://huggingface.co/genbio-ai) for immediate inference.
-The only requirements are the `config.yaml` and `<model>.ckpt` files to be run again from AIDO.ModelGenerator.
+The only requirements are the `config.yaml` and `<model>.ckpt` files to be run again from GB.ModelGenerator.
 
 ```
 # Download from HF

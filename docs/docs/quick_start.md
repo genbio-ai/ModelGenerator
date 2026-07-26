@@ -16,7 +16,7 @@ pip install git+https://github.com/NVIDIA/dllogger.git@0540a43971f4a8a16693a9de9
 ## Quick Start
 ### Get embeddings from a pre-trained model
 ```
-mgen predict --model Embed --model.backbone aido_dna_dummy \
+mgen predict --model Embed --model.backbone gb_dna_dummy \
   --data SequencesDataModule --data.path genbio-ai/100m-random-promoters \
   --data.x_col sequence --data.id_col sequence --data.test_split_size 0.0001 \
   --config configs/examples/save_predictions.yaml
@@ -24,7 +24,7 @@ mgen predict --model Embed --model.backbone aido_dna_dummy \
 
 ### Get token probabilities from a pre-trained model
 ```
-mgen predict --model Inference --model.backbone aido_dna_dummy \
+mgen predict --model Inference --model.backbone gb_dna_dummy \
   --data SequencesDataModule --data.path genbio-ai/100m-random-promoters \
   --data.x_col sequence --data.id_col sequence --data.test_split_size 0.0001 \
   --config configs/examples/save_predictions.yaml
@@ -32,14 +32,14 @@ mgen predict --model Inference --model.backbone aido_dna_dummy \
 
 ### Finetune a model
 ```
-mgen fit --model ConditionalDiffusion --model.backbone aido_dna_dummy \
+mgen fit --model ConditionalDiffusion --model.backbone gb_dna_dummy \
   --data ConditionalDiffusionDataModule --data.path "genbio-ai/100m-random-promoters" \
   --data.x_col sequence --data.y_col label --data.rename_cols "{sequence: sequences}"
 ```
 
 ### Evaluate a model checkpoint
 ```
-mgen test --model ConditionalDiffusion --model.backbone aido_dna_dummy \
+mgen test --model ConditionalDiffusion --model.backbone gb_dna_dummy \
   --data ConditionalDiffusionDataModule --data.path "genbio-ai/100m-random-promoters" \
   --data.x_col sequence --data.y_col label --data.rename_cols "{sequence: sequences}" \
   --ckpt_path logs/lightning_logs/version_X/checkpoints/<your_model>.ckpt
@@ -47,7 +47,7 @@ mgen test --model ConditionalDiffusion --model.backbone aido_dna_dummy \
 
 ### Save predictions
 ```
-mgen predict --model ConditionalDiffusion --model.backbone aido_dna_dummy \
+mgen predict --model ConditionalDiffusion --model.backbone gb_dna_dummy \
   --data ConditionalDiffusionDataModule --data.path "genbio-ai/100m-random-promoters" \
   --data.x_col sequence --data.y_col label --data.rename_cols "{sequence: sequences}" \
   --ckpt_path logs/lightning_logs/version_X/checkpoints/<your_model>.ckpt \
@@ -57,7 +57,7 @@ mgen predict --model ConditionalDiffusion --model.backbone aido_dna_dummy \
 ## Configify your experiment
 This command
 ```
-mgen fit --model ConditionalDiffusion --model.backbone aido_dna_dummy \
+mgen fit --model ConditionalDiffusion --model.backbone gb_dna_dummy \
   --data ConditionalDiffusionDataModule --data.path "genbio-ai/100m-random-promoters" \
   --data.x_col sequence --data.y_col label --data.rename_cols "{sequence: sequences}"
 ```
@@ -70,7 +70,7 @@ is equivalent to
 model:
   class_path: ConditionalDiffusion
   init_args:
-    backbone: aido_dna_dummy
+    backbone: gb_dna_dummy
 data:
   class_path: ConditionalDiffusionDataModule
   init_args:
@@ -107,7 +107,7 @@ mgen fit --data PromoterExpressionRegression \
 First run pretraining objective on finetuning data
 ```
 # https://arxiv.org/pdf/2310.02980
-mgen fit --model MLM --model.backbone aido_dna_dummy \
+mgen fit --model MLM --model.backbone gb_dna_dummy \
   --data MLMDataModule --data.path leannmlindsey/GUE \
   --data.x_col sequence --data.y_col label --data.rename_cols "{sequence: sequences}" \
   --data.config_name prom_core_notata

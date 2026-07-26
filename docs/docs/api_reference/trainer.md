@@ -1,9 +1,9 @@
 # Trainer
 
-AIDO.ModelGenerator uses the LightningCLI for configuring runs with the PyTorch Lightning Trainer.
+GB.ModelGenerator uses the LightningCLI for configuring runs with the PyTorch Lightning Trainer.
 The entrypoint for the CLI is `mgen`, which can be used with the `fit`, `test`, `validate`, and `predict` commands and the `--model`, `--data`, and `--trainer` arguments and their sub-arguments.
 ```bash
-mgen fit --model ConditionalDiffusion --model.backbone aido_dna_300m \
+mgen fit --model ConditionalDiffusion --model.backbone gb_dna_300m \
   --data ConditionalDiffusionDataModule --data.path "genbio-ai/100m-random-promoters" \
   --trainer.max_epochs 1 --trainer.accelerator auto --trainer.devices auto
 ```

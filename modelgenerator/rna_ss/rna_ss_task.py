@@ -10,7 +10,7 @@ class RNASSPairwiseTokenClassification(TaskInterface):
     """Task for fine-tuning a RNA-FM model on RNA Secondary Structure prediction.
 
     Args:
-        backbone (BackboneCallable, optional): The callable that returns a backbone. Defaults to --model.backbone aido_dna_dummy.
+        backbone (BackboneCallable, optional): The callable that returns a backbone. Defaults to --model.backbone gb_dna_dummy.
         adapter (AdapterCallable, optional): The callable that returns an adapter. Defaults to LinearAdapter.
         optimizer (OptimizerCallable, optional): The optimizer to use for training. Defaults to torch.optim.AdamW.
         lr_scheduler (LRSchedulerCallable, optional): The learning rate scheduler to use for training. Defaults to None.

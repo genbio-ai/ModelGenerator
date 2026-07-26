@@ -68,7 +68,7 @@ def get_masked_seq(seq, logits, M, mask_token=vocab_a2n_lm['[MASK]']):
     return seq_masked, mask
 
 ## load the model with the maskedlm head
-pretrained_LM_location = "genbio-ai/AIDO.RNA-1.6B"
+pretrained_LM_location = "genbio-ai/GB.RNA-1.6B"
 device = 'cuda'
 model = RNABertForMaskedLM.from_pretrained(pretrained_LM_location).to(device)
 model = model.eval()

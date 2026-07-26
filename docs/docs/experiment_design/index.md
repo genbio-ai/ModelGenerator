@@ -1,6 +1,6 @@
 # Experiment Design
 
-AIDO.ModelGenerator is designed to enable rapid and reproducible prototyping with four kinds of experiments in mind:
+GB.ModelGenerator is designed to enable rapid and reproducible prototyping with four kinds of experiments in mind:
 
 1. Applying pre-trained foundation models to new data
 2. Developing new finetuning and inference tasks for foundation models
@@ -13,7 +13,7 @@ This section is a pocket guide on developing each of these types of experiments,
 
 ## Experiment Types
 
-AIDO.ModelGenerator interfaces hide boilerplate and standardize training, evaluation, and prediction to enable a few common development goals.
+GB.ModelGenerator interfaces hide boilerplate and standardize training, evaluation, and prediction to enable a few common development goals.
 If you want to
 
 3. Use a new dataset for finetuning or inference.
@@ -28,7 +28,7 @@ If you want to
 
 ## Codebase Structure
 
-AIDO.ModelGenerator is built on [PyTorch Lightning](https://lightning.ai/docs/pytorch/stable/levels/core_skills.html) for training and testing, [Huggingface](https://huggingface.co/docs/datasets/index) for model and data management, and [LightningCLI](https://lightning.ai/docs/pytorch/stable/cli/lightning_cli.html) for experiment configuration and organization.
+GB.ModelGenerator is built on [PyTorch Lightning](https://lightning.ai/docs/pytorch/stable/levels/core_skills.html) for training and testing, [Huggingface](https://huggingface.co/docs/datasets/index) for model and data management, and [LightningCLI](https://lightning.ai/docs/pytorch/stable/cli/lightning_cli.html) for experiment configuration and organization.
 
 Most development will focus on implementing a simple interface in `backbones` `adapters` `tasks` or `data`
 
