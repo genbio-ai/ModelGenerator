@@ -26,7 +26,7 @@ INPUT_FILE = "temp_adata.h5ad"          # Path to input AnnData file
 OUTPUT_FILE = None                       # Output file (None = auto-generate from input)
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"  # Auto-detect device
 BATCH_SIZE = 32
-EMBEDDING_KEY = "X_aido_cell"           # Key to store embeddings in adata.obsm
+EMBEDDING_KEY = "X_gb_cell"             # Key to store embeddings in adata.obsm
 # ============================================================
 
 # Set output path if not specified

@@ -5,4 +5,4 @@ GB.Cell-100M is GenBio AI’s SOTA cellular foundation model trained on 50 milli
 ## Resources
 - [Quick Start](./quickstart.ipynb)
 - [Cell Classification Tutorial](./tutorial_cell_classification.ipynb)
-- [GB.Cell HuggingFace Collection](https://huggingface.co/collections/genbio-ai/aidocell-6750f409bb20d8cd2cf14a25)
+- [GB.Cell HuggingFace Collection](https://huggingface.co/collections/genbio-ai/gbcell-6750f409bb20d8cd2cf14a25)

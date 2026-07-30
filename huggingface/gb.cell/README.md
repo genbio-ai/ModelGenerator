@@ -29,7 +29,7 @@ INPUT_FILE = "temp_adata.h5ad"          # Path to your input file
 OUTPUT_FILE = None                       # Auto-generates: input_embeddings.h5ad
 DEVICE = "cuda"                          # "cuda" or "cpu"
 BATCH_SIZE = 32
-EMBEDDING_KEY = "X_aido_cell"
+EMBEDDING_KEY = "X_gb_cell"
 ```
 
 2. **Run the script**:
