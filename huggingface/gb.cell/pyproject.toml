@@ -25,7 +25,7 @@ classifiers = [
 
 dependencies = [
     "torch>=2.0.0",
-    "transformers>=4.30.0",
+    "transformers>=4.30.0,<5",
     "numpy>=1.20.0",
     "anndata>=0.8.0",
     "scanpy>=1.10.0",
@@ -45,7 +45,7 @@ peft = [
 Repository = "https://github.com/genbio-ai/ModelGenerator/huggingface"
 
 [tool.setuptools]
-packages = ["gb_cell", "gb_cell.models", "gb_cell.utils", "aido_cell"]
+packages = ["gb_cell", "gb_cell.models", "gb_cell.utils"]
 
 [tool.setuptools.package-data]
 gb_cell = ["models/gene_lists/*.tsv"]
