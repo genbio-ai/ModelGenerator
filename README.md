@@ -10,6 +10,8 @@
 [![Downloads](https://pepy.tech/badge/modelgenerator)](https://pepy.tech/project/modelgenerator)
 [![DOI](https://img.shields.io/badge/DOI-10.1101/2025.06.30.662437-brightgreen)](https://doi.org/10.1101/2025.06.30.662437)
 
+This repo is depreciated. It was used to finetune and benchmark the previous generation of `GB.*` foundation models. Experiments for these studies and base models are still available here.
+
 GB.ModelGenerator is a software stack that enables researchers to adapt pretrained models and generate finetuned models for downstream tasks.
 
 GB.ModelGenerator is open-sourced as an opinionated plug-and-play research framework for cross-disciplinary teams in ML & Bio.
