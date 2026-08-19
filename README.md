@@ -10,8 +10,7 @@
 [![Downloads](https://pepy.tech/badge/modelgenerator)](https://pepy.tech/project/modelgenerator)
 [![DOI](https://img.shields.io/badge/DOI-10.1101/2025.06.30.662437-brightgreen)](https://doi.org/10.1101/2025.06.30.662437)
 
-GB.ModelGenerator is a software stack powering the development of an AI-driven Digital Organism by enabling researchers to adapt pretrained models and generate finetuned models for downstream tasks.
-To read more about GB.ModelGenerator's integral role in building the world's first AI-driven Digital Organism, see [AIDO](https://github.com/genbio-ai/AIDO).
+GB.ModelGenerator is a software stack that enables researchers to adapt pretrained models and generate finetuned models for downstream tasks.
 
 GB.ModelGenerator is open-sourced as an opinionated plug-and-play research framework for cross-disciplinary teams in ML & Bio.
 It is designed to enable rapid and reproducible prototyping with four kinds of experiments in mind:
