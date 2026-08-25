@@ -163,7 +163,7 @@ class ProteinCSVParquetDataset(ProteinDataset):
     def __getitem__(self, index: int) -> dict[str, torch.Tensor | str | None]:
         row = self.proteins_df.iloc[index]
         filename = row["filename"]
-        chain = row["chain"] if not np.isnan(row["chain"]) else "nan"
+        chain = row["chain"] if not pd.isna(row["chain"]) else "nan"
         match Path(filename).suffix:
             case ".cif.gz" | ".cif":
                 entity = row["entity"]
